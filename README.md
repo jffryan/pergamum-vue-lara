@@ -1,1 +1,3 @@
-Laravel, Vue, Tailwind, Axios, Pinia baseline repo to get projects started without having to duplicate boilerplate and setup over and over and over and over.
+Pergamum was an ancient library. This is a modern one.
+
+WIP: Uses Laravel, Vue, Tailwind, Axios, Pinia
