@@ -27,7 +27,7 @@ const deleteBook = async (book_id) =>
 //
 // REMOVE GENRE INSTANCE
 const removeGenreInstance = async (deleteRequest) => {
-  const url = `/api/book/update-genre`;
+  const url = "/api/book/update-genre";
   const request = {
     request: deleteRequest,
   };
@@ -37,7 +37,7 @@ const removeGenreInstance = async (deleteRequest) => {
 
 // REMOVE AUTHOR INSTANCE
 const removeAuthorInstance = async (deleteRequest) => {
-  const url = `/api/book/update-author`;
+  const url = "/api/book/update-author";
   const request = {
     request: deleteRequest,
   };
@@ -54,4 +54,3 @@ export {
   removeAuthorInstance,
   deleteBook,
 };
-

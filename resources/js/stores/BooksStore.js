@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-export const useBooksStore = defineStore("BooksStore", {
+const useBooksStore = defineStore("BooksStore", {
   state: () => ({
     allBooks: [],
     sortedBy: "default",
@@ -87,3 +87,4 @@ export const useBooksStore = defineStore("BooksStore", {
   },
 });
 
+export default useBooksStore;

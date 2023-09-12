@@ -3,11 +3,15 @@ module.exports = {
     browser: true,
     es2021: true,
   },
-  extends: ["airbnb-base", "plugin:vue/vue3-essential"],
+  extends: [
+    "airbnb-base",
+    "plugin:vue/vue3-essential",
+    "plugin:prettier/recommended",
+  ],
   settings: {
     "import/resolver": {
       alias: {
-        map: [["@", "./src"]],
+        map: [["@", "./resources/js"]],
       },
     },
   },
@@ -30,7 +34,7 @@ module.exports = {
   rules: {
     quotes: ["error", "double"],
     "linebreak-style": "off",
-    "no-multiple-empty-lines": { max: 2 },
+    "no-multiple-empty-lines": 0,
+    "no-console": "off",
   },
 };
-

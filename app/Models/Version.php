@@ -12,6 +12,8 @@ class Version extends Model
 
     protected $primaryKey = "version_id";
 
+    protected $fillable = ['page_count', 'format_id'];
+
     public function format(): BelongsTo
     {
         return $this->belongsTo(Format::class, "format_id");

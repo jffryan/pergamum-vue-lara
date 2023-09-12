@@ -2,19 +2,17 @@ import axios from "axios";
 
 // Helper functions --------
 
-// Make request
 export const makeRequest = async (method, url, data) => {
   const config = {
-    method: method,
-    url: url,
-    data: data,
+    method,
+    url,
+    data,
   };
 
   const response = await axios(config);
   return response;
 };
 
-// Build URL
 export const buildUrl = (entity, id) => {
   let url = `/api/${entity}/`;
 
@@ -24,4 +22,3 @@ export const buildUrl = (entity, id) => {
 
   return url;
 };
-

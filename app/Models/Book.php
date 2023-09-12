@@ -14,6 +14,8 @@ class Book extends Model
 
     protected $primaryKey = "book_id";
 
+    protected $fillable = ['title', 'is_completed', 'rating', 'date_completed'];
+
     public function authors(): BelongsToMany
     {
         return $this->belongsToMany(Author::class, "book_author", "book_id", "author_id")->withTimestamps();

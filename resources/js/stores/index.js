@@ -1,4 +1,5 @@
 // Import unique stores into this file
-import { useBooksStore } from "./BooksStore";
+import useBooksStore from "./BooksStore";
+import useConfigStore from "./ConfigStore";
 
-export { useBooksStore };
+export { useBooksStore, useConfigStore };

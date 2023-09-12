@@ -5,10 +5,10 @@
         <router-link to="/" class="font-bold">Pergamum</router-link>
       </li>
       <li class="mb-2">
-        <router-link to="/library">Library</router-link>
+        <router-link :to="{ name: 'library.index' }">Library</router-link>
       </li>
       <li>
-        <router-link to="/add-books">Add books</router-link>
+        <router-link :to="{ name: 'books.create' }">Add books</router-link>
       </li>
     </ul>
   </nav>
@@ -19,4 +19,3 @@ export default {
   name: "SidebarNav",
 };
 </script>
-

@@ -13,6 +13,64 @@ use Carbon\Carbon;
 class BookController extends Controller
 {
     /**
+     * Helper functions
+     * 
+     */
+
+    private function createBook($bookData)
+    {
+        $data = [
+            'title' => $bookData['title'],
+            'is_completed' => $bookData['is_completed'],
+            'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
+            'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("Y-m-d", $bookData['date_completed']) : null,
+        ];
+
+        return Book::create($data);
+    }
+    private function handleAuthors($authorsData)
+    {
+        return collect($authorsData)->map(function ($author) {
+            return Author::firstOrCreate($author);
+        })->all();
+    }
+    private function createVersion($versionData)
+    {
+        $format = Format::find($versionData['format_id']);
+
+        if ($format->name == 'Audio') {
+            // Validate elsewhere
+        } elseif ($format->name == 'Paper') {
+            // Nullify audio_runtime for paper format
+            $versionData['audio_runtime'] = null;
+        }
+
+        return Version::create($versionData);
+    }
+    private function handleGenres($genresData)
+    {
+        return collect($genresData)->map(function ($genre) {
+            return Genre::firstOrCreate(['name' => $genre]);
+        })->all();
+    }
+    private function attachModels($book, $authors, $version, $genres)
+    {
+        $book->authors()->sync($authors);
+        $book->versions()->save($version);
+        $book->genres()->sync($genres);
+    }
+    private function buildResponse($book, $authors, $version, $genres)
+    {
+        return response()->json([
+            'book' => $book,
+            'authors' => $authors,
+            'version' => $version,
+            'genres' => $genres,
+        ]);
+    }
+
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -30,15 +88,6 @@ class BookController extends Controller
     public function create()
     {
         //
-
-        $formats = Format::all();
-        $data = [
-
-            "formats" => $formats,
-        ];
-
-
-        return response()->json($data);
     }
 
     /**
@@ -51,67 +100,16 @@ class BookController extends Controller
     {
         $bookForm = $request->bookForm;
 
-        // BOOK
-        $new_book = new Book;
-        $new_book->title =  $bookForm["book"]["title"];
-        $new_book->is_completed =  $bookForm["book"]["is_completed"];
-        if ($new_book->is_completed === true) {
-            $new_book->rating =  $bookForm["book"]["rating"];
-            $new_book->date_completed = Carbon::createFromFormat("Y-m-d", $bookForm["book"]["date_completed"]);
-        } else {
-            $new_book->rating =  null;
-            $new_book->date_completed =  null;
-        }
-        $new_book->save();
+        $new_book = $this->createBook($bookForm["book"]);
+        $new_authors = $this->handleAuthors($bookForm["authors"]);
+        $new_version = $this->createVersion($bookForm["version"]);
+        $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
 
-        // AUTHOR
-        $authors_array = $bookForm["authors"];
-        $new_authors = [];
-        foreach ($authors_array as $author) {
-            $new_author = Author::firstOrCreate(
-                [
-                    "first_name"    => $author["first_name"],
-                    "last_name"     => $author["last_name"],
-                ],
-            );
-            array_push($new_authors, $new_author);
-        };
+        $this->attachModels($new_book, $new_authors, $new_version, $new_genres);
 
-
-        // VERSION
-        $new_version = new Version;
-        $new_version->page_count =  $bookForm["version"]["page_count"];
-        $new_version->format_id =  $bookForm["version"]["format"];
-
-        // GENRES
-        $genres_array = $bookForm["book"]["genres"]["parsed"];
-        $new_genres = [];
-        foreach ($genres_array as $genre) {
-            $genre_request = Genre::firstOrCreate(
-                ["name" => $genre],
-            );
-            array_push($new_genres, $genre_request);
-        };
-
-
-        // JOIN MODELS
-        foreach ($new_authors as $new_author) {
-            $new_book->authors()->attach($new_author);
-        }
-        $new_book->versions()->save($new_version);
-        foreach ($new_genres as $new_genre) {
-            $new_book->genres()->attach($new_genre);
-        }
-
-        // RESPONSE
-        $data = [
-            "book"      => $new_book,
-            "author"    => $new_authors,
-            "version"   => $new_version,
-            "genres"    => $new_genres,
-        ];
-        return response()->json($data);
+        return $this->buildResponse($new_book, $new_authors, $new_version, $new_genres);
     }
+
 
     /**
      * Display the specified resource.
@@ -136,6 +134,60 @@ class BookController extends Controller
     }
 
     /**
+     * Helper functions for update
+     * 
+     */
+    private function updateBook($existing_book, $patch_book)
+    {
+        $existing_book->fill([
+            'title' => $patch_book['title'],
+            'is_completed' => $patch_book['is_completed'],
+            'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
+            'date_completed' => $patch_book['is_completed'] ? Carbon::createFromFormat("Y-m-d", $patch_book['date_completed']) : null,
+        ])->save();
+    }
+    private function updateAuthors($existing_book, $patch_authors)
+    {
+        $updated_authors = [];
+
+        foreach ($patch_authors as $author) {
+            if (isset($author['author_id'])) {
+                $existing_author = Author::findOrFail($author['author_id']);
+                $existing_author->update($author);
+            } else {
+                $existing_author = Author::create($author);
+                $existing_book->authors()->attach($existing_author);
+            }
+            $updated_authors[] = $existing_author;
+        }
+
+        return $updated_authors;
+    }
+    private function updateVersion($existing_book, $patch_version)
+    {
+        $existing_versions = $existing_book->versions()->get();
+        $existing_version = Version::findOrFail($existing_versions[0]['version_id']);
+
+        $existing_version->fill([
+            'page_count' => $patch_version['page_count'],
+            'format_id' => $patch_version['format_id'],
+        ])->save();
+
+        return [$existing_version];
+    }
+
+    private function updateGenres($existing_book, $genres_array)
+    {
+        $new_genres = collect($genres_array)->map(function ($genre) {
+            return Genre::firstOrCreate(['name' => $genre]);
+        })->all();
+
+        $existing_book->genres()->syncWithoutDetaching($new_genres);
+
+        return $new_genres;
+    }
+
+    /**
      * Update the specified resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -144,102 +196,20 @@ class BookController extends Controller
      */
     public function update(Request $request, $id)
     {
-        // THIS FUNCTION IS INSANE
         $existing_book = Book::findOrFail($id);
+        $data = $request->data["book_form"];
 
-        if ($existing_book) {
-            $existing_authors = $existing_book->authors()->get();
-            $existing_versions = $existing_book->versions()->get();
-        }
+        $patch_book = $data["book"];
+        $patch_authors = $data["authors"];
+        $patch_version = $data["versions"][0];
+        $genres_array = $data["newGenres"]["formatted"];
 
-        $patch_book = $request->data["book_form"]["book"];
-        $patch_authors = $request->data["book_form"]["authors"];
-        $patch_version = $request->data["book_form"]["versions"][0];
-        $genres_array = $request->data["book_form"]["newGenres"]["formatted"];
+        $this->updateBook($existing_book, $patch_book);
+        $existing_authors = $this->updateAuthors($existing_book, $patch_authors);
+        $existing_versions = $this->updateVersion($existing_book, $patch_version);
+        $new_genres = $this->updateGenres($existing_book, $genres_array);
 
-        // BOOK
-        if ($existing_book) {
-            $existing_book->title = $patch_book["title"];
-            $existing_book->is_completed = $patch_book["is_completed"];
-            if ($patch_book["is_completed"] === true) {
-                $existing_book->rating = $patch_book["rating"];
-                $existing_book->date_completed = Carbon::createFromFormat("Y-m-d", $patch_book["date_completed"]);
-            } else {
-                $existing_book->rating = null;
-                $existing_book->date_completed = null;
-            }
-
-            $existing_book->save();
-        }
-
-        // If we already have authors
-        if ($existing_authors) {
-
-            // THIS DOESN'T WORK because we want to loop through PATCH authors, not EXISTING authors
-            foreach ($patch_authors as $key => $author) {
-                // Check if the request already has an ID attached
-                if (array_key_exists("author_id", $author)) {
-                    $fetch_id = $author["author_id"];
-                    // Find existing author
-                    $existing_author = Author::findOrFail($fetch_id);
-
-                    // If we get a valid response from the DB, patch it
-                    if ($existing_author) {
-                        $existing_author->first_name = $patch_authors[$key]["first_name"];
-                        $existing_author->last_name = $patch_authors[$key]["last_name"];
-                        $existing_author->save();
-                    } else {
-                        // we have an ID but no record? ERROR!
-                        // @TODO: Handle gracefully
-                        return "ERROR, AUTHOR NOT FOUND";
-                    }
-                } else // If no ID key exists, it must be a new author... right?
-                {
-
-                    $new_author = new Author;
-                    $new_author->first_name =  $patch_authors[$key]["first_name"];
-                    $new_author->last_name =  $patch_authors[$key]["last_name"];
-
-                    $new_author->save();
-                    $existing_book->authors()->attach($new_author);
-                }
-            }
-        }
-
-
-        // VERSIONS
-        if ($existing_versions) {
-            $fetch_id = $existing_versions[0]["version_id"];
-            $existing_version = Version::findOrFail($fetch_id);
-            // Catch error
-            if ($existing_version) {
-                $existing_version->page_count = $patch_version["page_count"];
-                $existing_version->format_id = $patch_version["format_id"];
-                $existing_version->save();
-            }
-        }
-
-        // NEW GENRES
-        $new_genres = [];
-        foreach ($genres_array as $genre) {
-            $genre_request = Genre::firstOrCreate(
-                ["name" => $genre],
-            );
-            array_push($new_genres, $genre_request);
-        };
-        foreach ($new_genres as $new_genre) {
-            $existing_book->genres()->attach($new_genre);
-        }
-
-
-        // RESPONSE
-        $data = [
-            "book"          => $existing_book,
-            "authors"       => $existing_authors,
-            "versions"      => $existing_versions,
-            "genres"        => $new_genres,
-        ];
-        return response()->json($data);
+        return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres);
     }
 
     /**
