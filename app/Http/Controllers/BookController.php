@@ -34,18 +34,28 @@ class BookController extends Controller
             return Author::firstOrCreate($author);
         })->all();
     }
-    private function createVersion($versionData)
-    {
-        $format = Format::find($versionData['format_id']);
+    private function prepareVersion($version_data) {
+        $new_version = new Version;
+
+        $format = Format::find($version_data['format']);
 
         if ($format->name == 'Audio') {
             // Validate elsewhere
         } elseif ($format->name == 'Paper') {
             // Nullify audio_runtime for paper format
-            $versionData['audio_runtime'] = null;
+            $new_version['audio_runtime'] = null;
         }
 
-        return Version::create($versionData);
+        $new_version['page_count'] = $version_data['page_count'];
+        $new_version['audio_runtime'] = $version_data['audio_runtime'];
+        $new_version['format_id'] = $version_data['format'];
+
+        return $new_version;
+
+    }
+    private function createVersion($version_data)
+    { 
+        return Version::create($version_data);
     }
     private function handleGenres($genresData)
     {
@@ -55,9 +65,17 @@ class BookController extends Controller
     }
     private function attachModels($book, $authors, $version, $genres)
     {
-        $book->authors()->sync($authors);
+        $authorIds = array_map(function ($author) {
+            return $author->author_id;
+        }, $authors);
+
+        $genreIds = array_map(function ($genre) {
+            return $genre->genre_id;
+        }, $genres);
+
+        $book->authors()->attach($authorIds);
         $book->versions()->save($version);
-        $book->genres()->sync($genres);
+        $book->genres()->attach($genreIds);
     }
     private function buildResponse($book, $authors, $version, $genres)
     {
@@ -98,11 +116,11 @@ class BookController extends Controller
      */
     public function store(Request $request)
     {
-        $bookForm = $request->bookForm;
+        $bookForm = $request->book;
 
         $new_book = $this->createBook($bookForm["book"]);
         $new_authors = $this->handleAuthors($bookForm["authors"]);
-        $new_version = $this->createVersion($bookForm["version"]);
+        $new_version = $this->prepareVersion($bookForm["version"]);
         $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
 
         $this->attachModels($new_book, $new_authors, $new_version, $new_genres);

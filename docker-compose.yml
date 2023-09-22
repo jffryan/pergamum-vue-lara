@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  laravel-app:
+    build:
+      context: ./path/to/laravel/app
+      dockerfile: Dockerfile.backend
+    volumes:
+      - ./path/to/laravel/app:/var/www
+    ports:
+      - "9000:9000"
+
+  vue-app:
+    build:
+      context: ./path/to/vue/app
+      dockerfile: Dockerfile.frontend
+    volumes:
+      - ./path/to/vue/app:/app
+    ports:
+      - "8080:8080"
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"

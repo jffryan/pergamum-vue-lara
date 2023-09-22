@@ -1,0 +1,21 @@
+# Use Node base image
+FROM node:14
+
+# Set work directory
+WORKDIR /app
+
+# Install app dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Build app
+RUN npm run build
+
+# Expose the app on port 8080
+EXPOSE 8080
+
+# Start Vue app
+CMD ["npm", "run", "dev"]

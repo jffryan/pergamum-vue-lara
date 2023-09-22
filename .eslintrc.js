@@ -36,5 +36,6 @@ module.exports = {
     "linebreak-style": "off",
     "no-multiple-empty-lines": 0,
     "no-console": "off",
+    camelcase: "off",
   },
 };
