@@ -6,7 +6,7 @@
 </template>
 
 <script>
-import { getAllBooks } from "@/api/BookController.js";
+import { getAllBooks } from "@/api/BookController";
 
 import { useBooksStore } from "@/stores";
 
@@ -31,11 +31,10 @@ export default {
   },
   async mounted() {
     // I just know this is going to cause a bug later XD
-    if (this.BooksStore.allBooks.length === 0) {
+    if (this.BooksStore.allBooks.length < 2) {
       const books = await getAllBooks();
       this.BooksStore.setAllBooks(books.data);
     }
   },
 };
 </script>
-

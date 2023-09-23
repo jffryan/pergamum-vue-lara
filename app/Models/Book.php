@@ -14,7 +14,7 @@ class Book extends Model
 
     protected $primaryKey = "book_id";
 
-    protected $fillable = ['title', 'is_completed', 'rating', 'date_completed'];
+    protected $fillable = ['title', 'slug', 'is_completed', 'rating', 'date_completed'];
 
     public function authors(): BelongsToMany
     {

@@ -18,6 +18,7 @@ return new class extends Migration
         Schema::create('books', function (Blueprint $table) {
             $table->id("book_id");
             $table->string("title");
+            $table->string("slug")->unique();
             $table->boolean("is_completed")->default(0);
             $table->integer("rating")->nullable();
             $table->date("date_completed")->nullable();

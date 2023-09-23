@@ -12,6 +12,9 @@ const useBooksStore = defineStore("BooksStore", {
     setAllBooks(books) {
       this.allBooks = books;
     },
+    addBook(book) {
+      this.allBooks.push(book);
+    },
     // ---------------------
     // Sort helper functions
     // ---------------------

@@ -21,5 +21,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::resource("/books", BookController::class);
+Route::get("/book/{slug}", [BookController::class, 'getBookBySlug']);
 
 Route::get("/config/formats", [ConfigController::class, "getFormats"]);

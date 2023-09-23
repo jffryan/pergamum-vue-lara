@@ -10,6 +10,8 @@
             type="checkbox"
             v-model="bookForm.book.is_completed"
             class="sr-only peer"
+            :true-value="1"
+            :false-value="0"
           />
           <div
             class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
@@ -126,6 +128,19 @@
       </p>
     </div>
     <!-- END FORMAT SELECT -->
+    <div class="mb-4">
+      <label for="nickname" class="block mb-2 font-bold text-zinc-600 mr-6"
+        >Version Nickname</label
+      >
+      <input
+        type="text"
+        id="nickname"
+        name="nickname"
+        placeholder="Nickname"
+        v-model="bookForm.version.nickname"
+      />
+    </div>
+    <!-- END VERSION NICKNAME -->
     <div class="flex justify-between gap-x-4 mb-4">
       <!-- Page count field -->
       <div class="mb-4 w-full">
@@ -139,7 +154,10 @@
           placeholder="Page Count"
           v-model="bookForm.version.page_count"
           @input="
-            bookForm.page_count = $event.target.value.replace(/[^0-9]/g, '')
+            bookForm.version.page_count = $event.target.value.replace(
+              /[^0-9]/g,
+              ''
+            )
           "
         />
         <p v-if="!isValid.version.page_count" class="p-2 text-red-300">
@@ -243,6 +261,12 @@ import {
 
 export default {
   name: "BookCreateEditForm",
+  props: {
+    currentBook: {
+      type: Object,
+      default: null,
+    },
+  },
   setup() {
     const configStore = useConfigStore();
 
@@ -279,7 +303,6 @@ export default {
       return {
         book: {
           title: "",
-          authors: [""],
           genres: {
             raw: "",
             parsed: [""],
@@ -298,6 +321,7 @@ export default {
           format: "",
           page_count: "",
           audio_runtime: "",
+          nickname: "",
         },
       };
     },
@@ -348,6 +372,36 @@ export default {
         return `${value}/`;
       }
       return value;
+    },
+    formatBookToEdit(book) {
+      const formattedBook = this.initializeBookForm();
+
+      formattedBook.book.is_completed = book.is_completed;
+      formattedBook.book.title = book.title;
+      formattedBook.authors = book.authors;
+      // Genres
+      formattedBook.book.genres.raw = book.genres
+        .map(
+          (genre) =>
+            `${genre.name.charAt(0).toUpperCase()}${genre.name
+              .slice(1)
+              .toLowerCase()}, `
+        )
+        .join(" ");
+      // @TODO: need to update this to loop through versions
+      formattedBook.version.format = book.versions[0].format_id;
+      formattedBook.version.nickname = book.versions[0].nickname;
+      formattedBook.version.page_count = book.versions[0].page_count;
+      // Audio runtime
+      if (book.is_completed) {
+        const [year, month, day] = this.currentBook.date_completed.split("-");
+        const formattedDate = `${month}/${day}/${year}`;
+        formattedBook.book.date_completed = formattedDate;
+      }
+
+      formattedBook.book.rating = book.rating;
+
+      return formattedBook;
     },
     // Form validation
     validateBook(bookForm) {
@@ -408,6 +462,9 @@ export default {
   },
   async created() {
     await this.configStore.checkForFormats();
+    if (this.currentBook) {
+      this.bookForm = this.formatBookToEdit(this.currentBook);
+    }
   },
 };
 </script>

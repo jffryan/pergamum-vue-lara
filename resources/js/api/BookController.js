@@ -9,6 +9,10 @@ const getAllBooks = async () => makeRequest("get", buildUrl("books"));
 const getOneBook = async (book_id) =>
   makeRequest("get", buildUrl("books", book_id));
 
+// GET BY SLUG
+const getBookBySlug = async (slug) =>
+  makeRequest("get", buildUrl("book", slug));
+
 // CREATE
 const createBook = async (book) =>
   makeRequest("post", buildUrl("books"), { book });
@@ -47,6 +51,7 @@ const removeAuthorInstance = async (deleteRequest) => {
 
 export {
   getAllBooks,
+  getBookBySlug,
   getOneBook,
   createBook,
   updateBook,

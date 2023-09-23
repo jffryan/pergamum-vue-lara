@@ -9,6 +9,7 @@ use App\Models\Genre;
 use App\Models\Version;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class BookController extends Controller
 {
@@ -19,11 +20,18 @@ class BookController extends Controller
 
     private function createBook($bookData)
     {
+        $slug = Str::of($bookData['title'])
+        ->lower()
+        ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+        ->replace(' ', '-')  // Replace spaces with hyphens
+        ->limit(30);  // Limit to 30 characters
+
         $data = [
             'title' => $bookData['title'],
+            'slug' => $slug,
             'is_completed' => $bookData['is_completed'],
             'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
-            'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("Y-m-d", $bookData['date_completed']) : null,
+            'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("m/d/Y", $bookData['date_completed']) : null,
         ];
 
         return Book::create($data);
@@ -49,13 +57,10 @@ class BookController extends Controller
         $new_version['page_count'] = $version_data['page_count'];
         $new_version['audio_runtime'] = $version_data['audio_runtime'];
         $new_version['format_id'] = $version_data['format'];
+        $new_version['nickname'] = $version_data['nickname'];
 
         return $new_version;
 
-    }
-    private function createVersion($version_data)
-    { 
-        return Version::create($version_data);
     }
     private function handleGenres($genresData)
     {
@@ -135,9 +140,16 @@ class BookController extends Controller
      * @param  \App\Models\Book  $book
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
+    public function show($slug)
     {
-        return Book::with("authors", "versions", "versions.format", "genres")->where("book_id", $id)->get();
+        return Book::with("authors", "versions", "versions.format", "genres")->where("book_id", $slug)->firstOrFail();
+    }
+
+    public function getBookBySlug($slug)
+    {
+        $book = Book::with("authors", "versions", "versions.format", "genres")->where("slug", $slug)->firstOrFail();
+
+        return response()->json($book);
     }
 
     /**
@@ -161,7 +173,7 @@ class BookController extends Controller
             'title' => $patch_book['title'],
             'is_completed' => $patch_book['is_completed'],
             'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
-            'date_completed' => $patch_book['is_completed'] ? Carbon::createFromFormat("Y-m-d", $patch_book['date_completed']) : null,
+            'date_completed' => $patch_book['is_completed'] ? Carbon::createFromFormat("m/d/Y", $patch_book['date_completed']) : null,
         ])->save();
     }
     private function updateAuthors($existing_book, $patch_authors)
