@@ -4,236 +4,6 @@
       <h2 class="mb-0">
         {{ isCreateMode ? "Create Book" : "Edit Book" }}
       </h2>
-      <div class="mt-auto">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            v-model="bookForm.book.is_completed"
-            class="sr-only peer"
-            :true-value="1"
-            :false-value="0"
-          />
-          <div
-            class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
-          ></div>
-          <span class="ml-3 font-medium">I finished this book</span>
-        </label>
-      </div>
-    </div>
-    <!-- End header -->
-    <div class="mb-4">
-      <label for="title" class="block mb-2 font-bold text-zinc-600 mr-6"
-        >Title</label
-      >
-      <input
-        type="text"
-        id="title"
-        name="title"
-        placeholder="Title"
-        v-model="bookForm.book.title"
-      />
-      <p v-if="!isValid.book.title" class="p-2 text-red-300">
-        Enter a name for this book.
-      </p>
-    </div>
-    <!-- End title -->
-    <div class="mb-4">
-      <div class="flex justify-between mb-2">
-        <label
-          for="author_first_name"
-          class="block font-bold text-zinc-600 mr-6"
-          >Author</label
-        >
-        <div class="flex justify-end">
-          <button class="btn-inline" @click="addAuthorInput">Add more</button>
-        </div>
-      </div>
-
-      <div
-        v-for="(author, idx) in bookForm.authors"
-        :key="author.author_id ? author.author_id : idx"
-        ref="author_fields"
-      >
-        <div class="w-full text-right">
-          <button
-            class="btn-inline"
-            v-if="bookForm.authors.length > 1"
-            @click="removeAuthorInput(idx)"
-          >
-            Remove
-          </button>
-        </div>
-
-        <div class="flex justify-between gap-x-4">
-          <input
-            id="author_first_name"
-            name="author_first_name"
-            type="text"
-            placeholder="First"
-            class="block"
-            v-model="author.first_name"
-          />
-          <input
-            id="author_last_name"
-            name="author_last_name"
-            type="text"
-            placeholder="Last"
-            class="block"
-            v-model="author.last_name"
-          />
-        </div>
-
-        <p v-if="!isValid.authors[idx]" class="p-2 text-red-300">
-          Last name is required.
-        </p>
-      </div>
-    </div>
-    <!-- END AUTHOR INPUT -->
-    <div class="mb-4">
-      <label for="genres" class="block font-bold text-zinc-600 mb-2"
-        >Add genres, separated by a comma</label
-      >
-      <input
-        name="genres"
-        type="text"
-        placeholder="Genres"
-        class="block bg-dark-mode-100 w-full border-b border-zinc-400 p-2 mb-4"
-        v-model="bookForm.book.genres.raw"
-      />
-      <p v-if="!isValid.book.genres" class="p-2 text-red-300">
-        At least one genre is required.
-      </p>
-    </div>
-    <!-- END GENRES -->
-    <div class="mb-4">
-      <label for="title" class="block mb-2 font-bold text-zinc-600 mr-6"
-        >Format</label
-      >
-      <select
-        v-model="bookForm.version.format"
-        class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
-      >
-        <option value="" class="text-zinc-400" disabled>Select a format</option>
-        <option
-          v-for="format in configStore.books.formats"
-          :key="format.format_id"
-          :value="format.format_id"
-          class="text-zinc-700"
-        >
-          {{ format.name }}
-        </option>
-      </select>
-      <p v-if="!isValid.version.format" class="p-2 text-red-300">
-        Format is required.
-      </p>
-    </div>
-    <!-- END FORMAT SELECT -->
-    <div class="mb-4">
-      <label for="nickname" class="block mb-2 font-bold text-zinc-600 mr-6"
-        >Version Nickname</label
-      >
-      <input
-        type="text"
-        id="nickname"
-        name="nickname"
-        placeholder="Nickname"
-        v-model="bookForm.version.nickname"
-      />
-    </div>
-    <!-- END VERSION NICKNAME -->
-    <div class="flex justify-between gap-x-4 mb-4">
-      <!-- Page count field -->
-      <div class="mb-4 w-full">
-        <label for="page_count" class="block mb-2 font-bold text-zinc-600 mr-6"
-          >Page Count</label
-        >
-        <input
-          type="text"
-          id="page_count"
-          name="page_count"
-          placeholder="Page Count"
-          v-model="bookForm.version.page_count"
-          @input="
-            bookForm.version.page_count = $event.target.value.replace(
-              /[^0-9]/g,
-              ''
-            )
-          "
-        />
-        <p v-if="!isValid.version.page_count" class="p-2 text-red-300">
-          Enter a valid page count.
-        </p>
-      </div>
-
-      <!-- Audio runtime field -->
-      <div v-if="bookForm.version.format === 2" class="mb-4 w-full">
-        <label
-          for="audio_runtime"
-          class="block mb-2 font-bold text-zinc-600 mr-6"
-          >Audio Runtime</label
-        >
-        <input
-          type="text"
-          id="audio_runtime"
-          name="audio_runtime"
-          placeholder="Audio Runtime"
-          v-model="bookForm.audio_runtime"
-          @input="
-            bookForm.audio_runtime = $event.target.value.replace(/[^0-9]/g, '')
-          "
-        />
-        <p v-if="!isValid.version.audio_runtime" class="p-2 text-red-300">
-          Enter a valid audio runtime.
-        </p>
-      </div>
-    </div>
-    <!-- END CONTENT LENGTH -->
-    <div v-if="bookForm.book.is_completed">
-      <div class="mb-4">
-        <label
-          for="date_completed"
-          class="block mb-2 font-bold text-zinc-600 mr-6"
-          >Date Completed</label
-        >
-        <input
-          type="text"
-          id="date_completed"
-          name="date_completed"
-          :value="bookForm.book.date_completed"
-          @input="updateDateCompleted"
-          placeholder="MM/DD/YYYY"
-          class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
-        />
-      </div>
-      <!-- END DATE COMPLETED -->
-      <div class="mb-4">
-        <label for="rating" class="block mb-2 font-bold text-zinc-600 mr-6"
-          >Rating</label
-        >
-        <select
-          v-model="bookForm.book.rating"
-          class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
-        >
-          <option value="" class="text-zinc-400" disabled>
-            Select a rating
-          </option>
-          <option
-            v-for="(rating, idx) in Array.from(
-              { length: 9 },
-              (_, i) => 1 + i * 0.5
-            )"
-            :key="idx"
-            :value="rating"
-            class="text-zinc-700"
-          >
-            {{ rating }}
-          </option>
-        </select>
-      </div>
-      <!-- END RATING INPUT -->
-    </div>
-    <!-- END COMPLETED CONDITIONAL -->
-    <div class="mt-8 flex justify-end">
       <button
         type="submit"
         class="text-white bg-slate-800 hover:bg-slate-900ont-medium rounded-lg text-sm px-5 py-2.5 mb-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
@@ -241,17 +11,277 @@
         Submit
       </button>
     </div>
+    <!-- End header -->
+    <div class="mb-8">
+      <h3>Book information</h3>
+      <div class="mb-4">
+        <label for="title" class="block mb-2 font-bold text-zinc-600 mr-6"
+          >Title</label
+        >
+        <input
+          type="text"
+          id="title"
+          name="title"
+          placeholder="Title"
+          v-model="bookForm.book.title"
+        />
+        <p v-if="!isValid.book.title" class="p-2 text-red-300">
+          Enter a name for this book.
+        </p>
+      </div>
+      <!-- End title -->
+      <div class="mb-4">
+        <div class="flex justify-between mb-2">
+          <label
+            for="author_first_name"
+            class="block font-bold text-zinc-600 mr-6"
+            >Author</label
+          >
+          <div class="flex justify-end">
+            <button class="btn-inline" @click.prevent="addAuthorInput">
+              Add more
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-for="(author, idx) in bookForm.authors"
+          :key="author.author_id ? author.author_id : idx"
+          ref="author_fields"
+        >
+          <div class="w-full text-right">
+            <button
+              class="btn-inline"
+              v-if="bookForm.authors.length > 1"
+              @click.prevent="removeAuthorInput(idx)"
+            >
+              Remove
+            </button>
+          </div>
+
+          <div class="flex justify-between gap-x-4">
+            <input
+              id="author_first_name"
+              name="author_first_name"
+              type="text"
+              placeholder="First"
+              class="block"
+              v-model="author.first_name"
+            />
+            <input
+              id="author_last_name"
+              name="author_last_name"
+              type="text"
+              placeholder="Last"
+              class="block"
+              v-model="author.last_name"
+            />
+          </div>
+
+          <p v-if="!isValid.authors[idx]" class="p-2 text-red-300">
+            Last name is required.
+          </p>
+        </div>
+      </div>
+      <!-- END AUTHOR INPUT -->
+      <div class="mb-4">
+        <label for="genres" class="block font-bold text-zinc-600 mb-2"
+          >Add genres, separated by a comma</label
+        >
+        <input
+          name="genres"
+          type="text"
+          placeholder="Genres"
+          class="block bg-dark-mode-100 w-full border-b border-zinc-400 p-2 mb-4"
+          v-model="bookForm.book.genres.raw"
+        />
+        <p v-if="!isValid.book.genres" class="p-2 text-red-300">
+          At least one genre is required.
+        </p>
+      </div>
+      <!-- END GENRES -->
+    </div>
+    <div class="mb-8">
+      <div class="mb-4 flex justify-between">
+        <h3 class="mb-0">Reader Profile</h3>
+        <div class="mt-auto">
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="bookForm.book.is_completed"
+              class="sr-only peer"
+              :true-value="1"
+              :false-value="0"
+            />
+            <div
+              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+            ></div>
+            <span class="ml-3 font-medium">I finished this book</span>
+          </label>
+        </div>
+      </div>
+      <div v-if="bookForm.book.is_completed">
+        <div class="mb-4">
+          <label
+            for="date_completed"
+            class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Date Completed</label
+          >
+          <input
+            type="text"
+            id="date_completed"
+            name="date_completed"
+            :value="bookForm.book.date_completed"
+            @input="updateDateCompleted"
+            placeholder="MM/DD/YYYY"
+            class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
+          />
+        </div>
+        <!-- END DATE COMPLETED -->
+        <div class="mb-4">
+          <label for="rating" class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Rating</label
+          >
+          <select
+            v-model="bookForm.book.rating"
+            class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
+          >
+            <option value="" class="text-zinc-400" disabled>
+              Select a rating
+            </option>
+            <option
+              v-for="(rating, idx) in Array.from(
+                { length: 9 },
+                (_, i) => 1 + i * 0.5
+              )"
+              :key="idx"
+              :value="rating"
+              class="text-zinc-700"
+            >
+              {{ rating }}
+            </option>
+          </select>
+        </div>
+        <!-- END RATING INPUT -->
+      </div>
+      <!-- END COMPLETED CONDITIONAL -->
+    </div>
+    <div class="w-full flex justify-between align-bottom mb-4">
+      <h3>Version information</h3>
+      <button
+        @click.prevent="addNewVersion"
+        class="border border-slate-800 rounded-lg text-sm px-5 py-2.5"
+      >
+        Add new version
+      </button>
+    </div>
+    <div
+      v-for="(version, idx) in bookForm.versions"
+      :key="version.version_id ? version.version_id : idx"
+    >
+      <div class="mb-4">
+        <label for="title" class="block mb-2 font-bold text-zinc-600 mr-6"
+          >Format</label
+        >
+        <select
+          v-model="bookForm.versions[idx].format"
+          class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
+        >
+          <option value="" class="text-zinc-400" disabled>
+            Select a format
+          </option>
+          <option
+            v-for="format in ConfigStore.books.formats"
+            :key="format.format_id"
+            :value="format.format_id"
+            class="text-zinc-700"
+          >
+            {{ format.name }}
+          </option>
+        </select>
+        <p v-if="!isValid.versions[idx].format" class="p-2 text-red-300">
+          Format is required.
+        </p>
+      </div>
+      <!-- END FORMAT SELECT -->
+      <div class="mb-4">
+        <label for="nickname" class="block mb-2 font-bold text-zinc-600 mr-6"
+          >Version Nickname</label
+        >
+        <input
+          type="text"
+          id="nickname"
+          name="nickname"
+          placeholder="Nickname"
+          v-model="bookForm.versions[idx].nickname"
+        />
+      </div>
+      <!-- END VERSION NICKNAME -->
+      <div class="flex justify-between gap-x-4 mb-4">
+        <!-- Page count field -->
+        <div class="mb-4 w-full">
+          <label
+            for="page_count"
+            class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Page Count</label
+          >
+          <input
+            type="text"
+            id="page_count"
+            name="page_count"
+            placeholder="Page Count"
+            v-model="bookForm.versions[idx].page_count"
+            @input="
+              bookForm.versions[idx].page_count = $event.target.value.replace(
+                /[^0-9]/g,
+                ''
+              )
+            "
+          />
+          <p v-if="!isValid.versions[idx].page_count" class="p-2 text-red-300">
+            Enter a valid page count.
+          </p>
+        </div>
+
+        <!-- Audio runtime field -->
+        <div v-if="bookForm.versions[idx].format === 2" class="mb-4 w-full">
+          <label
+            for="audio_runtime"
+            class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Audio Runtime</label
+          >
+          <input
+            type="text"
+            id="audio_runtime"
+            name="audio_runtime"
+            placeholder="Audio Runtime"
+            v-model="bookForm.versions[idx].audio_runtime"
+            @input="
+              bookForm.versions[idx].audio_runtime =
+                $event.target.value.replace(/[^0-9]/g, '')
+            "
+          />
+          <p
+            v-if="!isValid.versions[idx].audio_runtime"
+            class="p-2 text-red-300"
+          >
+            Enter a valid audio runtime.
+          </p>
+        </div>
+      </div>
+      <!-- END CONTENT LENGTH -->
+    </div>
   </form>
 </template>
 
 <script>
 import _ from "lodash";
 
-import { useConfigStore } from "@/stores";
+import { useConfigStore, useBooksStore } from "@/stores";
 
 import { splitAndNormalizeGenres } from "@/utils/genresLibrary";
 
-import { createBook } from "@/api/BookController";
+import { createBook, updateBook } from "@/api/BookController";
 
 import {
   validateString,
@@ -268,10 +298,12 @@ export default {
     },
   },
   setup() {
-    const configStore = useConfigStore();
+    const BooksStore = useBooksStore();
+    const ConfigStore = useConfigStore();
 
     return {
-      configStore,
+      BooksStore,
+      ConfigStore,
     };
   },
   data() {
@@ -283,11 +315,13 @@ export default {
           genres: true,
         },
         authors: [true],
-        version: {
-          format: true,
-          page_count: true,
-          audio_runtime: true,
-        },
+        versions: [
+          {
+            format: true,
+            page_count: true,
+            audio_runtime: true,
+          },
+        ],
       },
     };
   },
@@ -295,6 +329,9 @@ export default {
     isCreateMode() {
       // This only works for now. Eventually I want to use this form on other pages
       return this.$route.name === "books.create";
+    },
+    isEditMode() {
+      return this.$route.path.includes("edit");
     },
   },
   methods: {
@@ -317,12 +354,14 @@ export default {
             last_name: "",
           },
         ],
-        version: {
-          format: "",
-          page_count: "",
-          audio_runtime: "",
-          nickname: "",
-        },
+        versions: [
+          {
+            format: "",
+            page_count: "",
+            audio_runtime: "",
+            nickname: "",
+          },
+        ],
       };
     },
     // Form UX functions
@@ -338,11 +377,11 @@ export default {
           last_name: "",
         };
         this.bookForm.authors.push(newAuthor);
+        // Add another isValid input
+        this.isValid.authors.push({
+          last_name: true,
+        });
       }
-      // Add another isValid input
-      this.isValid.authors.push({
-        last_name: true,
-      });
     },
     removeAuthorInput(index) {
       if (this.bookForm.authors.length > 1) {
@@ -373,12 +412,40 @@ export default {
       }
       return value;
     },
+    addNewVersion() {
+      // Limit to one blank input at a time
+      const lastIndex = this.bookForm.versions.length - 1;
+      const lastVersion = this.bookForm.versions[lastIndex];
+      if (lastVersion.format !== "") {
+        const newVersion = {
+          format: "",
+          page_count: "",
+          audio_runtime: "",
+          nickname: "",
+        };
+        this.bookForm.versions.push(newVersion);
+        this.isValid.versions.push({
+          format: true,
+          page_count: true,
+          audio_runtime: true,
+        });
+      }
+    },
     formatBookToEdit(book) {
       const formattedBook = this.initializeBookForm();
 
       formattedBook.book.is_completed = book.is_completed;
       formattedBook.book.title = book.title;
       formattedBook.authors = book.authors;
+      formattedBook.book_id = book.book_id;
+
+      // BUGGY!
+      for (let i = 0; i < formattedBook.authors.length; i += 1) {
+        this.isValid.authors.push({
+          last_name: true,
+        });
+      }
+
       // Genres
       formattedBook.book.genres.raw = book.genres
         .map(
@@ -388,10 +455,24 @@ export default {
               .toLowerCase()}, `
         )
         .join(" ");
-      // @TODO: need to update this to loop through versions
-      formattedBook.version.format = book.versions[0].format_id;
-      formattedBook.version.nickname = book.versions[0].nickname;
-      formattedBook.version.page_count = book.versions[0].page_count;
+
+      const versions = [];
+      for (let i = 0; i < book.versions.length; i += 1) {
+        versions.push({
+          format: book.versions[i].format_id,
+          page_count: book.versions[i].page_count,
+          audio_runtime: book.versions[i].audio_runtime,
+          nickname: book.versions[i].nickname,
+        });
+        // BUGGY!
+        this.isValid.versions.push({
+          format: true,
+          page_count: true,
+          audio_runtime: true,
+        });
+      }
+      formattedBook.versions = versions;
+
       // Audio runtime
       if (book.is_completed) {
         const [year, month, day] = this.currentBook.date_completed.split("-");
@@ -406,7 +487,14 @@ export default {
     // Form validation
     validateBook(bookForm) {
       const { title, genres } = bookForm.book;
-      const { format, page_count, audio_runtime } = bookForm.version;
+
+      const versionsValidation = bookForm.versions.map((version) => ({
+        format: validateNumber(version.format),
+        page_count:
+          validateString(version.page_count) ||
+          validateNumber(version.page_count),
+        audio_runtime: validateNumber(version.audio_runtime),
+      }));
 
       const isValid = {
         book: {
@@ -414,14 +502,11 @@ export default {
           genres: validateString(genres.raw),
         },
         authors: bookForm.authors.map((author) => validateAuthor(author)),
-        version: {
-          format: validateNumber(format),
-          page_count: validateString(page_count),
-          audio_runtime: validateNumber(audio_runtime),
-        },
+        versions: versionsValidation,
       };
 
       this.isValid = isValid;
+
       return Object.values(isValid.book).every((value) => value);
     },
     // Formatting submission
@@ -432,36 +517,88 @@ export default {
 
       return formattedBookForm;
     },
+    // Validate and format book
+    validateAndFormatBook(bookForm) {
+      const bookFormRequest = _.cloneDeep(bookForm);
+      // Validate
+      const isFormValid = this.validateBook(bookFormRequest);
+
+      if (isFormValid) {
+        // Set formatting
+        const parsedGenres = splitAndNormalizeGenres(bookForm.book.genres.raw);
+        const formattedBookForm = this.formatBookForm(
+          bookFormRequest,
+          parsedGenres
+        );
+
+        return formattedBookForm;
+      }
+
+      return false;
+    },
+    async submitCreateForm(bookForm) {
+      const bookFormRequest = _.cloneDeep(bookForm);
+      // Validate
+      const formattedBookForm = this.validateAndFormatBook(bookFormRequest);
+      if (formattedBookForm) {
+        const res = await createBook(formattedBookForm);
+
+        const formattedBook = this.formatBookResponse(res.data);
+
+        this.BooksStore.addBook(formattedBook);
+
+        this.bookForm = this.initializeBookForm();
+
+        return res;
+      }
+      return null;
+    },
+    async submitEditForm(bookForm) {
+      const bookFormRequest = _.cloneDeep(bookForm);
+      // Validate
+      const formattedBookForm = this.validateAndFormatBook(bookFormRequest);
+      if (formattedBookForm) {
+        const res = await updateBook(formattedBookForm);
+
+        const formattedBook = this.formatBookResponse(res.data);
+
+        this.BooksStore.updateBook(formattedBook);
+
+        return res;
+      }
+      return null;
+    },
     // Form submit process
     async submitBookForm(bookForm) {
-      const bookFormRequest = _.cloneDeep(bookForm);
-
       if (this.isCreateMode) {
-        // Validate
-        const isFormValid = this.validateBook(bookFormRequest);
-        if (isFormValid) {
-          // Set formatting
-          const parsedGenres = splitAndNormalizeGenres(
-            bookForm.book.genres.raw
-          );
-          const formattedBookForm = this.formatBookForm(
-            bookFormRequest,
-            parsedGenres
-          );
-
-          const res = await createBook(formattedBookForm);
-
-          this.bookForm = this.initializeBookForm();
-
-          return res;
-        }
-      } else {
-        throw new Error("Form is invalid.");
+        await this.submitCreateForm(bookForm);
       }
+
+      if (this.isEditMode) {
+        await this.submitEditForm(bookForm);
+      }
+    },
+
+    // Formats the book response object from CRUD actions to look like others in the library
+    // Probably a bad data-wrangley type of step
+    formatBookResponse(unFormattedBook) {
+      const formattedBook = {
+        authors: unFormattedBook.authors,
+        book_id: unFormattedBook.book.book_id,
+        date_completed: unFormattedBook.book.date_completed?.substring(0, 10),
+        genres: unFormattedBook.genres,
+        is_completed: unFormattedBook.book.is_completed,
+        rating: unFormattedBook.book?.rating,
+        slug: unFormattedBook.book.slug,
+        title: unFormattedBook.book.title,
+        versions: unFormattedBook.versions,
+      };
+
+      return formattedBook;
     },
   },
   async created() {
-    await this.configStore.checkForFormats();
+    await this.ConfigStore.checkForFormats();
     if (this.currentBook) {
       this.bookForm = this.formatBookToEdit(this.currentBook);
     }

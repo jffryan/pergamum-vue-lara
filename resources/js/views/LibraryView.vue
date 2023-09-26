@@ -31,7 +31,7 @@ export default {
   },
   async mounted() {
     // I just know this is going to cause a bug later XD
-    if (this.BooksStore.allBooks.length < 2) {
+    if (this.BooksStore.allBooks.length < 5) {
       const books = await getAllBooks();
       this.BooksStore.setAllBooks(books.data);
     }

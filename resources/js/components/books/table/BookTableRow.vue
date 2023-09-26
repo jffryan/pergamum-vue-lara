@@ -38,7 +38,20 @@ export default {
       return "Unknown";
     },
     bookFormat() {
-      return this.book.versions[0].format.name;
+      switch (this.book.versions[0].format_id) {
+        case 1:
+          return "Paper";
+        case 2:
+          return "Audio";
+        case 3:
+          return "eBook";
+        case 4:
+          return "Pirated";
+        case 5:
+          return "Borrowed";
+        default:
+          return "Unknown";
+      }
     },
     primaryGenres() {
       // Take the first 3 genres and return their names in an array

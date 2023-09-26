@@ -42,24 +42,29 @@ class BookController extends Controller
             return Author::firstOrCreate($author);
         })->all();
     }
-    private function prepareVersion($version_data) {
-        $new_version = new Version;
+    private function prepareVersions($versions_data) {
+        $new_versions = [];
 
-        $format = Format::find($version_data['format']);
+        foreach($versions_data as $version_data) {
+            $new_version = new Version;
+            $format = Format::find($version_data['format']);
 
-        if ($format->name == 'Audio') {
-            // Validate elsewhere
-        } elseif ($format->name == 'Paper') {
-            // Nullify audio_runtime for paper format
-            $new_version['audio_runtime'] = null;
+            if ($format->name == 'Audio') {
+                // Validate elsewhere
+            } elseif ($format->name == 'Paper') {
+                // Nullify audio_runtime for paper format
+                $new_version['audio_runtime'] = null;
+            }
+
+            $new_version['page_count'] = $version_data['page_count'];
+            $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            $new_version['format_id'] = $version_data['format'];
+            $new_version['nickname'] = $version_data['nickname'];
+
+            $new_versions[] = $new_version;
         }
 
-        $new_version['page_count'] = $version_data['page_count'];
-        $new_version['audio_runtime'] = $version_data['audio_runtime'];
-        $new_version['format_id'] = $version_data['format'];
-        $new_version['nickname'] = $version_data['nickname'];
-
-        return $new_version;
+        return $new_versions;
 
     }
     private function handleGenres($genresData)
@@ -68,7 +73,7 @@ class BookController extends Controller
             return Genre::firstOrCreate(['name' => $genre]);
         })->all();
     }
-    private function attachModels($book, $authors, $version, $genres)
+    private function attachModels($book, $authors, $versions, $genres)
     {
         $authorIds = array_map(function ($author) {
             return $author->author_id;
@@ -79,7 +84,7 @@ class BookController extends Controller
         }, $genres);
 
         $book->authors()->attach($authorIds);
-        $book->versions()->save($version);
+        $book->versions()->saveMany($versions);
         $book->genres()->attach($genreIds);
     }
     private function buildResponse($book, $authors, $version, $genres)
@@ -87,7 +92,7 @@ class BookController extends Controller
         return response()->json([
             'book' => $book,
             'authors' => $authors,
-            'version' => $version,
+            'versions' => $version,
             'genres' => $genres,
         ]);
     }
@@ -125,12 +130,12 @@ class BookController extends Controller
 
         $new_book = $this->createBook($bookForm["book"]);
         $new_authors = $this->handleAuthors($bookForm["authors"]);
-        $new_version = $this->prepareVersion($bookForm["version"]);
+        $new_versions = $this->prepareVersions($bookForm["versions"]);
         $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
 
-        $this->attachModels($new_book, $new_authors, $new_version, $new_genres);
+        $this->attachModels($new_book, $new_authors, $new_versions, $new_genres);
 
-        return $this->buildResponse($new_book, $new_authors, $new_version, $new_genres);
+        return $this->buildResponse($new_book, $new_authors, $new_versions, $new_genres);
     }
 
 
@@ -227,16 +232,16 @@ class BookController extends Controller
     public function update(Request $request, $id)
     {
         $existing_book = Book::findOrFail($id);
-        $data = $request->data["book_form"];
+        $data = $request->book;
 
         $patch_book = $data["book"];
         $patch_authors = $data["authors"];
-        $patch_version = $data["versions"][0];
-        $genres_array = $data["newGenres"]["formatted"];
+        $patch_versions = $data["versions"];
+        $genres_array = $data["genres"]["parsed"];
 
         $this->updateBook($existing_book, $patch_book);
         $existing_authors = $this->updateAuthors($existing_book, $patch_authors);
-        $existing_versions = $this->updateVersion($existing_book, $patch_version);
+        $existing_versions = $this->updateVersion($existing_book, $patch_versions);
         $new_genres = $this->updateGenres($existing_book, $genres_array);
 
         return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres);
