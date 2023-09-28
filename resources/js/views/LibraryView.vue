@@ -1,7 +1,17 @@
 <template>
   <div>
     <h1>Library</h1>
-    <BookshelfTable :books="books" />
+    <BookshelfTable :books="books" class="mb-4" />
+    <div class="flex justify-end align-middle"></div>
+    <div v-for="link in cleanedLinks" :key="link.label" class="inline mr-2">
+      <router-link
+        v-if="link.url"
+        :to="link.url"
+        :class="link.active ? 'font-bold underline' : ''"
+      >
+        {{ link.label.replace("&laquo;", "").replace("&raquo;", "") }}
+      </router-link>
+    </div>
   </div>
 </template>
 
@@ -24,17 +34,51 @@ export default {
       BooksStore,
     };
   },
+  data() {
+    return {
+      cleanedLinks: [],
+    };
+  },
   computed: {
     books() {
       return this.BooksStore.allBooks;
     },
   },
+
+  methods: {
+    async fetchData() {
+      const options = {
+        page: this.$route.query.page || 1,
+      };
+
+      const res = await getAllBooks(options);
+
+      this.BooksStore.setAllBooks(res.data.data);
+      this.cleanedLinks = this.cleanPaginationLinks(res.data.links);
+    },
+    cleanPaginationLinks(links) {
+      return links.map((link) => {
+        let url = null;
+        let page = null;
+        if (link.url) {
+          url = new URL(link.url);
+          page = url.searchParams.get("page");
+        }
+
+        return {
+          ...link,
+          url: page ? `/library?page=${page}` : null,
+          label: link.label.replace("&laquo;", "").replace("&raquo;", ""),
+        };
+      });
+    },
+  },
+
+  watch: {
+    "$route.query.page": "fetchData",
+  },
   async mounted() {
-    // I just know this is going to cause a bug later XD
-    if (this.BooksStore.allBooks.length < 5) {
-      const books = await getAllBooks();
-      this.BooksStore.setAllBooks(books.data);
-    }
+    await this.fetchData();
   },
 };
 </script>

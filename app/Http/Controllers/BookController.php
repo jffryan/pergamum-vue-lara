@@ -10,6 +10,7 @@ use App\Models\Version;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class BookController extends Controller
 {
@@ -21,10 +22,10 @@ class BookController extends Controller
     private function createBook($bookData)
     {
         $slug = Str::of($bookData['title'])
-        ->lower()
-        ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-        ->replace(' ', '-')  // Replace spaces with hyphens
-        ->limit(30);  // Limit to 30 characters
+            ->lower()
+            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+            ->replace(' ', '-')  // Replace spaces with hyphens
+            ->limit(30);  // Limit to 30 characters
 
         $data = [
             'title' => $bookData['title'],
@@ -42,31 +43,38 @@ class BookController extends Controller
             return Author::firstOrCreate($author);
         })->all();
     }
-    private function prepareVersions($versions_data) {
+    private function prepareVersions($versions_data)
+    {
         $new_versions = [];
-
-        foreach($versions_data as $version_data) {
+    
+        foreach ($versions_data as $version_data) {
             $new_version = new Version;
             $format = Format::find($version_data['format']);
-
-            if ($format->name == 'Audio') {
-                // Validate elsewhere
-            } elseif ($format->name == 'Paper') {
-                // Nullify audio_runtime for paper format
-                $new_version['audio_runtime'] = null;
+            
+            if (!$format) {
+                // Handle error here
+                continue;
             }
-
+    
             $new_version['page_count'] = $version_data['page_count'];
-            $new_version['audio_runtime'] = $version_data['audio_runtime'];
             $new_version['format_id'] = $version_data['format'];
             $new_version['nickname'] = $version_data['nickname'];
-
+            
+            if ($format->name == 'Audio') {
+                $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            } elseif ($format->name == 'Paper') {
+                $new_version['audio_runtime'] = null;
+            } else {
+                $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            }
+    
+            $new_version->load('format');
             $new_versions[] = $new_version;
         }
-
+    
         return $new_versions;
-
     }
+    
     private function handleGenres($genresData)
     {
         return collect($genresData)->map(function ($genre) {
@@ -87,14 +95,20 @@ class BookController extends Controller
         $book->versions()->saveMany($versions);
         $book->genres()->attach($genreIds);
     }
-    private function buildResponse($book, $authors, $version, $genres)
+    private function buildResponse($book, $authors, $versions, $genres)
     {
-        return response()->json([
-            'book' => $book,
-            'authors' => $authors,
-            'versions' => $version,
-            'genres' => $genres,
-        ]);
+        $nestedResponse = [
+            'book' => array_merge(
+                $book->toArray(),
+                [
+                    'authors' => $authors,
+                    'versions' => $versions,
+                    'genres' => $genres,
+                ]
+            )
+        ];
+
+        return response()->json($nestedResponse);
     }
 
 
@@ -103,10 +117,24 @@ class BookController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        return Book::with("authors", "versions", "versions.format", "genres")->get();
+        $query = Book::with("authors", "versions", "versions.format", "genres")
+            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.last_name) as primary_author_last_name')
+            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
+            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
+    
+        if ($request->has('sort_by') && $request->has('sort_order')) {
+            $query->orderBy($request->sort_by, $request->sort_order);
+        } else {
+            $query->orderBy('primary_author_last_name', 'asc');
+        }
+    
+        $limit = $request->has('limit') ? $request->limit : 20;
+        return $query->paginate($limit);
     }
+    
 
     /**
      * Show the form for creating a new resource.
@@ -198,28 +226,55 @@ class BookController extends Controller
 
         return $updated_authors;
     }
-    private function updateVersion($existing_book, $patch_version)
+    private function updateVersions($existing_book, $patch_versions)
     {
         $existing_versions = $existing_book->versions()->get();
-        $existing_version = Version::findOrFail($existing_versions[0]['version_id']);
+        $updated_versions = [];
 
-        $existing_version->fill([
-            'page_count' => $patch_version['page_count'],
-            'format_id' => $patch_version['format_id'],
-        ])->save();
+        foreach ($patch_versions as $patch_version) {
+            $existing_version = $existing_versions->firstWhere('version_id', $patch_version['version_id']);
 
-        return [$existing_version];
+            if ($existing_version) {
+                // Update existing version
+                $existing_version->fill([
+                    'page_count' => $patch_version['page_count'],
+                    'format_id' => $patch_version['format'],
+                    'nickname' => $patch_version['nickname'],
+                    'audio_runtime' => $patch_version['audio_runtime'] ?? null,
+                ])->save();
+            } else {
+                // Create new version
+                $existing_version = new Version;
+                $existing_version->fill([
+                    'page_count' => $patch_version['page_count'],
+                    'format_id' => $patch_version['format_id'],
+                    'nickname' => $patch_version['nickname'],
+                    'audio_runtime' => $patch_version['audio_runtime'] ?? null,
+                ]);
+                $existing_book->versions()->save($existing_version);
+            }
+
+            $updated_versions[] = $existing_version;
+        }
+
+        foreach ($updated_versions as $version) {
+            $version->load('format');
+        }
+
+        return $updated_versions;
     }
 
     private function updateGenres($existing_book, $genres_array)
     {
-        $new_genres = collect($genres_array)->map(function ($genre) {
-            return Genre::firstOrCreate(['name' => $genre]);
-        })->all();
+        $new_genres = array_map(function ($genre) {
+            return Genre::firstOrCreate(['name' => $genre])->genre_id;
+        }, $genres_array);
 
-        $existing_book->genres()->syncWithoutDetaching($new_genres);
+        $existing_book->genres()->sync($new_genres);
 
-        return $new_genres;
+        $new_genre_instances = Genre::findMany($new_genres);
+
+        return $new_genre_instances;
     }
 
     /**
@@ -237,54 +292,14 @@ class BookController extends Controller
         $patch_book = $data["book"];
         $patch_authors = $data["authors"];
         $patch_versions = $data["versions"];
-        $genres_array = $data["genres"]["parsed"];
+        $genres_array = $data["book"]["genres"]["parsed"];
 
         $this->updateBook($existing_book, $patch_book);
         $existing_authors = $this->updateAuthors($existing_book, $patch_authors);
-        $existing_versions = $this->updateVersion($existing_book, $patch_versions);
+        $existing_versions = $this->updateVersions($existing_book, $patch_versions);
         $new_genres = $this->updateGenres($existing_book, $genres_array);
 
         return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres);
-    }
-
-    /**
-     * Remove genre instance from book
-     * @param  \Illuminate\Http\Request  $request
-     */
-    public function remove_genre_instance(Request $request)
-    {
-        $book_to_detach = Book::find($request["request"]["book_id"]);
-        $genre_to_detach = Genre::find($request["request"]["genre_id"]);
-        if ($book_to_detach && $genre_to_detach) {
-            $book_to_detach->genres()->detach($genre_to_detach);
-            $genre_to_detach->books()->detach($book_to_detach);
-            return [
-                "status" => "success",
-                "message" => "Operation completed successfully",
-            ];
-        } else {
-            return "Nothing here...";
-        }
-    }
-
-    /**
-     * Remove author instance from book
-     * @param  \Illuminate\Http\Request  $request
-     */
-    public function remove_author_instance(Request $request)
-    {
-        $book_to_detach = Book::find($request["request"]["book_id"]);
-        $author_to_detach = Author::find($request["request"]["author_id"]);
-        if ($book_to_detach && $author_to_detach) {
-            $book_to_detach->genres()->detach($author_to_detach);
-            $author_to_detach->books()->detach($book_to_detach);
-            return [
-                "status" => "success",
-                "message" => "Operation completed successfully",
-            ];
-        } else {
-            return "Nothing here...";
-        }
     }
 
     /**

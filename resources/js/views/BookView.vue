@@ -38,7 +38,7 @@
         >
           <p>
             <span class="text-zinc-600">Date read: </span
-            >{{ formattedDateCompleted }}
+            >{{ currentBook.date_completed }}
           </p>
           <p>
             <span class="text-zinc-600">Rating: </span>{{ currentBook.rating }}
@@ -58,7 +58,7 @@
             </p>
             <p>
               <span class="text-zinc-600">Format: </span
-              >{{ version.format.name }}
+              >{{ version.format?.name }}
             </p>
             <p>
               <span class="text-zinc-600">Page count: </span
@@ -98,9 +98,11 @@ export default {
     },
     currentAuthors() {
       if (this.currentBook) {
-        return this.currentBook.authors.map(
-          (author) => `${author.first_name} ${author.last_name}`
-        );
+        return this.currentBook.authors.map((author) => {
+          const firstName = author.first_name || "";
+          const lastName = author.last_name || "";
+          return `${firstName} ${lastName}`.trim();
+        });
       }
       return [];
     },
@@ -109,13 +111,6 @@ export default {
         return this.currentBook.genres;
       }
       return [];
-    },
-    formattedDateCompleted() {
-      if (this.currentBook && this.currentBook.date_completed) {
-        const [year, month, day] = this.currentBook.date_completed.split("-");
-        return `${month}/${day}/${year}`;
-      }
-      return "";
     },
   },
   async mounted() {

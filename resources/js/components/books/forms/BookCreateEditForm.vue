@@ -281,7 +281,7 @@ import { useConfigStore, useBooksStore } from "@/stores";
 
 import { splitAndNormalizeGenres } from "@/utils/genresLibrary";
 
-import { createBook, updateBook } from "@/api/BookController";
+import { createBook, updateBook, getBookBySlug } from "@/api/BookController";
 
 import {
   validateString,
@@ -452,9 +452,9 @@ export default {
           (genre) =>
             `${genre.name.charAt(0).toUpperCase()}${genre.name
               .slice(1)
-              .toLowerCase()}, `
+              .toLowerCase()}`
         )
-        .join(" ");
+        .join(", ");
 
       const versions = [];
       for (let i = 0; i < book.versions.length; i += 1) {
@@ -463,6 +463,7 @@ export default {
           page_count: book.versions[i].page_count,
           audio_runtime: book.versions[i].audio_runtime,
           nickname: book.versions[i].nickname,
+          version_id: book.versions[i].version_id,
         });
         // BUGGY!
         this.isValid.versions.push({
@@ -475,12 +476,9 @@ export default {
 
       // Audio runtime
       if (book.is_completed) {
-        const [year, month, day] = this.currentBook.date_completed.split("-");
-        const formattedDate = `${month}/${day}/${year}`;
-        formattedBook.book.date_completed = formattedDate;
+        formattedBook.book.date_completed = this.currentBook.date_completed;
+        formattedBook.book.rating = book.rating;
       }
-
-      formattedBook.book.rating = book.rating;
 
       return formattedBook;
     },
@@ -543,12 +541,12 @@ export default {
       if (formattedBookForm) {
         const res = await createBook(formattedBookForm);
 
-        const formattedBook = this.formatBookResponse(res.data);
+        this.BooksStore.addBook(res.data.book);
 
-        this.BooksStore.addBook(formattedBook);
-
-        this.bookForm = this.initializeBookForm();
-
+        this.$router.push({
+          name: "books.show",
+          params: { slug: res.data.book.slug },
+        });
         return res;
       }
       return null;
@@ -560,10 +558,12 @@ export default {
       if (formattedBookForm) {
         const res = await updateBook(formattedBookForm);
 
-        const formattedBook = this.formatBookResponse(res.data);
+        this.BooksStore.updateBook(res.data.book);
 
-        this.BooksStore.updateBook(formattedBook);
-
+        this.$router.push({
+          name: "books.show",
+          params: { slug: res.data.book.slug },
+        });
         return res;
       }
       return null;
@@ -578,23 +578,9 @@ export default {
         await this.submitEditForm(bookForm);
       }
     },
-
-    // Formats the book response object from CRUD actions to look like others in the library
-    // Probably a bad data-wrangley type of step
-    formatBookResponse(unFormattedBook) {
-      const formattedBook = {
-        authors: unFormattedBook.authors,
-        book_id: unFormattedBook.book.book_id,
-        date_completed: unFormattedBook.book.date_completed?.substring(0, 10),
-        genres: unFormattedBook.genres,
-        is_completed: unFormattedBook.book.is_completed,
-        rating: unFormattedBook.book?.rating,
-        slug: unFormattedBook.book.slug,
-        title: unFormattedBook.book.title,
-        versions: unFormattedBook.versions,
-      };
-
-      return formattedBook;
+    async formatBookResponse(unFormattedBook) {
+      const res = await getBookBySlug(unFormattedBook.book.slug);
+      return res.data;
     },
   },
   async created() {

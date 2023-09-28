@@ -2,11 +2,12 @@ import axios from "axios";
 
 // Helper functions --------
 
-export const makeRequest = async (method, url, data) => {
+export const makeRequest = async (method, url, data, params) => {
   const config = {
     method,
     url,
     data,
+    params,
   };
 
   const response = await axios(config);

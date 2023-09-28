@@ -15,7 +15,7 @@
         {{ genre }}<span v-if="idx < primaryGenres.length - 1">, </span>
       </span>
     </div>
-    <div class="col-span-2 p-2">{{ dateReformatted(book.date_completed) }}</div>
+    <div class="col-span-2 p-2">{{ book.date_completed }}</div>
     <div class="col-span-1 p-2">{{ book.rating }}</div>
   </div>
 </template>
@@ -33,25 +33,17 @@ export default {
     authorName() {
       const authorResponse = this.book.authors[0];
       if (authorResponse) {
-        return `${authorResponse.first_name} ${authorResponse.last_name}`;
+        const firstName = authorResponse.first_name || "";
+        const lastName = authorResponse.last_name || "";
+        return `${firstName} ${lastName}`.trim();
       }
       return "Unknown";
     },
     bookFormat() {
-      switch (this.book.versions[0].format_id) {
-        case 1:
-          return "Paper";
-        case 2:
-          return "Audio";
-        case 3:
-          return "eBook";
-        case 4:
-          return "Pirated";
-        case 5:
-          return "Borrowed";
-        default:
-          return "Unknown";
+      if (this.book.versions && this.book.versions.length > 0) {
+        return this.book.versions[0].format.name;
       }
+      return "Unknown";
     },
     primaryGenres() {
       // Take the first 3 genres and return their names in an array
@@ -60,17 +52,6 @@ export default {
         .slice(0, 3)
         .map((genre) => genre.name);
       return genreNames;
-    },
-  },
-  methods: {
-    dateReformatted(date) {
-      if (date) {
-        const splitDate = date.split("-");
-        const formattedDate = `${splitDate[1]}/${splitDate[2]}/${splitDate[0]}`;
-
-        return formattedDate;
-      }
-      return "";
     },
   },
 };

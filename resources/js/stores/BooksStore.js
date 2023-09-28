@@ -15,6 +15,11 @@ const useBooksStore = defineStore("BooksStore", {
     addBook(book) {
       this.allBooks.push(book);
     },
+    // Updates existing book in allBooks array
+    updateBook(book) {
+      const index = this.allBooks.findIndex((b) => b.book_id === book.book_id);
+      this.allBooks[index] = book;
+    },
     // ---------------------
     // Sort helper functions
     // ---------------------

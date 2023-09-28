@@ -3,7 +3,8 @@ import axios from "axios";
 import { makeRequest, buildUrl } from "./apiHelpers";
 
 // GET ALL
-const getAllBooks = async () => makeRequest("get", buildUrl("books"));
+const getAllBooks = async (options = {}) =>
+  makeRequest("get", buildUrl("books"), null, options);
 
 // GET ONE
 const getOneBook = async (book_id) =>
