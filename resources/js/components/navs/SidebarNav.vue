@@ -10,6 +10,9 @@
       <li>
         <router-link :to="{ name: 'books.create' }">Add books</router-link>
       </li>
+      <li class="ml-4">
+        <router-link :to="{ name: 'books.bulk-add' }">Bulk add</router-link>
+      </li>
     </ul>
   </nav>
 </template>

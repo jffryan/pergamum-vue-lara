@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 
 class BookController extends Controller
@@ -136,12 +137,12 @@ class BookController extends Controller
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
 
-            if ($request->has('format')) {
-                $format = $request->get('format');
-                $query->whereHas('versions.format', function ($q) use ($format) {
-                    $q->where('formats.name', $format);
-                });
-            }
+        if ($request->has('format')) {
+            $format = $request->get('format');
+            $query->whereHas('versions.format', function ($q) use ($format) {
+                $q->where('formats.name', $format);
+            });
+        }
 
         if ($request->has('sort_by') && $request->has('sort_order')) {
             $query->orderBy($request->sort_by, $request->sort_order);
@@ -207,6 +208,35 @@ class BookController extends Controller
         $this->attachModels($new_book, $new_authors, $new_versions, $new_genres);
 
         return $this->buildResponse($new_book, $new_authors, $new_versions, $new_genres);
+    }
+
+    public function bulkCreate(Request $request)
+    {
+        $booksForm = $request->input('books');
+
+        $responses = [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($booksForm as $bookForm) {
+                $new_book = $this->createBook($bookForm["book"]);
+                $new_authors = $this->handleAuthors($bookForm["authors"]);
+                $new_versions = $this->prepareVersions($bookForm["versions"]);
+                $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
+
+                $this->attachModels($new_book, $new_authors, $new_versions, $new_genres);
+
+                $responses[] = $this->buildResponse($new_book, $new_authors, $new_versions, $new_genres);
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'An error occurred', 'error' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['books' => $responses]);
     }
 
 

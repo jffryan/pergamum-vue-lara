@@ -24,6 +24,10 @@ const getBooksByFormat = async (options) => {
 const createBook = async (book) =>
   makeRequest("post", buildUrl("books"), { book });
 
+const createBooks = async (books) => {
+  return makeRequest("post", buildUrl("books", "bulk"), { books });
+};
+
 // UPDATE
 const updateBook = async (book) =>
   makeRequest("patch", buildUrl("books", book.book_id), { book });
@@ -62,6 +66,7 @@ export {
   getOneBook,
   getBooksByFormat,
   createBook,
+  createBooks,
   updateBook,
   removeGenreInstance,
   removeAuthorInstance,
