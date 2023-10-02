@@ -3,13 +3,25 @@
     <div class="col-span-3 p-2">
       <router-link
         :to="{ name: 'books.show', params: { slug: book.slug } }"
-        class="h-full w-full"
+        class="block h-full w-full"
       >
         {{ book.title }}
       </router-link>
     </div>
-    <div class="col-span-2 p-2">{{ authorName }}</div>
-    <div class="col-span-1 p-2">{{ bookFormat }}</div>
+    <div class="col-span-2 p-2">
+      <router-link
+        :to="{ name: 'authors.show', params: { slug: authorInfo.slug } }"
+        class="block h-full w-full"
+        >{{ authorInfo.name }}</router-link
+      >
+    </div>
+    <div class="col-span-1 p-2">
+      <router-link
+        :to="{ name: 'formats.show', params: { format: bookFormat.slug } }"
+        class="block h-full w-full"
+        >{{ bookFormat.name }}</router-link
+      >
+    </div>
     <div class="col-span-3 p-2">
       <span v-for="(genre, idx) in primaryGenres" :key="idx" class="capitalize">
         {{ genre }}<span v-if="idx < primaryGenres.length - 1">, </span>
@@ -30,18 +42,28 @@ export default {
     },
   },
   computed: {
-    authorName() {
+    authorInfo() {
       const authorResponse = this.book.authors[0];
       if (authorResponse) {
         const firstName = authorResponse.first_name || "";
         const lastName = authorResponse.last_name || "";
-        return `${firstName} ${lastName}`.trim();
+        const fullName = `${firstName} ${lastName}`.trim();
+        const authorInfo = {
+          name: fullName,
+          slug: authorResponse.slug,
+        };
+        return authorInfo;
       }
       return "Unknown";
     },
     bookFormat() {
       if (this.book.versions && this.book.versions.length > 0) {
-        return this.book.versions[0].format.name;
+        const { format } = this.book.versions[0];
+        const formatInfo = {
+          name: format.name,
+          slug: format.slug,
+        };
+        return formatInfo;
       }
       return "Unknown";
     },

@@ -12,7 +12,7 @@
 <script>
 import { useBooksStore } from "@/stores";
 
-import { getBookBySlug } from "@/api/BookController";
+import { getOneBookFromSlug } from "@/api/BookController";
 
 import BookCreateEditForm from "@/components/books/forms/BookCreateEditForm.vue";
 
@@ -43,7 +43,7 @@ export default {
   async mounted() {
     if (!this.currentBook) {
       try {
-        const book = await getBookBySlug(this.currentSlug);
+        const book = await getOneBookFromSlug(this.currentSlug);
         this.BooksStore.addBook(book.data);
       } catch (error) {
         console.log(error);

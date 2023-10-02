@@ -8,7 +8,10 @@
       <div class="mb-12">
         <h1>{{ currentBook.title }}</h1>
         <h2 v-for="author in currentAuthors" :key="author.author_id">
-          {{ author }}
+          <router-link
+            :to="{ name: 'authors.show', params: { slug: author.slug } }"
+            >{{ author.name }}</router-link
+          >
         </h2>
         <p>
           <router-link
@@ -22,7 +25,7 @@
           </router-link>
         </p>
       </div>
-      <div>
+      <div class="pl-12">
         <div class="mb-8">
           <router-link
             class="p-2 border border-zinc-400 rounded-md hover:bg-zinc-600 hover:text-white transition-colors duration-200 ease-in-out"
@@ -32,37 +35,23 @@
           </router-link>
         </div>
 
-        <div
-          v-if="currentBook.is_completed"
-          class="w-1/2 p-8 border rounded-md border-slate-400 bg-slate-200 mx-auto"
-        >
-          <p>
-            <span class="text-zinc-600">Date read: </span
-            >{{ currentBook.date_completed }}
-          </p>
-          <p>
-            <span class="text-zinc-600">Rating: </span>{{ currentBook.rating }}
-          </p>
+        <div class="mb-8">
+          <h3>Versions</h3>
+          <VersionTable :versions="currentBook.versions" />
         </div>
-      </div>
+        <div v-if="currentBook.is_completed">
+          <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
+            <h3 class="mb-0">Reader Profile</h3>
+          </div>
 
-      <div class="col-span-2">
-        <h3 class="w-1/2">Versions</h3>
-        <div class="grid grid-cols-3">
-          <div
-            v-for="version in currentBook.versions"
-            :key="version.version_id"
-          >
-            <p v-if="version.nickname" class="text-lg font-bold">
-              {{ version.nickname }}
+          <div class="p-4 rounded-b-md bg-slate-200">
+            <p>
+              <span class="text-zinc-600">Date read: </span
+              >{{ currentBook.date_completed }}
             </p>
             <p>
-              <span class="text-zinc-600">Format: </span
-              >{{ version.format?.name }}
-            </p>
-            <p>
-              <span class="text-zinc-600">Page count: </span
-              >{{ version.page_count }}
+              <span class="text-zinc-600">Rating: </span
+              >{{ currentBook.rating }}
             </p>
           </div>
         </div>
@@ -74,7 +63,9 @@
 <script>
 import { useBooksStore } from "@/stores";
 
-import { getBookBySlug } from "@/api/BookController";
+import { getOneBookFromSlug } from "@/api/BookController";
+
+import VersionTable from "@/components/books/table/VersionTable.vue";
 
 export default {
   name: "BookView",
@@ -84,6 +75,9 @@ export default {
     return {
       BooksStore,
     };
+  },
+  components: {
+    VersionTable,
   },
   data() {
     return {
@@ -101,7 +95,8 @@ export default {
         return this.currentBook.authors.map((author) => {
           const firstName = author.first_name || "";
           const lastName = author.last_name || "";
-          return `${firstName} ${lastName}`.trim();
+          const slug = author.slug || "";
+          return { name: `${firstName} ${lastName}`.trim(), slug };
         });
       }
       return [];
@@ -116,7 +111,7 @@ export default {
   async mounted() {
     if (!this.currentBook) {
       try {
-        const book = await getBookBySlug(this.$route.params.slug);
+        const book = await getOneBookFromSlug(this.$route.params.slug);
         this.BooksStore.addBook(book.data);
       } catch (error) {
         console.log("ERROR: ", error);

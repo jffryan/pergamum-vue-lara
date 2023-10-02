@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h2>All books</h2>
+    <h2>{{ bookshelfTitle }}</h2>
     <div>
       <div class="grid grid-cols-12 bg-slate-900 text-slate-200 rounded-t-md">
         <div
@@ -110,6 +110,9 @@ export default {
     };
   },
   computed: {
+    bookshelfTitle() {
+      return "All Books";
+    },
     sortedByValue() {
       return this.BooksStore.sortedBy;
     },

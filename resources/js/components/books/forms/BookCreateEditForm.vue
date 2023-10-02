@@ -281,7 +281,11 @@ import { useConfigStore, useBooksStore } from "@/stores";
 
 import { splitAndNormalizeGenres } from "@/utils/genresLibrary";
 
-import { createBook, updateBook, getBookBySlug } from "@/api/BookController";
+import {
+  createBook,
+  updateBook,
+  getOneBookFromSlug,
+} from "@/api/BookController";
 
 import {
   validateString,
@@ -579,7 +583,7 @@ export default {
       }
     },
     async formatBookResponse(unFormattedBook) {
-      const res = await getBookBySlug(unFormattedBook.book.slug);
+      const res = await getOneBookFromSlug(unFormattedBook.book.slug);
       return res.data;
     },
   },

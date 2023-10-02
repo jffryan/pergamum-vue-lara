@@ -12,7 +12,7 @@ class Author extends Model
 
     protected $primaryKey = "author_id";
 
-    protected $fillable = ['first_name', 'last_name'];
+    protected $fillable = ['first_name', 'last_name', 'slug'];
 
     public function books(): BelongsToMany 
     {

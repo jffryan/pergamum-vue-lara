@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h1>Library</h1>
-    <BookshelfTable :books="books" class="mb-4" />
+    <h1>Format View</h1>
+    <BookshelfTable :books="booksByFormat" class="mb-4" />
     <div v-for="link in cleanedLinks" :key="link.label" class="inline mr-2">
       <router-link
         v-if="link.url"
@@ -15,14 +15,14 @@
 </template>
 
 <script>
-import { getAllBooks } from "@/api/BookController";
+import { getBooksByFormat } from "@/api/BookController";
 
 import { useBooksStore } from "@/stores";
 
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 
 export default {
-  name: "LibraryView",
+  name: "FormatView",
   components: {
     BookshelfTable,
   },
@@ -39,19 +39,20 @@ export default {
     };
   },
   computed: {
-    books() {
+    booksByFormat() {
       return this.BooksStore.allBooks;
     },
   },
-
   methods: {
     async fetchData() {
       const options = {
         page: this.$route.query.page || 1,
+        format: this.$route.params.format,
       };
 
-      const res = await getAllBooks(options);
-
+      console.log("OPTIONS", options);
+      const res = await getBooksByFormat(options);
+      console.log("RES", res);
       this.BooksStore.setAllBooks(res.data.data);
       this.cleanedLinks = this.cleanPaginationLinks(res.data.links);
     },
@@ -72,12 +73,16 @@ export default {
       });
     },
   },
-
   watch: {
     "$route.query.page": "fetchData",
   },
   async mounted() {
-    await this.fetchData();
+    try {
+      const response = await this.fetchData();
+      console.log("RESPONSE", response.data);
+    } catch (error) {
+      console.log(error.message);
+    }
   },
 };
 </script>

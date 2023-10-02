@@ -28,6 +28,16 @@ const router = createRouter({
       name: "books.show",
       component: () => import("@/views/BookView.vue"),
     },
+    {
+      path: "/authors/:slug",
+      name: "authors.show",
+      component: () => import("@/views/AuthorView.vue"),
+    },
+    {
+      path: "/formats/:format",
+      name: "formats.show",
+      component: () => import("@/views/FormatView.vue"),
+    },
   ],
 });
 

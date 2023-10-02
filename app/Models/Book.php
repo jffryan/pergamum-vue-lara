@@ -33,5 +33,9 @@ class Book extends Model
     {
         return Carbon::parse($date)->format('m/d/Y');
     }
+    public function formats(): BelongsToMany
+    {
+        return $this->belongsToMany(Format::class, "versions", "book_id", "format_id");
+    }
     
 }
