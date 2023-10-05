@@ -34,7 +34,7 @@ const updateBook = async (book) =>
 
 // DELETE
 const deleteBook = async (book_id) =>
-  makeRequest("delete", buildUrl("books", book_id), { book_id });
+  makeRequest("delete", buildUrl("books", book_id));
 
 // ------------------------------
 // Let's come back to these two functions later

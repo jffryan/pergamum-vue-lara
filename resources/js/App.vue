@@ -1,18 +1,38 @@
 <template>
-  <div class="body-grid">
+  <div class="body-grid relative">
     <SidebarNav />
     <RouterView class="py-10 px-20 w-full body-container" />
+    <div
+      v-if="ConfirmationModalStore.confirmationModalActive"
+      class="fixed inset-0 bg-slate-950 bg-opacity-60 overflow-y-auto h-full w-full"
+      @click.self="ConfirmationModalStore.hideConfirmationModal()"
+    >
+      <ConfirmationModal
+        class="absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 max-w-xl"
+        key="confirmation-modal"
+      />
+    </div>
   </div>
 </template>
 
 <script>
-import { RouterView } from "vue-router";
+import { useConfirmationModalStore } from "@/stores";
+
+import ConfirmationModal from "@/components/modals/confirmation/ConfirmationModal.vue";
 import SidebarNav from "@/components/navs/SidebarNav.vue";
 
 export default {
   name: "App",
   components: {
+    ConfirmationModal,
     SidebarNav,
+  },
+  setup() {
+    const ConfirmationModalStore = useConfirmationModalStore();
+
+    return {
+      ConfirmationModalStore,
+    };
   },
 };
 </script>

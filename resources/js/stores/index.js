@@ -2,5 +2,11 @@
 import useAuthorsStore from "./AuthorsStore";
 import useBooksStore from "./BooksStore";
 import useConfigStore from "./ConfigStore";
+import useConfirmationModalStore from "./ConfirmationModalStore";
 
-export { useAuthorsStore, useBooksStore, useConfigStore };
+export {
+  useAuthorsStore,
+  useBooksStore,
+  useConfigStore,
+  useConfirmationModalStore,
+};

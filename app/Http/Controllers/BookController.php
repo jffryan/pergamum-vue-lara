@@ -21,24 +21,32 @@ class BookController extends Controller
      * 
      */
 
-    private function createBook($bookData)
-    {
-        $slug = Str::of($bookData['title'])
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(30);  // Limit to 30 characters
 
-        $data = [
-            'title' => $bookData['title'],
-            'slug' => $slug,
-            'is_completed' => $bookData['is_completed'],
-            'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
-            'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("m/d/Y", $bookData['date_completed']) : null,
-        ];
-
-        return Book::create($data);
-    }
+     private function createOrGetBook($bookData)
+     {
+         $slug = Str::of($bookData['title'])
+             ->lower()
+             ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+             ->replace(' ', '-')  // Replace spaces with hyphens
+             ->limit(30);  // Limit to 30 characters
+     
+         // Look for an existing book by the slug
+         $existingBook = Book::where('slug', $slug)->first();
+     
+         if ($existingBook) {
+             return $existingBook;
+         }
+     
+         $data = [
+             'title' => $bookData['title'],
+             'slug' => $slug,
+             'is_completed' => $bookData['is_completed'],
+             'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
+             'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("m/d/Y", $bookData['date_completed']) : null,
+         ];
+     
+         return Book::create($data);
+     }
     private function handleAuthors($authorsData)
     {
         return collect($authorsData)->map(function ($author) {
@@ -200,14 +208,23 @@ class BookController extends Controller
     {
         $bookForm = $request->book;
 
-        $new_book = $this->createBook($bookForm["book"]);
+        $book = $this->createOrGetBook($bookForm["book"]);
+
+        if (!$book->wasRecentlyCreated) {
+            // If the book was not recently created (i.e., it existed), we'll just add a new version
+            $new_versions = $this->prepareVersions($bookForm["versions"]);
+            $book->versions()->saveMany($new_versions);
+    
+            return $this->buildResponse($book, [], $new_versions, []);
+        }
+
         $new_authors = $this->handleAuthors($bookForm["authors"]);
         $new_versions = $this->prepareVersions($bookForm["versions"]);
         $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
 
-        $this->attachModels($new_book, $new_authors, $new_versions, $new_genres);
+        $this->attachModels($book, $new_authors, $new_versions, $new_genres);
 
-        return $this->buildResponse($new_book, $new_authors, $new_versions, $new_genres);
+        return $this->buildResponse($book, $new_authors, $new_versions, $new_genres);
     }
 
     public function bulkCreate(Request $request)
@@ -381,15 +398,31 @@ class BookController extends Controller
      * @param  \App\Models\Book  $book
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy($book_id)
     {
-        $existingBook = Book::find($id);
-
-        if ($existingBook) {
+        return DB::transaction(function () use ($book_id) {
+    
+            $existingBook = Book::with('authors.books')->findOrFail($book_id);
+    
+            $authors = $existingBook->authors;
+    
             $existingBook->delete();
-            return "Book deleted successfully";
-        }
-
-        return "Book not found";
+    
+            $authorsToBeDeleted = [];
+    
+            foreach ($authors as $author) {
+                $author->load('books');
+                if ($author->books->count() == 0) {
+                    $fullName = $author->first_name . ' ' . $author->last_name;
+                    $authorsToBeDeleted[] = $fullName;
+                    $author->delete();
+                }
+            }
+    
+            return response()->json([
+                'message' => 'Book deleted successfully',
+                'deleted_authors' => $authorsToBeDeleted
+            ]);
+        });
     }
 }

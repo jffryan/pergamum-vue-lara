@@ -14,6 +14,7 @@
           >
         </h2>
         <p>
+          <span class="font-bold">Genres: </span>
           <router-link
             v-for="(genre, index) in currentGenres"
             :key="genre.genre_id"
@@ -28,11 +29,16 @@
       <div class="pl-12">
         <div class="mb-8">
           <router-link
-            class="p-2 border border-zinc-400 rounded-md hover:bg-zinc-600 hover:text-white transition-colors duration-200 ease-in-out"
+            class="btn btn-primary mr-4"
             :to="{ name: 'books.edit', params: { slug: currentBook.slug } }"
+            >Edit book</router-link
           >
-            Edit book
-          </router-link>
+          <button
+            @click="initDeleteBook(currentBook.book_id)"
+            class="btn btn-secondary"
+          >
+            Delete book
+          </button>
         </div>
 
         <div class="mb-8">
@@ -61,7 +67,7 @@
 </template>
 
 <script>
-import { useBooksStore } from "@/stores";
+import { useBooksStore, useConfirmationModalStore } from "@/stores";
 
 import { getOneBookFromSlug } from "@/api/BookController";
 
@@ -71,9 +77,11 @@ export default {
   name: "BookView",
   setup() {
     const BooksStore = useBooksStore();
+    const ConfirmationModalStore = useConfirmationModalStore();
 
     return {
       BooksStore,
+      ConfirmationModalStore,
     };
   },
   components: {
@@ -106,6 +114,14 @@ export default {
         return this.currentBook.genres;
       }
       return [];
+    },
+  },
+  methods: {
+    initDeleteBook() {
+      this.ConfirmationModalStore.showConfirmationModal("confirmDeleteBook", {
+        book_id: this.currentBook.book_id,
+        title: this.currentBook.title,
+      });
     },
   },
   async mounted() {

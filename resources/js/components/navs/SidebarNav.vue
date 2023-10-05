@@ -8,7 +8,7 @@
         <router-link :to="{ name: 'library.index' }">Library</router-link>
       </li>
       <li>
-        <router-link :to="{ name: 'books.create' }">Add books</router-link>
+        <router-link :to="{ name: 'books.create' }">Add book</router-link>
       </li>
       <li class="ml-4">
         <router-link :to="{ name: 'books.bulk-add' }">Bulk add</router-link>

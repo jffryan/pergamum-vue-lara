@@ -49,10 +49,7 @@ export default {
         page: this.$route.query.page || 1,
         format: this.$route.params.format,
       };
-
-      console.log("OPTIONS", options);
       const res = await getBooksByFormat(options);
-      console.log("RES", res);
       this.BooksStore.setAllBooks(res.data.data);
       this.cleanedLinks = this.cleanPaginationLinks(res.data.links);
     },

@@ -26,19 +26,39 @@
 </template>
 
 <script>
+import Papa from "papaparse";
+
+import {
+  splitAndNormalizeGenres,
+  splitName,
+} from "@/utils/BookFormattingLibrary";
 import { createBooks } from "@/api/BookController";
+import { useConfigStore } from "@/stores";
 
 export default {
+  setup() {
+    const ConfigStore = useConfigStore();
+
+    return {
+      ConfigStore,
+    };
+  },
   data() {
     return {
       selectedFile: null,
     };
+  },
+  computed: {
+    formats() {
+      return this.ConfigStore.books.formats;
+    },
   },
   methods: {
     fileChanged(event) {
       [this.selectedFile] = event.target.files;
     },
     async uploadCsv() {
+      const vm = this;
       if (!this.selectedFile) {
         console.log("Please select a CSV file first.");
         return;
@@ -48,27 +68,43 @@ export default {
       reader.readAsText(this.selectedFile);
 
       reader.onload = async () => {
-        const csvData = reader.result;
+        const parsedData = Papa.parse(reader.result, { header: true });
+        const books = parsedData.data;
+        const formattedBooks = books.map((book) => {
+          const authorsArray = book.authors
+            .split(",")
+            .map((author) => author.trim());
 
-        // Convert CSV data to an array of books
-        const lines = csvData.split("\n");
-        const header = lines[0].split(",");
-        const books = [];
+          const { format_id } = vm.formats.find(
+            ({ name }) => name.toLowerCase() === book.format.toLowerCase()
+          );
 
-        for (let i = 1; i < lines.length; i += 1) {
-          const book = {};
-          const values = lines[i].split(",");
-
-          for (let j = 0; j < header.length; j += 1) {
-            book[header[j].trim()] = values[j].trim();
-          }
-
-          books.push(book);
-        }
+          return {
+            authors: authorsArray.map((author) => splitName(author)),
+            book: {
+              date_completed: book.date_completed,
+              // NEED TO FIX
+              genres: {
+                parsed: splitAndNormalizeGenres(book.genres),
+              },
+              is_completed: book.is_completed === "TRUE",
+              rating: book.rating,
+              title: book.title,
+            },
+            versions: [
+              {
+                audio_runtime: book.audio_runtime,
+                format: format_id,
+                nickname: book.nickname,
+                page_count: book.page_count,
+              },
+            ],
+          };
+        });
 
         // Send the array of books to the backend
         try {
-          const response = await createBooks(books);
+          const response = await createBooks(formattedBooks);
           console.log("Books uploaded:", response);
         } catch (error) {
           console.error("An error occurred:", error);
@@ -79,6 +115,9 @@ export default {
         console.log("Could not read the file. Please try again.");
       };
     },
+  },
+  async created() {
+    await this.ConfigStore.checkForFormats();
   },
 };
 </script>

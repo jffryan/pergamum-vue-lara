@@ -4,12 +4,15 @@
       <h2 class="mb-0">
         {{ isCreateMode ? "Create Book" : "Edit Book" }}
       </h2>
-      <button
-        type="submit"
-        class="text-white bg-slate-800 hover:bg-slate-900ont-medium rounded-lg text-sm px-5 py-2.5 mb-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
-      >
-        Submit
-      </button>
+      <div>
+        <button type="submit" class="btn btn-primary mr-4">Submit</button>
+        <router-link
+          v-if="isEditMode"
+          :to="{ name: 'books.show', params: { slug: currentBook.slug } }"
+          class="btn btn-secondary"
+          >Cancel</router-link
+        >
+      </div>
     </div>
     <!-- End header -->
     <div class="mb-8">
@@ -279,7 +282,7 @@ import _ from "lodash";
 
 import { useConfigStore, useBooksStore } from "@/stores";
 
-import { splitAndNormalizeGenres } from "@/utils/genresLibrary";
+import { splitAndNormalizeGenres } from "@/utils/BookFormattingLibrary";
 
 import {
   createBook,
