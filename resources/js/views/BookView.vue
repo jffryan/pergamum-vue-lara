@@ -18,7 +18,7 @@
           <router-link
             v-for="(genre, index) in currentGenres"
             :key="genre.genre_id"
-            to="/"
+            :to="{ name: 'genres.show', params: { id: genre.genre_id } }"
             class="capitalize"
           >
             {{ genre.name
@@ -27,7 +27,7 @@
         </p>
       </div>
       <div class="pl-12">
-        <div class="mb-8">
+        <div class="mb-4">
           <router-link
             class="btn btn-primary mr-4"
             :to="{ name: 'books.edit', params: { slug: currentBook.slug } }"
@@ -39,6 +39,11 @@
           >
             Delete book
           </button>
+        </div>
+        <div class="mb-8">
+          <router-link :to="{ name: 'library.index' }" class="block mb-4"
+            >Back to Library</router-link
+          >
         </div>
 
         <div class="mb-8">

@@ -263,9 +263,9 @@ class BookController extends Controller
      * @param  \App\Models\Book  $book
      * @return \Illuminate\Http\Response
      */
-    public function show($slug)
+    public function show($book_id)
     {
-        return Book::with("authors", "versions", "versions.format", "genres")->where("book_id", $slug)->firstOrFail();
+        return Book::with("authors", "versions", "versions.format", "genres")->where("book_id", $book_id)->firstOrFail();
     }
 
     public function getOneBookFromSlug($slug)

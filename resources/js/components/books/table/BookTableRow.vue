@@ -23,8 +23,15 @@
       >
     </div>
     <div class="col-span-3 p-2">
-      <span v-for="(genre, idx) in primaryGenres" :key="idx" class="capitalize">
-        {{ genre }}<span v-if="idx < primaryGenres.length - 1">, </span>
+      <span
+        v-for="(genre, idx) in primaryGenres"
+        :key="genre.id"
+        class="capitalize"
+      >
+        <router-link :to="{ name: 'genres.show', params: { id: genre.id } }">{{
+          genre.name
+        }}</router-link
+        ><span v-if="idx < primaryGenres.length - 1">, </span>
       </span>
     </div>
     <div class="col-span-2 p-2">{{ book.date_completed }}</div>
@@ -68,11 +75,10 @@ export default {
       return "Unknown";
     },
     primaryGenres() {
-      // Take the first 3 genres and return their names in an array
-      // @TODO: Take their IDs as well, and return an array of objects that includes IDs to use as url params
+      // Take the first 3 genres and return their names + ids in an array
       const genreNames = this.book.genres
         .slice(0, 3)
-        .map((genre) => genre.name);
+        .map((genre) => ({ name: genre.name, id: genre.genre_id }));
       return genreNames;
     },
   },

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\ConfigController;
+use App\Http\Controllers\GenreController;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,6 +23,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::resource("/books", BookController::class);
+Route::resource("/genres", GenreController::class);
 Route::post("books/bulk", [BookController::class, "bulkCreate"]);
 
 Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);

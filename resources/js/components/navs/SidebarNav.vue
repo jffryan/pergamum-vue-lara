@@ -4,13 +4,16 @@
       <li class="mb-6">
         <router-link to="/" class="font-bold">Pergamum</router-link>
       </li>
-      <li class="mb-2">
+      <li>
         <router-link :to="{ name: 'library.index' }">Library</router-link>
+      </li>
+      <li class="mb-2 ml-4">
+        <router-link :to="{ name: 'genres.index' }">Genres</router-link>
       </li>
       <li>
         <router-link :to="{ name: 'books.create' }">Add book</router-link>
       </li>
-      <li class="ml-4">
+      <li class="mb-2 ml-4">
         <router-link :to="{ name: 'books.bulk-add' }">Bulk add</router-link>
       </li>
     </ul>

@@ -43,6 +43,16 @@ const router = createRouter({
       name: "formats.show",
       component: () => import("@/views/FormatView.vue"),
     },
+    {
+      path: "/genres",
+      name: "genres.index",
+      component: () => import("@/views/GenresView.vue"),
+    },
+    {
+      path: "/genres/:id",
+      name: "genres.show",
+      component: () => import("@/views/GenreView.vue"),
+    },
   ],
 });
 

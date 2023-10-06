@@ -1,7 +1,14 @@
 <template>
   <div>
     <h1>Format View</h1>
-    <BookshelfTable :books="booksByFormat" class="mb-4" />
+    <router-link :to="{ name: 'library.index' }" class="block mb-4"
+      >Back to Library</router-link
+    >
+    <BookshelfTable
+      :books="booksByFormat"
+      :bookshelfTitle="$route.params.format + ' Books'"
+      class="mb-4"
+    />
     <div v-for="link in cleanedLinks" :key="link.label" class="inline mr-2">
       <router-link
         v-if="link.url"
