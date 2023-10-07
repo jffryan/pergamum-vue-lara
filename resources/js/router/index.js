@@ -53,6 +53,11 @@ const router = createRouter({
       name: "genres.show",
       component: () => import("@/views/GenreView.vue"),
     },
+    {
+      path: "/about",
+      name: "about",
+      component: () => import("@/views/AboutView.vue"),
+    },
   ],
 });
 

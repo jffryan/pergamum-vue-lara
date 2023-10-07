@@ -1,7 +1,10 @@
 <template>
   <div class="body-grid relative">
     <SidebarNav />
-    <RouterView class="py-10 px-20 w-full body-container" />
+    <div>
+      <HeaderNav class="mb-16" />
+      <RouterView class="py-10 px-20 w-full body-container" />
+    </div>
     <div
       v-if="ConfirmationModalStore.confirmationModalActive"
       class="fixed inset-0 bg-slate-950 bg-opacity-60 overflow-y-auto h-full w-full"
@@ -19,12 +22,14 @@
 import { useConfirmationModalStore } from "@/stores";
 
 import ConfirmationModal from "@/components/modals/confirmation/ConfirmationModal.vue";
+import HeaderNav from "@/components/navs/HeaderNav.vue";
 import SidebarNav from "@/components/navs/SidebarNav.vue";
 
 export default {
   name: "App",
   components: {
     ConfirmationModal,
+    HeaderNav,
     SidebarNav,
   },
   setup() {

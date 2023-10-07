@@ -36,3 +36,10 @@ p {
 .btn-danger {
   @apply text-white bg-red-900;
 }
+
+/* NonTailwind */
+
+.body-container {
+  max-width: 1440px;
+  margin: 0 auto;
+}
