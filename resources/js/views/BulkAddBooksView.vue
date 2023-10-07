@@ -22,6 +22,9 @@
         Upload
       </button>
     </form>
+    <div v-if="displayMessage">
+      {{ displayMessage }}
+    </div>
   </div>
 </template>
 
@@ -46,6 +49,7 @@ export default {
   data() {
     return {
       selectedFile: null,
+      displayMessage: null,
     };
   },
   computed: {
@@ -105,7 +109,17 @@ export default {
         // Send the array of books to the backend
         try {
           const response = await createBooks(formattedBooks);
-          console.log("Books uploaded:", response);
+          // This is all kinds of fucked up because I need to fix the backend
+          const booksRes = response.data.books;
+
+          if (booksRes.length > 1) {
+            const message = `${booksRes.length} books were added to your library.`;
+            this.displayMessage = message;
+          }
+          if (booksRes.length === 1) {
+            const message = `${booksRes[0].title} was added to your library.`;
+            this.displayMessage = message;
+          }
         } catch (error) {
           console.error("An error occurred:", error);
         }

@@ -72,42 +72,36 @@ export default {
         {
           name: "Title",
           span: 3,
-          clickHandler: this.toggleSortByTitle,
           ascending: "sortByTitleAlpha",
           descending: "sortByTitleAlphaDesc",
         },
         {
           name: "Primary Author",
           span: 2,
-          clickHandler: this.toggleSortByAuthor,
           ascending: "sortByAuthorLastName",
           descending: "sortByAuthorLastNameDesc",
         },
         {
           name: "Format",
           span: 1,
-          clickHandler: this.toggleSortByFormat,
           ascending: "sortByFormat",
           descending: "sortByFormatDesc",
         },
         {
           name: "Genres",
           span: 3,
-          clickHandler: null,
           ascending: null,
           descending: null,
         },
         {
           name: "Date Read",
           span: 2,
-          clickHandler: this.toggleSortByDateCompleted,
           ascending: "sortByDateCompleted",
           descending: "sortByDateCompletedDesc",
         },
         {
           name: "Rating",
           span: 1,
-          clickHandler: this.toggleSortByRating,
           ascending: "sortByRating",
           descending: "sortByRatingDesc",
         },
@@ -128,63 +122,6 @@ export default {
           return null;
         }
       };
-    },
-  },
-  methods: {
-    // This shouldn't "set All Books" going forward. It should only set the bookshelf
-    // For now, these are the same thing though
-    toggleSort(sortBy, ascending, descending, defaultSort) {
-      switch (this.sortedByValue) {
-        case ascending:
-          this.BooksStore.setAllBooks(this.BooksStore[descending](this.books));
-          break;
-        case descending:
-          this.BooksStore.setAllBooks(this.BooksStore[defaultSort](this.books));
-          break;
-        default:
-          this.BooksStore.setAllBooks(this.BooksStore[ascending](this.books));
-          break;
-      }
-    },
-    toggleSortByTitle() {
-      this.toggleSort(
-        "title",
-        "sortByTitleAlpha",
-        "sortByTitleAlphaDesc",
-        "setToDefault"
-      );
-    },
-    toggleSortByAuthor() {
-      this.toggleSort(
-        "author",
-        "sortByAuthorLastName",
-        "sortByAuthorLastNameDesc",
-        "setToDefault"
-      );
-    },
-    toggleSortByFormat() {
-      this.toggleSort(
-        "format",
-        "sortByFormat",
-        "sortByFormatDesc",
-        "setToDefault"
-      );
-    },
-    toggleSortByDateCompleted() {
-      this.toggleSort(
-        "date_completed",
-        "sortByDateCompleted",
-        "sortByDateCompletedDesc",
-        "setToDefault"
-      );
-    },
-    toggleSortByRating() {
-      this.toggleSort(
-        "rating",
-        "sortByRating",
-        "sortByRatingDesc",
-        "setToDefault"
-      );
     },
   },
 };

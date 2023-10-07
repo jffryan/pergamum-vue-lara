@@ -237,7 +237,7 @@ class BookController extends Controller
 
         try {
             foreach ($booksForm as $bookForm) {
-                $new_book = $this->createBook($bookForm["book"]);
+                $new_book = $this->createOrGetBook($bookForm["book"]);
                 $new_authors = $this->handleAuthors($bookForm["authors"]);
                 $new_versions = $this->prepareVersions($bookForm["versions"]);
                 $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
