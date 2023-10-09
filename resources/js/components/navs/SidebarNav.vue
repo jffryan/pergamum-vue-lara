@@ -1,9 +1,6 @@
 <template>
-  <nav class="bg-slate-400 h-full py-10 px-8">
+  <nav class="h-screen">
     <ul>
-      <li class="mb-6">
-        <router-link to="/" class="font-bold">Pergamum</router-link>
-      </li>
       <li>
         <router-link :to="{ name: 'library.index' }">Library</router-link>
       </li>

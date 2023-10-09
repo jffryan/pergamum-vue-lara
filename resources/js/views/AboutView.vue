@@ -59,7 +59,8 @@ export default {
 <style scoped>
 .droplet img {
   height: auto;
-  -webkit-mask: url(/images/blob-two.svg) no-repeat center / contain;
-  mask: url(/images/blob-two.svg) no-repeat center / contain;
+  border-radius: 100%;
+  /* -webkit-mask: url(/images/blob-two.svg) no-repeat center / contain;
+  mask: url(/images/blob-two.svg) no-repeat center / contain; */
 }
 </style>

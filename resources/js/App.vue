@@ -1,9 +1,11 @@
 <template>
-  <div class="body-grid relative">
-    <SidebarNav />
+  <HeaderNav />
+  <div class="relative max-w-8xl mx-auto px-4 sm:px-6 md:px-8">
+    <SidebarNav
+      class="fixed z-20 inset-0 top-16 left-[max(0px,calc(50%-45rem))] right-auto w-[20rem] py-6 pr-8 overflow-y-auto"
+    />
     <div>
-      <HeaderNav class="mb-16" />
-      <RouterView class="py-10 px-20 w-full body-container" />
+      <RouterView class="py-6 pl-[20rem] w-full" />
     </div>
     <div
       v-if="ConfirmationModalStore.confirmationModalActive"

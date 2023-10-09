@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <main>
     <div class="flex">
       <div class="w-1/2 flex justify-center flex-col">
         <h1 class="text-6xl font-bold">Pergamum</h1>
@@ -18,7 +18,7 @@
         </figure>
       </div>
     </div>
-  </div>
+  </main>
 </template>
 
 <script>
@@ -30,7 +30,8 @@ export default {
 <style scoped>
 .droplet img {
   height: auto;
-  -webkit-mask: url(/images/blob-two.svg) no-repeat center / contain;
-  mask: url(/images/blob-two.svg) no-repeat center / contain;
+  border-radius: 100%;
+  /* -webkit-mask: url(/images/blob-two.svg) no-repeat center / contain;
+  mask: url(/images/blob-two.svg) no-repeat center / contain; */
 }
 </style>
