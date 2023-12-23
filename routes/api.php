@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthorController;
+use App\Http\Controllers\BacklogController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\GenreController;
@@ -28,5 +29,6 @@ Route::post("books/bulk", [BookController::class, "bulkCreate"]);
 
 Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
 Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
+Route::get("/backlog", [BacklogController::class, "index"]);
 
 Route::get("/config/formats", [ConfigController::class, "getFormats"]);

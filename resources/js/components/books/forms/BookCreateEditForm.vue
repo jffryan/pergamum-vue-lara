@@ -105,8 +105,8 @@
       <!-- END GENRES -->
     </div>
     <div class="mb-8">
+      <h3>Reader Profile</h3>
       <div class="mb-4 flex justify-between">
-        <h3 class="mb-0">Reader Profile</h3>
         <div class="mt-auto">
           <label class="relative inline-flex items-center cursor-pointer">
             <input
@@ -120,6 +120,21 @@
               class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
             ></div>
             <span class="ml-3 font-medium">I finished this book</span>
+          </label>
+        </div>
+        <div class="mt-auto">
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="bookForm.book.is_backlog"
+              class="sr-only peer"
+              :true-value="1"
+              :false-value="0"
+            />
+            <div
+              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+            ></div>
+            <span class="ml-3 font-medium">Add to backlog</span>
           </label>
         </div>
       </div>
@@ -320,6 +335,7 @@ export default {
         book: {
           title: true,
           genres: true,
+          is_backlog: true,
         },
         authors: [true],
         versions: [
@@ -352,6 +368,7 @@ export default {
             parsed: [""],
           },
           is_completed: false,
+          is_backlog: false,
           date_completed: "",
           rating: "",
         },

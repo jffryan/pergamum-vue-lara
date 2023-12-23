@@ -31,11 +31,22 @@ class Book extends Model
     }
     public function getDateCompletedAttribute($date)
     {
-        return Carbon::parse($date)->format('m/d/Y');
+        return $date ? Carbon::parse($date)->format('m/d/Y') : null;
     }
     public function formats(): BelongsToMany
     {
         return $this->belongsToMany(Format::class, "versions", "book_id", "format_id");
     }
-    
+
+    public function backlogItem()
+    {
+        return $this->hasOne(BacklogItem::class, "book_id");
+    }
+
+    // Method to add to backlog
+    public function addToBacklog($order, $additionalProperties = [])
+    {
+        $backlogData = array_merge(['order' => $order], $additionalProperties);
+        $this->backlogItem()->create($backlogData);
+    }
 }

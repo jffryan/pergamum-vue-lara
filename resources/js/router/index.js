@@ -58,6 +58,18 @@ const router = createRouter({
       name: "about",
       component: () => import("@/views/AboutView.vue"),
     },
+    {
+      path: "/backlog",
+      name: "backlog.home",
+      component: () => import("@/views/BacklogHome.vue"),
+      props: { innerComponent: "BacklogDashboard" },
+    },
+    {
+      path: "/backlog/index",
+      name: "backlog.index",
+      component: () => import("@/views/BacklogHome.vue"),
+      props: { innerComponent: "BacklogIndex" },
+    },
   ],
 });
 
