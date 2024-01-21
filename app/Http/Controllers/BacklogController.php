@@ -7,68 +7,73 @@ use Illuminate\Http\Request;
 
 class BacklogController extends Controller
 {
-  public function index(Request $request)
-  {
-      $query = BacklogItem::with(['book' => function($query) {
-                          $query->with('authors', 'versions', 'versions.format', 'genres');
-                      }])
-          ->join('books', 'backlog_items.book_id', '=', 'books.book_id')
-          ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-          ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-          ->selectRaw('backlog_items.*, books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed,
-                       (SELECT MIN(a.last_name) FROM authors a JOIN book_author ba ON a.author_id = ba.author_id WHERE ba.book_id = books.book_id) as primary_author_last_name');
-  
-      // Additional query conditions (format, sort_by, etc.)
-      // ...
-  
-      $limit = $request->has('limit') ? $request->limit : 20;
-      $backlogItems = $query->paginate($limit);
-  
-      // Transform the results
-      return $backlogItems->through(function ($item) {
-          $book = $item->book->toArray();
-          unset($item->book); // Remove the nested book object
-          $transformed = array_merge($item->toArray(), $book);
-          $transformed['authors'] = $book['authors'];
-          $transformed['versions'] = $book['versions'];
-          $transformed['genres'] = $book['genres'];
-          return $transformed;
-      });
-  }
-}
+    public function index(Request $request)
+    {
+        $incompleteQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres')
+            ->whereHas('book', function ($query) {
+                $query->where('is_completed', false);
+            })
+            ->orderBy('backlog_ordinal', 'asc')
+            ->limit(100)
+            ->get();
 
+        $completedQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres')
+            ->join('books', 'backlog_items.book_id', '=', 'books.book_id')
+            ->where('books.is_completed', true)
+            ->orderBy('books.date_completed', 'desc')
+            ->select('backlog_items.*') // Select only columns from backlog_items to avoid column name conflicts
+            ->limit(100)
+            ->get();
 
-/*
-public function index(Request $request)
-{
-    $query = BacklogItem::with(['book' => function($query) {
-                        $query->with('authors', 'versions', 'versions.format', 'genres');
-                    }])
-        ->join('books', 'backlog_items.book_id', '=', 'books.book_id')
-        ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-        ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-        ->selectRaw('backlog_items.*,
-                     books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed,
-                     MIN(authors.last_name) as primary_author_last_name')
-        ->groupBy('backlog_items.id', 'books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
+        // Additional query conditions (format, sort_by, etc.)
+        // ...
 
-    // Additional query conditions (format, sort_by, etc.)
-    // ...
+        // Fetch and transform incomplete items
+        $incompleteItems = $incompleteQuery->map(function ($item) {
+            return $this->transformBacklogItem($item);
+        });
 
-    $limit = $request->has('limit') ? $request->limit : 20;
-    $backlogItems = $query->paginate($limit);
+        // Fetch and transform completed items
+        $completedItems = $completedQuery->map(function ($item) {
+            return $this->transformBacklogItem($item);
+        });
 
-    // Transform the results
-    return $backlogItems->through(function ($item) {
-        $book = $item->book->toArray();
-        unset($item->book); // Remove the nested book object
-        $transformed = array_merge($item->toArray(), $book);
-        $transformed['authors'] = $book['authors'];
-        $transformed['versions'] = $book['versions'];
-        $transformed['genres'] = $book['genres'];
+        // Combine results
+        return [
+            'incompleteItems' => $incompleteItems,
+            'completedItems' => $completedItems
+        ];
+    }
+
+    private function transformBacklogItem($item)
+    {
+        $book = $item->book;
+        $transformed = $item->toArray();
+        $transformed['book_id'] = $book->book_id;
+        $transformed['title'] = $book->title;
+        $transformed['slug'] = $book->slug;
+        $transformed['is_completed'] = $book->is_completed;
+        $transformed['rating'] = $book->rating;
+        $transformed['date_completed'] = $book->date_completed;
+        $transformed['primary_author_last_name'] = $book->authors->sortBy('last_name')->first()->last_name ?? null;
+        $transformed['authors'] = $book->authors;
+        $transformed['versions'] = $book->versions;
+        $transformed['genres'] = $book->genres;
         return $transformed;
-    });
+    }
+
+    public function updateOrdinals(Request $request)
+    {
+        $this->validate($request, [
+            'items' => 'required|array',
+            'items.*.backlog_item_id' => 'required|exists:backlog_items,backlog_item_id'
+        ]);
+    
+        foreach ($request->items as $index => $item) {
+            BacklogItem::where('backlog_item_id', $item['backlog_item_id'])
+                ->update(['backlog_ordinal' => $index]);
+        }
+    
+        return response()->json(['message' => 'Backlog order updated successfully']);
+    }    
 }
-
-
-*/

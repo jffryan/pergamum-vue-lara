@@ -5,7 +5,7 @@
       class="fixed z-20 inset-0 top-16 left-[max(0px,calc(50%-45rem))] right-auto w-[20rem] py-6 pr-8 overflow-y-auto"
     />
     <div>
-      <RouterView class="py-6 pl-[20rem] w-full" />
+      <RouterView class="pt-6 pb-16 pl-[20rem] w-full" />
     </div>
     <div
       v-if="ConfirmationModalStore.confirmationModalActive"

@@ -20,7 +20,7 @@ return new class extends Migration
                 ->on("books")
                 ->constrained()
                 ->onDelete("cascade");
-            $table->integer("order")->default(0);
+            $table->integer("backlog_ordinal")->default(0);
             $table->timestamps();
         });
     }

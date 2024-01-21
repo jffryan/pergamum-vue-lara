@@ -24,6 +24,8 @@
         "lodash": "^4.17.19",
         "papaparse": "^5.4.1",
         "pinia": "^2.1.6",
+        "sortablejs": "^1.15.2",
+        "sortablejs-vue3": "^1.2.11",
         "vue": "^3.2.36",
         "vue-loader": "^17.2.2",
         "vue-router": "^4.2.4"

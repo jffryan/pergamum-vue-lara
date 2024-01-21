@@ -5,7 +5,19 @@
       <BacklogControls class="w-1/2 mb-8" />
     </div>
     <div>
-      <BookshelfTable :books="backlogBooks" bookshelfTitle="All" />
+      <BookshelfTable
+        v-if="BacklogStore.isnot_complete"
+        :books="BacklogStore.backlog.incompleteItems"
+        :bookshelfTitle="null"
+        :isSortable="true"
+        class="mb-12"
+      />
+      <BookshelfTable
+        v-if="!BacklogStore.isnot_complete"
+        :books="completedBacklog"
+        bookshelfTitle="Completed"
+        class="mb-4"
+      />
     </div>
   </div>
 </template>
@@ -29,12 +41,17 @@ export default {
     };
   },
   computed: {
-    backlogBooks() {
-      return this.BacklogStore.activeBacklog;
+    currentBacklog() {
+      return this.BacklogStore.backlog.incompleteItems;
+    },
+    completedBacklog() {
+      return this.BacklogStore.backlog.completedItems;
     },
   },
   mounted() {
-    this.BacklogStore.fetchAndSetBacklog();
+    if (!this.BacklogStore.backlog) {
+      this.BacklogStore.fetchAndSetBacklog();
+    }
   },
 };
 </script>

@@ -27,8 +27,10 @@ Route::resource("/books", BookController::class);
 Route::resource("/genres", GenreController::class);
 Route::post("books/bulk", [BookController::class, "bulkCreate"]);
 
+Route::get("/completed/{year}", [BookController::class, "getBooksByYear"]);
 Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
 Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
 Route::get("/backlog", [BacklogController::class, "index"]);
+Route::post("/backlog/update-ordinals", [BacklogController::class, "updateOrdinals"]);
 
 Route::get("/config/formats", [ConfigController::class, "getFormats"]);

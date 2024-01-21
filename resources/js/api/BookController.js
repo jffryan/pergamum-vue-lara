@@ -20,6 +20,11 @@ const getBooksByFormat = async (options) => {
   return makeRequest("get", buildUrl("books"), null, options);
 };
 
+// GET BY YEAR
+const getBooksByYear = async (year) => {
+  return makeRequest("get", buildUrl(`completed/${year}`));
+};
+
 // CREATE
 const createBook = async (book) =>
   makeRequest("post", buildUrl("books"), { book });
@@ -65,6 +70,7 @@ export {
   getOneBookFromSlug,
   getOneBook,
   getBooksByFormat,
+  getBooksByYear,
   createBook,
   createBooks,
   updateBook,

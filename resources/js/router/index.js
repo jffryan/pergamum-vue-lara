@@ -70,6 +70,11 @@ const router = createRouter({
       component: () => import("@/views/BacklogHome.vue"),
       props: { innerComponent: "BacklogIndex" },
     },
+    {
+      path: "/completed",
+      name: "completed.home",
+      component: () => import("@/views/CompletedView.vue"),
+    },
   ],
 });
 

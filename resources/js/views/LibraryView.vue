@@ -1,7 +1,15 @@
 <template>
   <div>
     <h1>Library</h1>
-    <BookshelfTable :books="books" class="mb-4" />
+    <div class="mb-4">
+      <input
+        type="text"
+        placeholder="Search books..."
+        class="border border-gray-400 rounded px-2 py-1 mb-2"
+        v-model="searchTerm"
+      />
+    </div>
+    <BookshelfTable :books="displayedBooks" class="mb-4" />
     <div v-for="link in cleanedLinks" :key="link.label" class="inline mr-2">
       <router-link
         v-if="link.url"
@@ -36,11 +44,27 @@ export default {
   data() {
     return {
       cleanedLinks: [],
+      searchTerm: "",
     };
   },
   computed: {
-    books() {
+    allBooks() {
       return this.BooksStore.allBooks;
+    },
+    displayedBooks() {
+      // This only works if the book you're looking for is on the page you're actively on.
+      // That doesn't really work for users...
+      let filteredBooks = [...this.allBooks];
+
+      if (this.searchTerm) {
+        filteredBooks = filteredBooks.filter((book) => {
+          return book.title
+            .toLowerCase()
+            .includes(this.searchTerm.toLowerCase());
+        });
+      }
+
+      return filteredBooks;
     },
   },
 

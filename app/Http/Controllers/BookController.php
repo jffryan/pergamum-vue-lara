@@ -138,10 +138,37 @@ class BookController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+
+    //  LAST NAME PREFERRED, JUST USING FIRST NAME WHILE DATA MIGRATING
+    // public function index(Request $request)
+    // {
+    //     $query = Book::with("authors", "versions", "versions.format", "genres")
+    //         ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.last_name) as primary_author_last_name')
+    //         ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
+    //         ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+    //         ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
+
+    //     if ($request->has('format')) {
+    //         $format = $request->get('format');
+    //         $query->whereHas('versions.format', function ($q) use ($format) {
+    //             $q->where('formats.name', $format);
+    //         });
+    //     }
+
+    //     if ($request->has('sort_by') && $request->has('sort_order')) {
+    //         $query->orderBy($request->sort_by, $request->sort_order);
+    //     } else {
+    //         $query->orderBy('primary_author_last_name', 'asc');
+    //     }
+
+    //     $limit = $request->has('limit') ? $request->limit : 20;
+    //     return $query->paginate($limit);
+    // }
+
     public function index(Request $request)
     {
         $query = Book::with("authors", "versions", "versions.format", "genres")
-            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.last_name) as primary_author_last_name')
+            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.first_name) as primary_author_first_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
@@ -156,7 +183,7 @@ class BookController extends Controller
         if ($request->has('sort_by') && $request->has('sort_order')) {
             $query->orderBy($request->sort_by, $request->sort_order);
         } else {
-            $query->orderBy('primary_author_last_name', 'asc');
+            $query->orderBy('primary_author_first_name', 'asc');
         }
 
         $limit = $request->has('limit') ? $request->limit : 20;
@@ -228,7 +255,7 @@ class BookController extends Controller
         // Check if the book should be added to the backlog
         if (isset($bookForm["book"]["is_backlog"]) && $bookForm["book"]["is_backlog"]) {
             // Add the book to the backlog. Determine the order as needed.
-            $order = BacklogItem::max('order') + 1;
+            $order = BacklogItem::max('backlog_ordinal') + 1;
             $book->addToBacklog($order);
         }
 
@@ -313,7 +340,7 @@ class BookController extends Controller
             if (!$existing_book->backlogItem) {
                 // Determine the order for the new backlog item. This is a placeholder logic.
                 // You might want to replace it with your actual logic to determine the order.
-                $order = BacklogItem::max('order') + 1;
+                $order = BacklogItem::max('backlog_ordinal') + 1;
 
                 $existing_book->addToBacklog($order);
             }
@@ -336,32 +363,34 @@ class BookController extends Controller
 
         return $updated_authors;
     }
+
     private function updateVersions($existing_book, $patch_versions)
     {
         $existing_versions = $existing_book->versions()->get();
         $updated_versions = [];
 
         foreach ($patch_versions as $patch_version) {
-            $existing_version = $existing_versions->firstWhere('version_id', $patch_version['version_id']);
-
-            if ($existing_version) {
+            if (isset($patch_version['version_id'])) {
                 // Update existing version
-                $existing_version->fill([
-                    'page_count' => $patch_version['page_count'],
-                    'format_id' => $patch_version['format'],
-                    'nickname' => $patch_version['nickname'],
-                    'audio_runtime' => $patch_version['audio_runtime'] ?? null,
-                ])->save();
+                $existing_version = $existing_versions->firstWhere('version_id', $patch_version['version_id']);
+
+                if ($existing_version) {
+                    $existing_version->fill([
+                        'page_count' => $patch_version['page_count'],
+                        'format_id' => $patch_version['format'],
+                        'nickname' => $patch_version['nickname'],
+                        'audio_runtime' => $patch_version['audio_runtime'] ?? null,
+                    ])->save();
+                }
             } else {
-                // Create new version
-                $existing_version = new Version;
-                $existing_version->fill([
-                    'page_count' => $patch_version['page_count'],
-                    'format_id' => $patch_version['format_id'],
-                    'nickname' => $patch_version['nickname'],
-                    'audio_runtime' => $patch_version['audio_runtime'] ?? null,
-                ]);
-                $existing_book->versions()->save($existing_version);
+                // Prepare and save the new version as part of the update process
+                $prepared_versions = $this->prepareVersions([$patch_version]);
+
+                foreach ($prepared_versions as $prepared_version) {
+                    $existing_book->versions()->save($prepared_version);
+                    $updated_versions[] = $prepared_version;
+                }
+                continue;
             }
 
             $updated_versions[] = $existing_version;
@@ -444,5 +473,23 @@ class BookController extends Controller
                 'deleted_authors' => $authorsToBeDeleted
             ]);
         });
+    }
+
+    public function getBooksByYear($year)
+    {
+
+        // Validate that the year is a valid number
+        if (!is_numeric($year) || strlen($year) != 4) {
+            return response()->json(['error' => 'Invalid year format'], 400);
+        }
+
+        // Query the database for books
+        $books = Book::with("authors", "versions", "versions.format", "genres")
+            ->where('is_completed', true)
+            ->whereYear('date_completed', '=', $year)
+            ->orderBy('date_completed', 'asc')
+            ->get();
+
+        return response()->json($books);
     }
 }

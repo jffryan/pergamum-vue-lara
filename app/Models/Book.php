@@ -46,7 +46,17 @@ class Book extends Model
     // Method to add to backlog
     public function addToBacklog($order, $additionalProperties = [])
     {
-        $backlogData = array_merge(['order' => $order], $additionalProperties);
+        $backlogData = array_merge(['backlog_ordinal' => $order], $additionalProperties);
         $this->backlogItem()->create($backlogData);
+    }
+
+    // Null backlog ordinal
+    public function setIsCompletedAttribute($value)
+    {
+        $this->attributes['is_completed'] = $value;
+
+        if ($value) {
+            $this->backlogItem()->update(['backlog_ordinal' => null]);
+        }
     }
 }

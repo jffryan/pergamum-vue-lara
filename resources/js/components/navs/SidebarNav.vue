@@ -13,6 +13,9 @@
       <li class="mb-2 ml-4">
         <router-link :to="{ name: 'books.bulk-add' }">Bulk add</router-link>
       </li>
+      <li>
+        <router-link :to="{ name: 'completed.home' }">Completed</router-link>
+      </li>
     </ul>
   </nav>
 </template>

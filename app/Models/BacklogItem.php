@@ -12,7 +12,7 @@ class BacklogItem extends Model
     
     protected $primaryKey = "backlog_item_id";
     
-    protected $fillable = ['book_id', 'order'];
+    protected $fillable = ['book_id', 'backlog_ordinal'];
 
     public function book() {
         return $this->belongsTo(Book::class, "book_id");

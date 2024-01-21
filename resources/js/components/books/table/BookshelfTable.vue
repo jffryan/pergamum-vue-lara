@@ -23,21 +23,42 @@
           />
         </div>
       </div>
-      <BookTableRow
-        v-for="(book, idx) in books"
-        :key="book.book_id"
-        :book="book"
-        :class="[
-          idx % 2 === 0 ? 'bg-slate-200' : 'bg-slate-300',
-          ' text-black cursor-pointer hover:bg-slate-600 hover:text-white',
-        ]"
-      />
+      <Sortable
+        v-if="isSortable"
+        :list="books"
+        item-key="book_id"
+        @end="moveItemInArray(books, $event.oldIndex, $event.newIndex)"
+      >
+        <template #item="{ element, index }">
+          <BookTableRow
+            :key="element.book_id"
+            :book="element"
+            :class="[
+              index % 2 === 0 ? 'bg-slate-200' : 'bg-slate-300',
+              ' text-black cursor-pointer hover:bg-slate-600 hover:text-white',
+            ]"
+          />
+        </template>
+      </Sortable>
+      <div v-else>
+        <BookTableRow
+          v-for="(book, index) in books"
+          :key="book.book_id"
+          :book="book"
+          :class="[
+            index % 2 === 0 ? 'bg-slate-200' : 'bg-slate-300',
+            ' text-black cursor-pointer hover:bg-slate-600 hover:text-white',
+          ]"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { useBooksStore } from "@/stores";
+import { Sortable } from "sortablejs-vue3";
+
+import { useBooksStore, useBacklogStore } from "@/stores";
 
 import BookTableRow from "@/components/books/table/BookTableRow.vue";
 import UpArrow from "@/components/globals/svgs/UpArrow.vue";
@@ -47,6 +68,7 @@ export default {
   components: {
     BookTableRow,
     UpArrow,
+    Sortable,
   },
   props: {
     books: {
@@ -57,6 +79,11 @@ export default {
       type: String,
       required: false,
       default: "All Books",
+    },
+    isSortable: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   setup() {
@@ -122,6 +149,12 @@ export default {
           return null;
         }
       };
+    },
+  },
+  methods: {
+    // This works but makes the component messy for now.
+    moveItemInArray(array, oldIndex, newIndex) {
+      array.splice(newIndex, 0, array.splice(oldIndex, 1)[0]);
     },
   },
 };

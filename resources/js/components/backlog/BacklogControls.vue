@@ -3,57 +3,56 @@
     <div class="bg-slate-900 text-slate-200 rounded-t-md p-2">
       <h4 class="mb-0">Filters</h4>
     </div>
-    <div
-      class="flex items-center mb-4 bg-slate-200 text-black rounded-b-md p-2"
-    >
-      <div class="flex items-center mr-8">
+    <div class="p-2 flex items-center">
+      <div class="flex items-center mr-4">
         <input
           id="is_complete"
-          type="checkbox"
-          :checked="isComplete"
-          @change="toggleFilter('is_complete')"
-          class="w-4 h-4 bg-slate-100 border-slate-600 rounded focus:ring-blue-600 focus:ring-2"
+          type="radio"
+          :value="false"
+          name="backlog-status"
+          v-model="BacklogStore.isnot_complete"
+          class="w-4 h-4 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600"
         />
-        <label for="is_complete" class="ms-2">Completed</label>
+        <label for="is_complete" class="ms-2 text-sm font-medium"
+          >Completed</label
+        >
       </div>
-      <div class="flex items-center">
+      <div class="flex items-center mr-4">
         <input
+          checked
           id="isnot_complete"
-          type="checkbox"
-          :checked="isNotComplete"
-          @change="toggleFilter('isnot_complete')"
-          class="w-4 h-4 bg-slate-100 border-slate-600 rounded focus:ring-blue-600 focus:ring-2"
+          type="radio"
+          :value="true"
+          name="backlog-status"
+          v-model="BacklogStore.isnot_complete"
+          class="w-4 h-4 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600"
         />
-        <label for="isnot_complete" class="ms-2">Not Completed</label>
+        <label for="isnot_complete" class="ms-2 text-sm font-medium"
+          >Current backlog</label
+        >
+      </div>
+      <div>
+        <button
+          @click="BacklogStore.updateBacklogOrdinals"
+          class="btn btn-primary"
+        >
+          Save changes
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { computed } from "vue";
-
 import { useBacklogStore } from "@/stores";
 
 export default {
   name: "BacklogControls",
   setup() {
     const BacklogStore = useBacklogStore();
-    const isComplete = computed(
-      () => BacklogStore.filters.is_complete || false
-    );
-    const isNotComplete = computed(
-      () => BacklogStore.filters.isnot_complete || false
-    );
-
-    function toggleFilter(filterName) {
-      BacklogStore.toggleFilter(filterName);
-    }
 
     return {
-      isComplete,
-      isNotComplete,
-      toggleFilter,
+      BacklogStore,
     };
   },
 };
