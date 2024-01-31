@@ -58,7 +58,7 @@
           <div class="p-4 rounded-b-md bg-slate-200">
             <p>
               <span class="text-zinc-600">Date read: </span
-              >{{ currentBook.date_completed }}
+              >{{ formattedMostRecentDateRead }}
             </p>
             <p>
               <span class="text-zinc-600">Rating: </span
@@ -119,6 +119,17 @@ export default {
         return this.currentBook.genres;
       }
       return [];
+    },
+    formattedMostRecentDateRead() {
+      if (this.currentBook.read_instances.length === 0) return "";
+
+      // Get the most recent date read and format it as MM/DD/YYYY
+      const readInstance = this.currentBook.read_instances[0];
+      // MM/DD/YYYY
+      const unformattedDate = readInstance.date_read;
+      const [year, month, day] = unformattedDate.split("-");
+      const formattedDateRead = `${month}/${day}/${year}`;
+      return formattedDateRead;
     },
   },
   methods: {

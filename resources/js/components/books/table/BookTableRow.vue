@@ -34,7 +34,7 @@
         ><span v-if="idx < primaryGenres.length - 1">, </span>
       </span>
     </div>
-    <div class="col-span-2 p-2">{{ book.date_completed }}</div>
+    <div class="col-span-2 p-2">{{ formattedMostRecentDateRead }}</div>
     <div class="col-span-1 p-2">{{ book.rating }}</div>
   </div>
 </template>
@@ -80,6 +80,21 @@ export default {
         .slice(0, 3)
         .map((genre) => ({ name: genre.name, id: genre.genre_id }));
       return genreNames;
+    },
+    formattedMostRecentDateRead() {
+      if (
+        this.book.read_instances === undefined ||
+        this.book.read_instances.length === 0
+      )
+        return "";
+
+      // Get the most recent date read and format it as MM/DD/YYYY
+      const readInstance = this.book.read_instances[0];
+      // MM/DD/YYYY
+      const unformattedDate = readInstance.date_read;
+      const [year, month, day] = unformattedDate.split("-");
+      const formattedDateRead = `${month}/${day}/${year}`;
+      return formattedDateRead;
     },
   },
 };

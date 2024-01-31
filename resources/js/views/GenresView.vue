@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>Genres View</h1>
+    <h1>All Genres</h1>
     <router-link :to="{ name: 'library.index' }" class="block mb-4"
       >Back to Library</router-link
     >
@@ -88,50 +88,35 @@ export default {
     allGenres() {
       return this.GenreStore.allGenres;
     },
-    totalPages() {
-      return Math.ceil(this.allGenres.length / this.itemsPerPage);
-    },
-    // @TODO: Set up active filters
-    displayedGenres() {
-      let filteredGenres = [...this.allGenres];
+    filteredGenres() {
+      let filtered = [...this.allGenres];
 
       if (this.searchTerm) {
-        const regex = new RegExp(this.searchTerm, "i"); // i flag for case-insensitive matching
-        filteredGenres = filteredGenres.filter((genre) =>
-          regex.test(genre.name)
-        );
+        const regex = new RegExp(this.searchTerm, "i");
+        filtered = filtered.filter((genre) => regex.test(genre.name));
       }
 
       const sortFunctions = {
-        "name.asc": (a, b) => {
-          const aStartsWithNumber = /^[0-9]/.test(a.name);
-          const bStartsWithNumber = /^[0-9]/.test(b.name);
-
-          if (aStartsWithNumber && !bStartsWithNumber) return 1;
-          if (!aStartsWithNumber && bStartsWithNumber) return -1;
-          return a.name.localeCompare(b.name);
-        },
-        "name.desc": (a, b) => {
-          const aStartsWithNumber = /^[0-9]/.test(a.name);
-          const bStartsWithNumber = /^[0-9]/.test(b.name);
-
-          if (aStartsWithNumber && !bStartsWithNumber) return -1;
-          if (!aStartsWithNumber && bStartsWithNumber) return 1;
-          return b.name.localeCompare(a.name);
-        },
+        "name.asc": (a, b) => a.name.localeCompare(b.name),
+        "name.desc": (a, b) => b.name.localeCompare(a.name),
         "popularity.asc": (a, b) =>
-          b.books_count - a.books_count || b.name.localeCompare(a.name),
-        "popularity.desc": (a, b) =>
           a.books_count - b.books_count || a.name.localeCompare(b.name),
+        "popularity.desc": (a, b) =>
+          b.books_count - a.books_count || b.name.localeCompare(a.name),
       };
 
-      filteredGenres.sort(sortFunctions[this.sortBy]);
+      filtered.sort(sortFunctions[this.sortBy]);
 
-      // Pagination
+      return filtered;
+    },
+    totalPages() {
+      return Math.ceil(this.filteredGenres.length / this.itemsPerPage);
+    },
+    displayedGenres() {
       const startIndex = (this.GenreStore.currentPage - 1) * this.itemsPerPage;
       const endIndex = startIndex + this.itemsPerPage;
 
-      return filteredGenres.slice(startIndex, endIndex);
+      return this.filteredGenres.slice(startIndex, endIndex);
     },
     nameArrow() {
       if (this.sortBy === "name.asc") return "transform rotate-180";

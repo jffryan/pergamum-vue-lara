@@ -8,6 +8,7 @@ use App\Models\Format;
 use App\Models\Genre;
 use App\Models\Version;
 use App\Models\BacklogItem;
+use App\Models\ReadInstance;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
@@ -43,7 +44,6 @@ class BookController extends Controller
             'slug' => $slug,
             'is_completed' => $bookData['is_completed'],
             'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
-            'date_completed' => $bookData['is_completed'] ? Carbon::createFromFormat("m/d/Y", $bookData['date_completed']) : null,
         ];
 
         return Book::create($data);
@@ -116,7 +116,7 @@ class BookController extends Controller
         $book->versions()->saveMany($versions);
         $book->genres()->attach($genreIds);
     }
-    private function buildResponse($book, $authors, $versions, $genres)
+    private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
     {
         $nestedResponse = [
             'book' => array_merge(
@@ -125,6 +125,7 @@ class BookController extends Controller
                     'authors' => $authors,
                     'versions' => $versions,
                     'genres' => $genres,
+                    'read_instances' => $readInstances
                 ]
             )
         ];
@@ -139,39 +140,14 @@ class BookController extends Controller
      * @return \Illuminate\Http\Response
      */
 
-    //  LAST NAME PREFERRED, JUST USING FIRST NAME WHILE DATA MIGRATING
-    // public function index(Request $request)
-    // {
-    //     $query = Book::with("authors", "versions", "versions.format", "genres")
-    //         ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.last_name) as primary_author_last_name')
-    //         ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-    //         ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-    //         ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
-
-    //     if ($request->has('format')) {
-    //         $format = $request->get('format');
-    //         $query->whereHas('versions.format', function ($q) use ($format) {
-    //             $q->where('formats.name', $format);
-    //         });
-    //     }
-
-    //     if ($request->has('sort_by') && $request->has('sort_order')) {
-    //         $query->orderBy($request->sort_by, $request->sort_order);
-    //     } else {
-    //         $query->orderBy('primary_author_last_name', 'asc');
-    //     }
-
-    //     $limit = $request->has('limit') ? $request->limit : 20;
-    //     return $query->paginate($limit);
-    // }
-
     public function index(Request $request)
     {
-        $query = Book::with("authors", "versions", "versions.format", "genres")
-            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, books.date_completed, MIN(authors.first_name) as primary_author_first_name')
+        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating', 'books.date_completed');
+            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
 
         if ($request->has('format')) {
             $format = $request->get('format');
@@ -183,7 +159,7 @@ class BookController extends Controller
         if ($request->has('sort_by') && $request->has('sort_order')) {
             $query->orderBy($request->sort_by, $request->sort_order);
         } else {
-            $query->orderBy('primary_author_first_name', 'asc');
+            $query->orderBy('primary_author_last_name', 'asc');
         }
 
         $limit = $request->has('limit') ? $request->limit : 20;
@@ -252,14 +228,24 @@ class BookController extends Controller
 
         $this->attachModels($book, $new_authors, $new_versions, $new_genres);
 
+        $new_read_instances = [];
+
+        if (isset($bookForm["readInstances"])) {
+            $readInstancesData = array_filter($bookForm["readInstances"], function ($instance) {
+                return !empty($instance["date_read"]);
+            });
+        
+            $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
+        }
+
         // Check if the book should be added to the backlog
-        if (isset($bookForm["book"]["is_backlog"]) && $bookForm["book"]["is_backlog"]) {
+        if ($bookForm["book"]["is_backlog"]) {
             // Add the book to the backlog. Determine the order as needed.
             $order = BacklogItem::max('backlog_ordinal') + 1;
             $book->addToBacklog($order);
         }
 
-        return $this->buildResponse($book, $new_authors, $new_versions, $new_genres);
+        return $this->buildResponse($book, $new_authors, $new_versions, $new_genres, $new_read_instances);
     }
 
     public function bulkCreate(Request $request)
@@ -300,12 +286,12 @@ class BookController extends Controller
      */
     public function show($book_id)
     {
-        return Book::with("authors", "versions", "versions.format", "genres")->where("book_id", $book_id)->firstOrFail();
+        return Book::with("authors", "versions", "versions.format", "genres", "readInstances")->where("book_id", $book_id)->firstOrFail();
     }
 
     public function getOneBookFromSlug($slug)
     {
-        $book = Book::with("authors", "versions", "versions.format", "genres")->where("slug", $slug)->firstOrFail();
+        $book = Book::with("authors", "versions", "versions.format", "genres", "readInstances")->where("slug", $slug)->firstOrFail();
 
         return response()->json($book);
     }
@@ -331,7 +317,6 @@ class BookController extends Controller
             'title' => $patch_book['title'],
             'is_completed' => $patch_book['is_completed'],
             'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
-            'date_completed' => $patch_book['is_completed'] ? Carbon::createFromFormat("m/d/Y", $patch_book['date_completed']) : null,
         ])->save();
 
         // Check if the book should be added to the backlog
@@ -416,6 +401,34 @@ class BookController extends Controller
         return $new_genre_instances;
     }
 
+    private function updateReadInstances($existing_book, $readInstancesData)
+    {
+        $updated_read_instances = [];
+    
+        foreach ($readInstancesData as $instanceData) {
+            if (isset($instanceData['read_instances_id']) && $instanceData['read_instances_id'] != null) {
+                // Update existing read instance
+                $existing_read_instance = ReadInstance::findOrFail($instanceData['read_instances_id']);
+                $existing_read_instance->update([
+                    'date_read' => Carbon::createFromFormat("m/d/Y", $instanceData['date_read']),
+                    // Update other fields as necessary
+                ]);
+                $updated_read_instances[] = $existing_read_instance;
+            } else {
+                // Create new read instance
+                $new_read_instance = new ReadInstance([
+                    'book_id' => $existing_book->book_id,
+                    'date_read' => Carbon::createFromFormat("m/d/Y", $instanceData['date_read']),
+                    // Set other fields as necessary
+                ]);
+                $existing_book->readInstances()->save($new_read_instance);
+                $updated_read_instances[] = $new_read_instance;
+            }
+        }
+    
+        return $updated_read_instances;
+    }
+
     /**
      * Update the specified resource in storage.
      *
@@ -438,7 +451,16 @@ class BookController extends Controller
         $existing_versions = $this->updateVersions($existing_book, $patch_versions);
         $new_genres = $this->updateGenres($existing_book, $genres_array);
 
-        return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres);
+        $updated_read_instances = [];
+        if (isset($bookForm["readInstances"])) {
+            $readInstancesData = array_filter($bookForm["readInstances"], function ($instance) {
+                return !empty($instance["date_read"]);
+            });
+        
+            $updated_read_instances = $this->updateReadInstances($patch_book, $readInstancesData);
+        }
+
+        return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres, $updated_read_instances);
     }
 
     /**
@@ -477,17 +499,17 @@ class BookController extends Controller
 
     public function getBooksByYear($year)
     {
-
         // Validate that the year is a valid number
         if (!is_numeric($year) || strlen($year) != 4) {
             return response()->json(['error' => 'Invalid year format'], 400);
         }
 
         // Query the database for books
-        $books = Book::with("authors", "versions", "versions.format", "genres")
-            ->where('is_completed', true)
-            ->whereYear('date_completed', '=', $year)
-            ->orderBy('date_completed', 'asc')
+        $books = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+            ->join('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+            ->whereYear('read_instances.date_read', '=', $year)
+            ->orderBy('read_instances.date_read', 'asc')
+            ->select('books.*') // Select columns from books table
             ->get();
 
         return response()->json($books);

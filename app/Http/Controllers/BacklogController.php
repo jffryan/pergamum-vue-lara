@@ -9,7 +9,7 @@ class BacklogController extends Controller
 {
     public function index(Request $request)
     {
-        $incompleteQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres')
+        $incompleteQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres', 'book.readInstances')
             ->whereHas('book', function ($query) {
                 $query->where('is_completed', false);
             })
@@ -17,7 +17,7 @@ class BacklogController extends Controller
             ->limit(100)
             ->get();
 
-        $completedQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres')
+        $completedQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres', 'book.readInstances')
             ->join('books', 'backlog_items.book_id', '=', 'books.book_id')
             ->where('books.is_completed', true)
             ->orderBy('books.date_completed', 'desc')
@@ -54,7 +54,6 @@ class BacklogController extends Controller
         $transformed['slug'] = $book->slug;
         $transformed['is_completed'] = $book->is_completed;
         $transformed['rating'] = $book->rating;
-        $transformed['date_completed'] = $book->date_completed;
         $transformed['primary_author_last_name'] = $book->authors->sortBy('last_name')->first()->last_name ?? null;
         $transformed['authors'] = $book->authors;
         $transformed['versions'] = $book->versions;

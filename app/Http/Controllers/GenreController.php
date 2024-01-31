@@ -53,7 +53,7 @@ class GenreController extends Controller
      */
     public function show($genre_id)
     {
-        $genre = Genre::with('books.authors', 'books.versions', 'books.versions.format', 'books.genres')
+        $genre = Genre::with('books.authors', 'books.versions', 'books.versions.format', 'books.genres', 'books.readInstances')
             ->findOrFail($genre_id);
 
         return response()->json([

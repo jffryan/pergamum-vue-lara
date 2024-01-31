@@ -38,6 +38,11 @@ class Book extends Model
         return $this->belongsToMany(Format::class, "versions", "book_id", "format_id");
     }
 
+    public function readInstances()
+    {
+        return $this->hasMany(ReadInstance::class, "book_id");
+    }
+
     public function backlogItem()
     {
         return $this->hasOne(BacklogItem::class, "book_id");

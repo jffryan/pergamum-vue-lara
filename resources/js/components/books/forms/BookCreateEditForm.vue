@@ -140,16 +140,14 @@
       </div>
       <div v-if="bookForm.book.is_completed">
         <div class="mb-4">
-          <label
-            for="date_completed"
-            class="block mb-2 font-bold text-zinc-600 mr-6"
+          <label for="date_read" class="block mb-2 font-bold text-zinc-600 mr-6"
             >Date Completed</label
           >
           <input
             type="text"
-            id="date_completed"
-            name="date_completed"
-            :value="bookForm.book.date_completed"
+            id="date_read"
+            name="date_read"
+            :value="bookForm.readInstances[0].date_read"
             @input="updateDateCompleted"
             placeholder="MM/DD/YYYY"
             class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
@@ -369,7 +367,6 @@ export default {
           },
           is_completed: false,
           is_backlog: false,
-          date_completed: "",
           rating: "",
         },
         authors: [
@@ -384,6 +381,11 @@ export default {
             page_count: "",
             audio_runtime: "",
             nickname: "",
+          },
+        ],
+        readInstances: [
+          {
+            date_read: "",
           },
         ],
       };
@@ -423,10 +425,10 @@ export default {
         /^((0[1-9]|1[0-2])\/?)?((0[1-9]|[12][0-9]|3[01])\/?)?((19|20)?\d{0,2})?$/;
 
       if (partialRegex.test(adjustedValue)) {
-        this.bookForm.book.date_completed = adjustedValue;
+        this.bookForm.readInstances[0].date_read = adjustedValue;
       } else {
         // Try to rewrite this to fix the lint issue
-        event.target.value = this.bookForm.book.date_completed;
+        event.target.value = this.bookForm.readInstances[0].date_read;
       }
     },
     // Helper function for date input.
@@ -500,7 +502,7 @@ export default {
 
       // Audio runtime
       if (book.is_completed) {
-        formattedBook.book.date_completed = this.currentBook.date_completed;
+        formattedBook.readInstances = this.currentBook.read_instances;
         formattedBook.book.rating = book.rating;
       }
 
