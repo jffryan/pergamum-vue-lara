@@ -46,8 +46,8 @@
           :key="book.book_id"
           :book="book"
           :class="[
-            index % 2 === 0 ? 'bg-slate-200' : 'bg-slate-300',
-            ' text-black cursor-pointer hover:bg-slate-600 hover:text-white',
+            index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-200',
+            ' text-black cursor-pointer hover:bg-slate-500 hover:text-white',
           ]"
         />
       </div>
@@ -58,7 +58,7 @@
 <script>
 import { Sortable } from "sortablejs-vue3";
 
-import { useBooksStore, useBacklogStore } from "@/stores";
+import { useBooksStore } from "@/stores";
 
 import BookTableRow from "@/components/books/table/BookTableRow.vue";
 import UpArrow from "@/components/globals/svgs/UpArrow.vue";
@@ -115,6 +115,12 @@ export default {
           descending: "sortByFormatDesc",
         },
         {
+          name: "Page Count",
+          span: 1,
+          ascending: null,
+          descending: null,
+        },
+        {
           name: "Genres",
           span: 3,
           ascending: null,
@@ -122,7 +128,7 @@ export default {
         },
         {
           name: "Date Read",
-          span: 2,
+          span: 1,
           ascending: "sortByDateCompleted",
           descending: "sortByDateCompletedDesc",
         },

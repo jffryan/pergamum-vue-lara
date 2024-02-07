@@ -19,6 +19,11 @@ const router = createRouter({
       component: () => import("@/views/AddBooksView.vue"),
     },
     {
+      path: "/new-book/",
+      name: "books.new",
+      component: () => import("@/views/NewBookView.vue"),
+    },
+    {
       path: "/add-books/bulk-upload",
       name: "books.bulk-add",
       component: () => import("@/views/BulkAddBooksView.vue"),
@@ -74,6 +79,11 @@ const router = createRouter({
       path: "/completed",
       name: "completed.home",
       component: () => import("@/views/CompletedView.vue"),
+    },
+    {
+      path: "/completed/statistics",
+      name: "completed.statistics",
+      component: () => import("@/views/CompletedStatisticsDashboard.vue"),
     },
   ],
 });

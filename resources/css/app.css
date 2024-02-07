@@ -41,4 +41,9 @@ p {
   @apply text-white bg-red-900;
 }
 
+/* Forms */
+input[type="text"] {
+  @apply border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all;
+}
+
 /* NonTailwind */

@@ -22,6 +22,7 @@
         >{{ bookFormat.name }}</router-link
       >
     </div>
+    <div class="col-span-1 p-2">{{ pageCount }}</div>
     <div class="col-span-3 p-2">
       <span
         v-for="(genre, idx) in primaryGenres"
@@ -34,7 +35,8 @@
         ><span v-if="idx < primaryGenres.length - 1">, </span>
       </span>
     </div>
-    <div class="col-span-2 p-2">{{ formattedMostRecentDateRead }}</div>
+
+    <div class="col-span-1 p-2">{{ formattedMostRecentDateRead }}</div>
     <div class="col-span-1 p-2">{{ book.rating }}</div>
   </div>
 </template>
@@ -77,7 +79,7 @@ export default {
     primaryGenres() {
       // Take the first 3 genres and return their names + ids in an array
       const genreNames = this.book.genres
-        .slice(0, 3)
+        .slice(0, 2)
         .map((genre) => ({ name: genre.name, id: genre.genre_id }));
       return genreNames;
     },
@@ -90,11 +92,15 @@ export default {
 
       // Get the most recent date read and format it as MM/DD/YYYY
       const readInstance = this.book.read_instances[0];
-      // MM/DD/YYYY
+      // MM/DD/YY
       const unformattedDate = readInstance.date_read;
       const [year, month, day] = unformattedDate.split("-");
-      const formattedDateRead = `${month}/${day}/${year}`;
+      const lastTwoDigitsOfYear = year.slice(-2);
+      const formattedDateRead = `${month}/${day}/${lastTwoDigitsOfYear}`;
       return formattedDateRead;
+    },
+    pageCount() {
+      return this.book.versions[0].page_count || "";
     },
   },
 };

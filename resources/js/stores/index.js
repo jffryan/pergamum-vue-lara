@@ -5,6 +5,7 @@ import useBooksStore from "./BooksStore";
 import useConfigStore from "./ConfigStore";
 import useConfirmationModalStore from "./ConfirmationModalStore";
 import useGenreStore from "./GenreStore";
+import useNewBookStore from "./NewBookStore";
 
 export {
   useAuthorsStore,
@@ -13,4 +14,5 @@ export {
   useConfigStore,
   useConfirmationModalStore,
   useGenreStore,
+  useNewBookStore,
 };

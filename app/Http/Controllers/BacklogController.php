@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BacklogItem;
 use Illuminate\Http\Request;
+use App\Models\ReadInstance;
 
 class BacklogController extends Controller
 {
@@ -20,8 +21,14 @@ class BacklogController extends Controller
         $completedQuery = BacklogItem::with('book.authors', 'book.versions.format', 'book.genres', 'book.readInstances')
             ->join('books', 'backlog_items.book_id', '=', 'books.book_id')
             ->where('books.is_completed', true)
-            ->orderBy('books.date_completed', 'desc')
-            ->select('backlog_items.*') // Select only columns from backlog_items to avoid column name conflicts
+            // Use a subquery to order by the latest read instance date
+            ->orderByDesc(
+                ReadInstance::select('date_read')
+                    ->whereColumn('book_id', 'books.book_id')
+                    ->latest('date_read')
+                    ->limit(1)
+            )
+            ->select('backlog_items.*') // Ensure you're only selecting columns from backlog_items to avoid conflicts
             ->limit(100)
             ->get();
 
@@ -58,6 +65,7 @@ class BacklogController extends Controller
         $transformed['authors'] = $book->authors;
         $transformed['versions'] = $book->versions;
         $transformed['genres'] = $book->genres;
+        $transformed['read_instances'] = $book->readInstances;
         return $transformed;
     }
 
@@ -67,12 +75,12 @@ class BacklogController extends Controller
             'items' => 'required|array',
             'items.*.backlog_item_id' => 'required|exists:backlog_items,backlog_item_id'
         ]);
-    
+
         foreach ($request->items as $index => $item) {
             BacklogItem::where('backlog_item_id', $item['backlog_item_id'])
                 ->update(['backlog_ordinal' => $index]);
         }
-    
+
         return response()->json(['message' => 'Backlog order updated successfully']);
-    }    
+    }
 }

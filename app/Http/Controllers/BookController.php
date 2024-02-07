@@ -162,7 +162,7 @@ class BookController extends Controller
             $query->orderBy('primary_author_last_name', 'asc');
         }
 
-        $limit = $request->has('limit') ? $request->limit : 20;
+        $limit = $request->has('limit') ? $request->limit : 30;
         return $query->paginate($limit);
     }
 
@@ -440,8 +440,10 @@ class BookController extends Controller
     {
         $existing_book = Book::findOrFail($id);
         $data = $request->book;
-
+        
+        $existing_book_id = $data["book_id"];
         $patch_book = $data["book"];
+        $existing_book->book_id = $existing_book_id; // Ensure the book_id is set to the existing book's ID
         $patch_authors = $data["authors"];
         $patch_versions = $data["versions"];
         $genres_array = $data["book"]["genres"]["parsed"];
@@ -452,12 +454,12 @@ class BookController extends Controller
         $new_genres = $this->updateGenres($existing_book, $genres_array);
 
         $updated_read_instances = [];
-        if (isset($bookForm["readInstances"])) {
-            $readInstancesData = array_filter($bookForm["readInstances"], function ($instance) {
+        if (isset($data["readInstances"])) {
+            $readInstancesData = array_filter($data["readInstances"], function ($instance) {
                 return !empty($instance["date_read"]);
             });
         
-            $updated_read_instances = $this->updateReadInstances($patch_book, $readInstancesData);
+            $updated_read_instances = $this->updateReadInstances($existing_book, $readInstancesData);
         }
 
         return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres, $updated_read_instances);
