@@ -1,5 +1,8 @@
 <template>
-  <form @submit.prevent="submitBook()">
+  <form
+    @submit.prevent="submitBook()"
+    class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
+  >
     <div class="mb-4">
       <label for="title" class="block mb-2 font-bold text-zinc-600 mr-6"
         >Enter Title</label
@@ -45,12 +48,12 @@ export default {
     };
   },
   methods: {
-    submitBook() {
+    async submitBook() {
       const isValid = this.validateBook();
       if (!isValid) {
         return;
       }
-      const res = this.NewBookStore.beginBookCreation(this.book);
+      await this.NewBookStore.beginBookCreation(this.book);
     },
     validateBook() {
       this.isValid = validateString(this.book.title);

@@ -10,12 +10,9 @@ function initializeBookData() {
       is_completed: false,
       rating: null,
     },
-    authors: [
-      {
-        first_name: "",
-        last_name: "",
-      },
-    ],
+    authors: [],
+    genres: [],
+    versions: [],
   };
 }
 
@@ -56,14 +53,57 @@ const useNewBookStore = defineStore("NewBookStore", {
       if (!res.exists) {
         this.setSlug(res.book.slug);
         this.setCurrentStepComponent([
-          "NewBookProgressForm",
           "NewAuthorsInput",
+          "NewBookProgressForm",
         ]);
       }
       // If a prior model found, set the book data from the existing record
       if (res.exists) {
         this.setBookFromExisting(res.book);
+        this.setCurrentStepComponent([
+          "NewVersionsInput",
+          "NewBookProgressForm",
+        ]);
       }
+    },
+    addAuthorsToNewBook(authors) {
+      // Check to ensure authors exists on the request
+      if (!authors.length) {
+        return;
+      }
+
+      /**
+       We can actually save all this for later - for now we should just store it until we're ready to go to the DB
+       
+      // Format each author as an object with full name, first name, and last name
+      const authorsData = authors.map((author) => {
+        return {
+          name: `${author.first_name} ${author.last_name}`,
+          first_name: author.first_name,
+          last_name: author.last_name,
+        };
+      });
+
+      const res = await this.getOrSetToBeCreatedAuthorsByName(authorsData);
+      */
+      // Save the author data to the store
+      this.setBookAuthors(authors);
+      this.setCurrentStepComponent(["NewGenresInput", "NewBookProgressForm"]);
+    },
+    async addGenresToNewBook(genres) {
+      // Check to ensure genres exists on the request
+      if (!genres.length) {
+        return;
+      }
+      const formattedGenres = genres.map((genre) => {
+        return {
+          name: genre,
+          genre_id: null,
+        };
+      });
+      // Save in the store for later
+      this.setBookGenres(formattedGenres);
+      this.setCurrentStepComponent(["NewVersionsInput", "NewBookProgressForm"]);
     },
     // ------------------------------
     // Helper functions that set specific model data
@@ -73,6 +113,10 @@ const useNewBookStore = defineStore("NewBookStore", {
       this.setIsCompleted(book.is_completed);
       this.setRating(book.rating);
       this.setBookId(book.book_id);
+      this.setBookAuthors(book.authors);
+      this.setBookGenres(book.genres);
+      this.setBookVersions(book.versions);
+      this.setCurrentStepHeading("Add new version");
     },
 
     // ------------------------------
@@ -93,6 +137,42 @@ const useNewBookStore = defineStore("NewBookStore", {
     setBookId(id) {
       this.currentBookData.book.book_id = id;
     },
+    setBookAuthors(authors) {
+      for (let i = 0; i < authors.length; i += 1) {
+        const author = {
+          name: `${authors[i].first_name} ${authors[i].last_name}`,
+          author_id: authors[i].author_id,
+        };
+
+        this.currentBookData.authors[i] = author;
+      }
+    },
+    setBookGenres(genres) {
+      for (let i = 0; i < genres.length; i += 1) {
+        const genre = {
+          name: genres[i].name,
+          genre_id: genres[i].genre_id,
+        };
+
+        this.currentBookData.genres[i] = genre;
+      }
+    },
+    setBookVersions(versions) {
+      this.currentBookData.versions = versions.map((version) => ({
+        audio_runtime: version.audio_runtime,
+        format: version.format.name,
+        nickname: version.nickname,
+        page_count: version.page_count,
+        read_instances:
+          version.read_instances && version.read_instances.length > 0
+            ? version.read_instances.map((instance) => ({
+                read_instances_id: instance.read_instances_id,
+                date_read: instance.date_read,
+              }))
+            : [], // Handle cases where read_instances might be undefined or empty
+        version_id: version.version_id,
+      }));
+    },
     // ------------------------------
     // Helper functions that set internal store process properties
     // ------------------------------
@@ -111,6 +191,12 @@ const useNewBookStore = defineStore("NewBookStore", {
     async createOrGetBookByTitle(title) {
       const res = await axios.post("/api/create-book/title", {
         title,
+      });
+      return res.data;
+    },
+    async getOrSetToBeCreatedAuthorsByName(authorsData) {
+      const res = await axios.post("/api/create-authors", {
+        authorsData,
       });
       return res.data;
     },

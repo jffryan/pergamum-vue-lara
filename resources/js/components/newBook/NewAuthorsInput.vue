@@ -1,5 +1,8 @@
 <template>
-  <form @submit.prevent="console.log('hello world')">
+  <form
+    @submit.prevent="submitAuthors"
+    class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
+  >
     <div class="mb-4">
       <div class="flex justify-between mb-2">
         <label
@@ -40,6 +43,7 @@
             placeholder="Last"
             class="block"
             v-model="author.last_name"
+            @input="clearValidation(idx)"
           />
         </div>
 
@@ -50,8 +54,18 @@
     </div>
     <!-- END AUTHOR INPUT -->
     <div class="flex justify-end">
-      <button class="btn btn-secondary mr-4" @click.prevent="addAuthorInput">
-        Add author
+      <button
+        v-if="canAddMoreAuthors || authors.length > 1"
+        :disabled="!canAddMoreAuthors"
+        class="btn btn-secondary mr-4"
+        :class="
+          canAddMoreAuthors
+            ? ''
+            : 'cursor-not-allowed text-zinc-400 hover:bg-white hover:text-zinc-400'
+        "
+        @click.prevent="addAuthorInput"
+      >
+        Add more authors
       </button>
       <button class="btn btn-primary" type="submit">Submit</button>
     </div>
@@ -59,8 +73,19 @@
 </template>
 
 <script>
+import { validateString } from "@/utils/validators";
+
+import { useNewBookStore } from "@/stores";
+
 export default {
   name: "NewAuthorsInput",
+  setup() {
+    const NewBookStore = useNewBookStore();
+
+    return {
+      NewBookStore,
+    };
+  },
   data() {
     return {
       authors: [
@@ -74,23 +99,45 @@ export default {
       },
     };
   },
-  methods: {
-    addAuthorInput(e) {
-      e.preventDefault();
-
+  computed: {
+    canAddMoreAuthors() {
       // Limit to one blank input at a time
       const lastIndex = this.authors.length - 1;
       const lastAuthor = this.authors[lastIndex];
       if (lastAuthor.first_name !== "" || lastAuthor.last_name !== "") {
+        return true;
+      }
+      return false;
+    },
+  },
+
+  methods: {
+    async submitAuthors() {
+      const isValid = this.validateAuthors();
+      if (!isValid) {
+        return;
+      }
+      await this.NewBookStore.addAuthorsToNewBook(this.authors);
+    },
+    validateAuthors() {
+      this.isValid.authors = this.authors.map((author) => {
+        return validateString(author.last_name);
+      });
+      return this.isValid.authors.every((isValid) => isValid);
+    },
+    clearValidation(index) {
+      this.isValid.authors[index] = true;
+    },
+    addAuthorInput(e) {
+      e.preventDefault();
+      if (this.canAddMoreAuthors) {
         const newAuthor = {
           first_name: "",
           last_name: "",
         };
         this.authors.push(newAuthor);
         // Add another isValid input
-        this.isValid.authors.push({
-          last_name: true,
-        });
+        this.isValid.authors.push(true);
       }
     },
     removeAuthorInput(index) {

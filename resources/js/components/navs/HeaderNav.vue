@@ -1,6 +1,6 @@
 <template>
   <div
-    class="sticky top-0 z-40 w-full bg-white flex-none transition-colors duration-500 lg:z-50"
+    class="sticky top-0 z-40 w-full flex-none transition-colors duration-500 lg:z-50"
   >
     <div class="max-w-8xl mx-auto">
       <div class="py-4 mx-4 lg:mx-0">

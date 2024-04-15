@@ -505,15 +505,82 @@ class BookController extends Controller
         if (!is_numeric($year) || strlen($year) != 4) {
             return response()->json(['error' => 'Invalid year format'], 400);
         }
-
-        // Query the database for books
-        $books = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->join('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->whereYear('read_instances.date_read', '=', $year)
-            ->orderBy('read_instances.date_read', 'asc')
-            ->select('books.*') // Select columns from books table
+    
+        $read_instances = ReadInstance::whereYear('date_read', '=', $year)
+            ->with('book', 'version', 'version.format', 'book.authors', 'book.genres')
+            ->orderBy('date_read', 'asc')
             ->get();
-
+    
+        $books = $read_instances->map(function ($instance) {
+            return [
+                'book_id' => $instance->book->book_id,
+                'title' => $instance->book->title,
+                'slug' => $instance->book->slug,
+                'is_completed' => $instance->book->is_completed,
+                'rating' => $instance->book->rating,
+                'created_at' => $instance->book->created_at,
+                'updated_at' => $instance->book->updated_at,
+                'authors' => $instance->book->authors->map(function ($author) {
+                    return [
+                        'author_id' => $author->author_id,
+                        'first_name' => $author->first_name,
+                        'last_name' => $author->last_name,
+                        'slug' => $author->slug,
+                        'created_at' => $author->created_at,
+                        'updated_at' => $author->updated_at,
+                        'pivot' => [
+                            'book_id' => $author->pivot->book_id,
+                            'author_id' => $author->pivot->author_id,
+                            'created_at' => $author->pivot->created_at,
+                            'updated_at' => $author->pivot->updated_at
+                        ]
+                    ];
+                }),
+                'versions' => [
+                    [
+                        'version_id' => $instance->version->version_id,
+                        'page_count' => $instance->version->page_count,
+                        'audio_runtime' => $instance->version->audio_runtime,
+                        'format_id' => $instance->version->format_id,
+                        'book_id' => $instance->version->book_id,
+                        'created_at' => $instance->version->created_at,
+                        'updated_at' => $instance->version->updated_at,
+                        'nickname' => $instance->version->nickname,
+                        'format' => [
+                            'format_id' => $instance->version->format->format_id,
+                            'name' => $instance->version->format->name,
+                            'slug' => $instance->version->format->slug,
+                            'created_at' => $instance->version->format->created_at,
+                            'updated_at' => $instance->version->format->updated_at
+                        ]
+                    ]
+                ],
+                'genres' => $instance->book->genres->map(function ($genre) {
+                    return [
+                        'genre_id' => $genre->genre_id,
+                        'name' => $genre->name,
+                        'created_at' => $genre->created_at,
+                        'updated_at' => $genre->updated_at,
+                        'pivot' => [
+                            'book_id' => $genre->pivot->book_id,
+                            'genre_id' => $genre->pivot->genre_id,
+                            'created_at' => $genre->pivot->created_at,
+                            'updated_at' => $genre->pivot->updated_at
+                        ]
+                    ];
+                }),
+                'read_instances' => [
+                    [
+                        'read_instances_id' => $instance->read_instances_id,
+                        'book_id' => $instance->book_id,
+                        'version_id' => $instance->version_id,
+                        'date_read' => $instance->date_read->format('Y-m-d'),
+                        'created_at' => $instance->created_at->format('Y-m-d'),
+                        'updated_at' => $instance->updated_at->format('Y-m-d')
+                    ]
+                ]
+            ];
+        });
         return response()->json($books);
-    }
+    }    
 }

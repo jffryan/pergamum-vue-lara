@@ -1,12 +1,15 @@
 <template>
   <div>
-    <h1>{{ currentStep }}</h1>
-    <component
-      v-for="component in currentComponents"
-      :is="component"
-      :key="component"
-      class="w-2/3 px-6 py-8 border rounded-md border-zinc-400 mb-4"
-    />
+    <div
+      class="w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
+    >
+      <h1>{{ currentStep }}</h1>
+      <component
+        v-for="component in currentComponents"
+        :is="component"
+        :key="component"
+      />
+    </div>
   </div>
 </template>
 
@@ -15,6 +18,8 @@ import { useNewBookStore } from "@/stores";
 import NewAuthorsInput from "@/components/newBook/NewAuthorsInput.vue";
 import NewBookTitleInput from "@/components/newBook/NewBookTitleInput.vue";
 import NewBookProgressForm from "@/components/newBook/NewBookProgressForm.vue";
+import NewGenresInput from "@/components/newBook/NewGenresInput.vue";
+import NewVersionsInput from "@/components/newBook/NewVersionsInput.vue";
 
 export default {
   name: "NewBookView",
@@ -22,6 +27,8 @@ export default {
     NewAuthorsInput,
     NewBookTitleInput,
     NewBookProgressForm,
+    NewGenresInput,
+    NewVersionsInput,
   },
   setup() {
     const NewBookStore = useNewBookStore();
