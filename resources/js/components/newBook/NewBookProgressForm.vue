@@ -34,14 +34,14 @@
       </div>
     </div>
     <div v-if="versions && versions.length" class="mb-8">
-      <div class="grid grid-cols-2 gap-x-4">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-4">
         <div
           v-for="version in versions"
           :key="version.version_id"
           class="p-4 bg-zinc-100 border rounded-md border-zinc-400 mb-2 shadow-md"
         >
-          <div class="font-bold">
-            {{ version.format }}
+          <div class="font-bold capitalize">
+            {{ version.format.name }}
           </div>
           <!-- Page Count conditional on format -->
           <div v-if="!version.audio_runtime" class="font-normal">
@@ -55,6 +55,12 @@
           <div v-if="version.read_instances && version.read_instances.length">
             Completed: {{ formatDate(version.read_instances[0].date_read) }}
           </div>
+        </div>
+        <div
+          v-if="backlogItem"
+          class="p-4 bg-zinc-100 border rounded-md border-zinc-400 mb-8 shadow-md"
+        >
+          <p class="mb-0">This book will be added to your current backlog.</p>
         </div>
       </div>
     </div>
@@ -85,6 +91,9 @@ export default {
     },
     versions() {
       return this.NewBookStore.currentBookData.versions;
+    },
+    backlogItem() {
+      return this.NewBookStore.currentBookData.addToBacklog;
     },
   },
   methods: {

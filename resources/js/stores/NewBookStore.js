@@ -13,6 +13,7 @@ function initializeBookData() {
     authors: [],
     genres: [],
     versions: [],
+    addToBacklog: false,
   };
 }
 
@@ -72,25 +73,21 @@ const useNewBookStore = defineStore("NewBookStore", {
         return;
       }
 
-      /**
-       We can actually save all this for later - for now we should just store it until we're ready to go to the DB
-       
       // Format each author as an object with full name, first name, and last name
       const authorsData = authors.map((author) => {
         return {
           name: `${author.first_name} ${author.last_name}`,
           first_name: author.first_name,
           last_name: author.last_name,
+          author_id: null,
         };
       });
 
-      const res = await this.getOrSetToBeCreatedAuthorsByName(authorsData);
-      */
       // Save the author data to the store
-      this.setBookAuthors(authors);
+      this.setBookAuthors(authorsData);
       this.setCurrentStepComponent(["NewGenresInput", "NewBookProgressForm"]);
     },
-    async addGenresToNewBook(genres) {
+    addGenresToNewBook(genres) {
       // Check to ensure genres exists on the request
       if (!genres.length) {
         return;
@@ -104,6 +101,58 @@ const useNewBookStore = defineStore("NewBookStore", {
       // Save in the store for later
       this.setBookGenres(formattedGenres);
       this.setCurrentStepComponent(["NewVersionsInput", "NewBookProgressForm"]);
+    },
+    addVersionToNewBook(version) {
+      // Check to ensure versions exists on the request
+      if (!version) {
+        return;
+      }
+
+      // Format to work with setBookVersions
+      const formattedVersion = {
+        audio_runtime: version.audio_runtime,
+        format: version.format,
+        nickname: version.nickname,
+        page_count: version.page_count,
+        read_instances: [],
+        version_id: null,
+      };
+      // Save in the store for later
+      this.currentBookData.versions.push(formattedVersion);
+      if (version.is_read) {
+        this.setCurrentStepComponent([
+          "NewReadInstanceInput",
+          "NewBookProgressForm",
+        ]);
+      }
+
+      this.setCurrentStepComponent([
+        "NewBacklogItemInput",
+        "NewBookProgressForm",
+      ]);
+    },
+    setBacklogItemToNewBook(backlogItem) {
+      // Check to ensure backlogItem exists on the request
+      if (!backlogItem) {
+        this.setCurrentStepComponent([
+          "NewBookProgressForm",
+          "NewBookSubmitControls",
+        ]);
+        this.setCurrentStepHeading("Review book details");
+        return;
+      }
+      this.currentBookData.addToBacklog = true;
+      this.setCurrentStepComponent([
+        "NewBookProgressForm",
+        "NewBookSubmitControls",
+      ]);
+      this.setCurrentStepHeading("Review book details");
+    },
+    async submitNewBook() {
+      const res = await axios.post("/api/create-book", {
+        bookData: this.currentBookData,
+      });
+      return res;
     },
     // ------------------------------
     // Helper functions that set specific model data
@@ -141,6 +190,8 @@ const useNewBookStore = defineStore("NewBookStore", {
       for (let i = 0; i < authors.length; i += 1) {
         const author = {
           name: `${authors[i].first_name} ${authors[i].last_name}`,
+          first_name: authors[i].first_name,
+          last_name: authors[i].last_name,
           author_id: authors[i].author_id,
         };
 
@@ -160,7 +211,7 @@ const useNewBookStore = defineStore("NewBookStore", {
     setBookVersions(versions) {
       this.currentBookData.versions = versions.map((version) => ({
         audio_runtime: version.audio_runtime,
-        format: version.format.name,
+        format: version.format,
         nickname: version.nickname,
         page_count: version.page_count,
         read_instances:
@@ -191,12 +242,6 @@ const useNewBookStore = defineStore("NewBookStore", {
     async createOrGetBookByTitle(title) {
       const res = await axios.post("/api/create-book/title", {
         title,
-      });
-      return res.data;
-    },
-    async getOrSetToBeCreatedAuthorsByName(authorsData) {
-      const res = await axios.post("/api/create-authors", {
-        authorsData,
       });
       return res.data;
     },

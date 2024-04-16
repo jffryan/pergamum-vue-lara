@@ -16,18 +16,24 @@
 <script>
 import { useNewBookStore } from "@/stores";
 import NewAuthorsInput from "@/components/newBook/NewAuthorsInput.vue";
+import NewBacklogItemInput from "@/components/newBook/NewBacklogItemInput.vue";
 import NewBookTitleInput from "@/components/newBook/NewBookTitleInput.vue";
 import NewBookProgressForm from "@/components/newBook/NewBookProgressForm.vue";
 import NewGenresInput from "@/components/newBook/NewGenresInput.vue";
+import NewReadInstanceInput from "@/components/newBook/NewReadInstanceInput.vue";
+import NewBookSubmitControls from "@/components/newBook/NewBookSubmitControls.vue";
 import NewVersionsInput from "@/components/newBook/NewVersionsInput.vue";
 
 export default {
   name: "NewBookView",
   components: {
     NewAuthorsInput,
+    NewBacklogItemInput,
     NewBookTitleInput,
     NewBookProgressForm,
     NewGenresInput,
+    NewReadInstanceInput,
+    NewBookSubmitControls,
     NewVersionsInput,
   },
   setup() {

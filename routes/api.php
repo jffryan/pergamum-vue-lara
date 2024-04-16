@@ -35,6 +35,7 @@ Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
 Route::get("/backlog", [BacklogController::class, "index"]);
 Route::post("/backlog/update-ordinals", [BacklogController::class, "updateOrdinals"]);
 Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByTitle"]);
+Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);
 Route::post("/create-authors", [AuthorController::class, "getOrSetToBeCreatedAuthorsByName"]);
 
 // Statistics
