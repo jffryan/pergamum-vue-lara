@@ -8,9 +8,6 @@
         <router-link :to="{ name: 'genres.index' }">Genres</router-link>
       </li>
       <li>
-        <router-link :to="{ name: 'books.create' }">Add book</router-link>
-      </li>
-      <li>
         <router-link :to="{ name: 'books.new' }">New book</router-link>
       </li>
       <li class="mb-2 ml-4">

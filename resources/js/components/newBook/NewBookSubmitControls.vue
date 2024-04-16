@@ -3,7 +3,7 @@
     @submit.prevent="submitBook"
     class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
   >
-    <label class="block font-bold text-zinc-600 mr-6"
+    <label class="block font-bold text-zinc-600 mb-4"
       >Are you ready to submit this book?</label
     >
     <div class="flex justify-end">

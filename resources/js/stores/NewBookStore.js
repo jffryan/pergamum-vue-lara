@@ -12,6 +12,7 @@ function initializeBookData() {
     },
     authors: [],
     genres: [],
+    read_instances: [],
     versions: [],
     addToBacklog: false,
   };
@@ -124,12 +125,41 @@ const useNewBookStore = defineStore("NewBookStore", {
           "NewReadInstanceInput",
           "NewBookProgressForm",
         ]);
+        return;
       }
 
       this.setCurrentStepComponent([
         "NewBacklogItemInput",
         "NewBookProgressForm",
       ]);
+    },
+    addReadInstanceToNewBookVersion(readInstance) {
+      // Check to ensure readInstance exists on the request
+      if (!readInstance) {
+        return;
+      }
+
+      // Format to work with setBookVersions
+      const formattedReadInstance = {
+        read_instances_id: null,
+        date_read: readInstance.date_read,
+      };
+
+      // Save in the store for later
+      this.currentBookData.versions[
+        this.currentBookData.versions.length - 1
+      ].read_instances.push(formattedReadInstance);
+
+      this.currentBookData.read_instances.push(formattedReadInstance);
+
+      this.currentBookData.book.is_completed = true;
+      this.currentBookData.book.rating = readInstance.rating;
+
+      this.setCurrentStepComponent([
+        "NewBookProgressForm",
+        "NewBookSubmitControls",
+      ]);
+      this.setCurrentStepHeading("Review book details");
     },
     setBacklogItemToNewBook(backlogItem) {
       // Check to ensure backlogItem exists on the request

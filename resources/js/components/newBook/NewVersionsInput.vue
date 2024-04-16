@@ -48,7 +48,7 @@
           </p>
         </div>
         <!-- Audio runtime field -->
-        <div v-if="version.format === 2" class="mb-4 w-full">
+        <div v-if="version.format?.format_id === 2" class="mb-4 w-full">
           <label
             for="audio_runtime"
             class="block mb-2 font-bold text-zinc-600 mr-6"
@@ -79,17 +79,25 @@
         placeholder="Nickname"
       />
     </div>
-    <div class="flex items-center">
-      <input
-        v-model="version.is_read"
-        type="checkbox"
-        id="is_read"
-        name="is_read"
-        class="mr-2"
-      />
-      <label for="is_read" class="block mb-1 font-bold text-zinc-600"
-        >I have read this version</label
-      >
+    <label for="is_read" class="block mb-2 font-bold text-zinc-600"
+      >I have read this version</label
+    >
+    <div class="mt-auto">
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input
+          type="checkbox"
+          v-model="version.is_read"
+          class="sr-only peer"
+          :true-value="1"
+          :false-value="0"
+        />
+        <div
+          class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+        ></div>
+        <span class="ml-3 font-medium">{{
+          version.is_read ? "Yes" : "No"
+        }}</span>
+      </label>
     </div>
     <!-- End version -->
     <div class="flex justify-end">

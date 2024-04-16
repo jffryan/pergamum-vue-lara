@@ -11,6 +11,7 @@ use App\Models\Author;
 use App\Models\Format;
 use App\Models\Version;
 use App\Models\BacklogItem;
+use App\Models\ReadInstance;
 
 class NewBookController extends Controller
 {
@@ -120,6 +121,27 @@ class NewBookController extends Controller
         })->all();
     }
 
+    private function handleReadInstances($readInstancesData, $bookData, $versionsData)
+    {
+        return collect($readInstancesData)->map(function ($readInstance) use ($bookData, $versionsData) {
+            $book_id = $bookData['book_id'];
+            $version_id = null;
+
+            if (isset($readInstance['version_id'])) {
+                $version_id = $readInstance['version_id'];
+            } else {
+                // Return the first version (FOR NOW!!!)
+                $version_id = $versionsData[0]->version_id;
+            }
+
+
+            $readInstance['book_id'] = $book_id;
+            $readInstance['version_id'] = $version_id;
+
+            return ReadInstance::create($readInstance);
+        })->all();
+    }
+
     private function attachModels($book, $authors, $genres, $versions)
     {
         $authorIds = array_map(function ($author) {
@@ -147,6 +169,7 @@ class NewBookController extends Controller
             $authors = $this->handleAuthors($bookData["authors"]);
             $genres = $this->handleGenres($bookData["genres"]);
             $versions = $this->handleVersions($bookData["versions"], $book);
+            $read_instances = $this->handleReadInstances($bookData["read_instances"], $book, $versions);
 
             $this->attachModels($book, $authors, $genres, $versions);
 
@@ -167,6 +190,7 @@ class NewBookController extends Controller
                 'authors' => $authors,
                 'genres' => $genres,
                 'versions' => $versions,
+                'read_instances' => $read_instances,
             ]);
         } catch (\Exception $e) {
             // If any operation fails, roll back the transaction
