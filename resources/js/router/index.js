@@ -39,6 +39,11 @@ const router = createRouter({
       component: () => import("@/views/BookView.vue"),
     },
     {
+      path: "/books/:slug/add-read-history",
+      name: "books.add-read-history",
+      component: () => import("@/views/AddReadHistoryView.vue"),
+    },
+    {
       path: "/authors/:slug",
       name: "authors.show",
       component: () => import("@/views/AuthorView.vue"),

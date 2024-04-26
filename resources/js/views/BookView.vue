@@ -30,15 +30,25 @@
         <div class="mb-4">
           <router-link
             class="btn btn-primary mr-4"
+            :to="{
+              name: 'books.add-read-history',
+              params: { slug: currentBook.slug },
+            }"
+            >Add read history</router-link
+          >
+          <router-link
+            class="btn btn-secondary mr-4"
             :to="{ name: 'books.edit', params: { slug: currentBook.slug } }"
             >Edit book</router-link
           >
+          <!--
           <button
             @click="initDeleteBook(currentBook.book_id)"
             class="btn btn-secondary"
           >
             Delete book
           </button>
+          -->
         </div>
         <div class="mb-8">
           <router-link :to="{ name: 'library.index' }" class="block mb-4"
@@ -52,7 +62,7 @@
         </div>
         <div v-if="currentBook.is_completed">
           <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
-            <h3 class="mb-0">Reader Profile</h3>
+            <h3 class="mb-0">Read History</h3>
           </div>
 
           <div class="p-4 rounded-b-md bg-slate-200">

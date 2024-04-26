@@ -105,7 +105,7 @@
       <!-- END GENRES -->
     </div>
     <div class="mb-8">
-      <h3>Reader Profile</h3>
+      <h3>Read History</h3>
       <div class="mb-4 flex justify-between">
         <div class="mt-auto">
           <label class="relative inline-flex items-center cursor-pointer">
