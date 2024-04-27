@@ -5,7 +5,7 @@
       <input
         type="text"
         placeholder="Search books..."
-        class="border border-gray-400 rounded px-2 py-1 mb-2"
+        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 mb-2"
         v-model="searchTerm"
       />
     </div>

@@ -7,11 +7,16 @@
     <div class="grid grid-cols-2">
       <div class="mb-12">
         <h1>{{ currentBook.title }}</h1>
-        <h2 v-for="author in currentAuthors" :key="author.author_id">
-          <router-link
-            :to="{ name: 'authors.show', params: { slug: author.slug } }"
-            >{{ author.name }}</router-link
-          >
+        <h2>
+          <span v-for="author in currentAuthors" :key="author.author_id"
+            ><router-link
+              :to="{ name: 'authors.show', params: { slug: author.slug } }"
+              class="hover:underline"
+              >{{ author.name }}</router-link
+            ><span v-if="author !== currentAuthors[currentAuthors.length - 1]"
+              >,
+            </span>
+          </span>
         </h2>
         <p>
           <span class="font-bold">Genres: </span>
@@ -19,7 +24,7 @@
             v-for="(genre, index) in currentGenres"
             :key="genre.genre_id"
             :to="{ name: 'genres.show', params: { id: genre.genre_id } }"
-            class="capitalize"
+            class="capitalize hover:underline"
           >
             {{ genre.name
             }}<span v-if="index < currentGenres.length - 1">, </span>

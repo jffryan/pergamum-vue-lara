@@ -1,6 +1,6 @@
 <template>
   <form
-    @submit.prevent="submitReadInstance"
+    @submit.prevent="addReadInstanceToBookData"
     class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
   >
     <div>
@@ -52,18 +52,26 @@
 </template>
 
 <script>
-import axios from "axios";
+import { useBooksStore, useNewBookStore } from "@/stores";
 
-import { useNewBookStore } from "@/stores";
+import axios from "axios";
 
 export default {
   name: "UpdateReadInstanceInput",
   setup() {
+    const BooksStore = useBooksStore();
     const NewBookStore = useNewBookStore();
 
     return {
+      BooksStore,
       NewBookStore,
     };
+  },
+  props: {
+    selectedVersion: {
+      type: Object,
+      required: true,
+    },
   },
   data() {
     return {
@@ -94,11 +102,38 @@ export default {
       }
       return value;
     },
-    async submitReadInstance() {
-      await axios.post("/api/add-read-instance", {
-        book_id: this.NewBookStore.currentBook.id,
-        date_read: this.readInstance.date_read,
-        rating: this.readInstance.rating,
+    validateReadInstance() {
+      return this.readInstance.date_read && this.readInstance.rating;
+    },
+    async addReadInstanceToBookData() {
+      if (!this.validateReadInstance()) {
+        return;
+      }
+      this.NewBookStore.addReadInstanceToExistingBookVersion(
+        this.readInstance,
+        this.selectedVersion
+      );
+
+      const res = await axios.post("/api/add-read-instance", {
+        readInstance:
+          this.NewBookStore.currentBookData.read_instances[
+            this.NewBookStore.currentBookData.read_instances.length - 1
+          ],
+      });
+      if (res.status !== 200) {
+        console.log("ERROR: ", res);
+        return;
+      }
+
+      // Find matching book_id in BooksStore.allBooks array then update the record
+      const bookIndex = this.BooksStore.allBooks.findIndex(
+        (b) => b.book_id === this.NewBookStore.currentBookData.book.book_id
+      );
+      this.BooksStore.allBooks[bookIndex] = this.NewBookStore.currentBookData;
+
+      this.$router.push({
+        name: "books.show",
+        params: { slug: this.NewBookStore.currentBookData.book.slug },
       });
     },
   },

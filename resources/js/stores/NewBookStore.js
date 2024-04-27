@@ -161,20 +161,35 @@ const useNewBookStore = defineStore("NewBookStore", {
       ]);
       this.setCurrentStepHeading("Review book details");
     },
+    addReadInstanceToExistingBookVersion(readInstance, selectedVersion) {
+      // Check to ensure readInstance exists on the request
+      if (!readInstance) {
+        return;
+      }
+
+      const formattedReadInstance = readInstance;
+
+      formattedReadInstance.version_id = selectedVersion.version_id;
+      formattedReadInstance.book_id = selectedVersion.book_id;
+
+      this.currentBookData.book.is_completed = true;
+      this.currentBookData.book.rating = readInstance.rating;
+      this.currentBookData.read_instances.push(formattedReadInstance);
+    },
     setBacklogItemToNewBook(backlogItem) {
       // Check to ensure backlogItem exists on the request
       if (!backlogItem) {
         this.setCurrentStepComponent([
-          "NewBookProgressForm",
           "NewBookSubmitControls",
+          "NewBookProgressForm",
         ]);
         this.setCurrentStepHeading("Review book details");
         return;
       }
       this.currentBookData.addToBacklog = true;
       this.setCurrentStepComponent([
-        "NewBookProgressForm",
         "NewBookSubmitControls",
+        "NewBookProgressForm",
       ]);
       this.setCurrentStepHeading("Review book details");
     },
@@ -188,6 +203,10 @@ const useNewBookStore = defineStore("NewBookStore", {
     // Helper functions that set specific model data
     // ------------------------------
     setBookFromExisting(book) {
+      // Sometimes the form doesn't enter from setBookFromTitle, so we need to set title separately
+      if (!this.currentBookData.book.title) {
+        this.setTitle(book.title);
+      }
       this.setSlug(book.slug);
       this.setIsCompleted(book.is_completed);
       this.setRating(book.rating);

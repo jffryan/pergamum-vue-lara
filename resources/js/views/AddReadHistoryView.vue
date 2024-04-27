@@ -4,6 +4,12 @@
       class="w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
     >
       <div>
+        <span
+          @click="hasHistory() ? $router.go(-1) : $router.push('/')"
+          class="block mb-2 cursor-pointer text-zinc-600 hover:text-zinc-700 hover:underline"
+        >
+          Go Back</span
+        >
         <h1>Add Read History</h1>
         <p>
           Add a read history entry for this book. You can add multiple read
@@ -16,8 +22,11 @@
         >
           <h2>Book Information</h2>
           <p>Title: {{ currentBook.title }}</p>
-          <p v-for="author in currentAuthors" :key="author.author_id">
-            {{ author }}
+          <p>
+            Author(s):
+            <span v-for="author in currentAuthors" :key="author.author_id">{{
+              author
+            }}</span>
           </p>
         </div>
         <!-- End book information -->
@@ -33,14 +42,16 @@
             }"
           >
             <p v-if="version.nickname">{{ version.nickname }}</p>
-            <p>{{ version.format.name }}</p>
+            <p>
+              <strong>{{ version.format.name }}</strong>
+            </p>
             <p>{{ version.page_count }}</p>
             <p v-if="version.format_id === 2">{{ version.audio_runtime }}</p>
           </div>
         </div>
         <!-- End versions -->
         <div>
-          <UpdateBookReadInstance />
+          <UpdateBookReadInstance :selectedVersion="selectedVersion" />
         </div>
       </div>
     </div>
@@ -48,7 +59,7 @@
 </template>
 
 <script>
-import { useBooksStore } from "@/stores";
+import { useBooksStore, useNewBookStore } from "@/stores";
 
 import { getOneBookFromSlug } from "@/api/BookController";
 
@@ -58,8 +69,11 @@ export default {
   name: "AddReadHistoryView",
   setup() {
     const BooksStore = useBooksStore();
+    const NewBookStore = useNewBookStore();
+
     return {
       BooksStore,
+      NewBookStore,
     };
   },
   components: {
@@ -87,6 +101,11 @@ export default {
       return this.currentBook.versions;
     },
   },
+  methods: {
+    hasHistory() {
+      return window.history.length > 2;
+    },
+  },
   async mounted() {
     if (!this.currentBook) {
       try {
@@ -99,6 +118,7 @@ export default {
     if (this.currentBook.versions.length === 1) {
       [this.selectedVersion] = this.currentBook.versions;
     }
+    this.NewBookStore.setBookFromExisting(this.currentBook);
   },
 };
 </script>

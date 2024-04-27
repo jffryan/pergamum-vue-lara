@@ -37,6 +37,7 @@ Route::post("/backlog/update-ordinals", [BacklogController::class, "updateOrdina
 Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByTitle"]);
 Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);
 Route::post("/create-authors", [AuthorController::class, "getOrSetToBeCreatedAuthorsByName"]);
+Route::post("/add-read-instance", [BookController::class, "addReadInstance"]);
 
 // Statistics
 Route::get("/statistics", [StatisticsController::class, "fetchUserStats"]);

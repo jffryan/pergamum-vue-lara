@@ -583,4 +583,31 @@ class BookController extends Controller
         });
         return response()->json($books);
     }    
+    public function addReadInstance(Request $request)
+    {
+        $read_instance_data = $request['readInstance'];
+        $book_id = $read_instance_data['book_id'];
+        $version_id = $read_instance_data['version_id'];
+    
+        $book = Book::findOrFail($book_id);
+        $version = Version::findOrFail($version_id);
+    
+        if (!$book || !$version) {
+            return response()->json(['message' => 'Book or version not found'], 404);
+        }
+    
+        $read_instance = new ReadInstance($read_instance_data);
+    
+        // Attach the read instance to the book and version
+        $book->readInstances()->save($read_instance);
+        $version->readInstances()->save($read_instance);
+    
+        // Set is_completed to true and save the book
+        $book->is_completed = true;
+        $book->rating = $read_instance_data['rating'];
+        $book->save();
+    
+        return response()->json($read_instance);
+    }
+    
 }
