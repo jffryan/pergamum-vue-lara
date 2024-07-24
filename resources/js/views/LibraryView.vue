@@ -1,15 +1,22 @@
 <template>
   <div>
     <h1>Library</h1>
-    <div class="mb-4">
+    <div class="mb-4 flex items-baseline">
       <input
         type="text"
         placeholder="Search books..."
-        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 mb-2"
+        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 mb-2 mr-4"
         v-model="searchTerm"
       />
+      <button
+        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 btn btn-primary"
+        @click="searchForBookByTitle"
+      >
+        Search
+      </button>
     </div>
-    <BookshelfTable :books="displayedBooks" class="mb-4" />
+    <BookshelfTable :books="allBooks" class="mb-4" />
+    <!-- Need to set pagination properly for search results -->
     <div v-for="link in cleanedLinks" :key="link.label" class="inline mr-2">
       <router-link
         v-if="link.url"
@@ -78,6 +85,13 @@ export default {
 
       this.BooksStore.setAllBooks(res.data.data);
       this.cleanedLinks = this.cleanPaginationLinks(res.data.links);
+    },
+    async searchForBookByTitle() {
+      const res = await getAllBooks({
+        search: this.searchTerm,
+      });
+
+      this.BooksStore.setAllBooks(res.data.data);
     },
     cleanPaginationLinks(links) {
       return links.map((link) => {

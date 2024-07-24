@@ -55,16 +55,25 @@ class GenreController extends Controller
     {
         $genre = Genre::with('books.authors', 'books.versions', 'books.versions.format', 'books.genres', 'books.readInstances')
             ->findOrFail($genre_id);
-
+    
+        // Get the books collection
+        $books = $genre->books;
+    
+        // Sort the books based on the last name of the first author
+        $sortedBooks = $books->sortBy(function ($book) {
+            // Return the last name of the first author as the sort key
+            return $book->authors->first()->last_name ?? null;
+        });
+    
         return response()->json([
             'genre' => [
                 'genre_id' => $genre->genre_id,
                 'name' => $genre->name,
             ],
-            'books' => $genre->books,
+            'books' => $sortedBooks->values()->all(), // Reset indices after sorting
         ]);
     }
-
+    
     /**
      * Show the form for editing the specified resource.
      *

@@ -33,6 +33,7 @@ Route::get("/completed/{year}", [BookController::class, "getBooksByYear"]);
 Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
 Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
 Route::get("/backlog", [BacklogController::class, "index"]);
+// Route::get("/backlog", [BacklogController::class, "getBooksCompletedInCurrentYear"]);
 Route::post("/backlog/update-ordinals", [BacklogController::class, "updateOrdinals"]);
 Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByTitle"]);
 Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);

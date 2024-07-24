@@ -133,6 +133,25 @@ class BookController extends Controller
         return response()->json($nestedResponse);
     }
 
+    private function searchBooks(Request $request)
+    {
+        $search = $request->search;
+
+        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
+            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
+            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+            ->where('books.title', 'like', "%$search%")
+            ->orWhere('authors.first_name', 'like', "%$search%")
+            ->orWhere('authors.last_name', 'like', "%$search%")
+            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
+
+        $limit = $request->has('limit') ? $request->limit : 30;
+
+        return $query->paginate($limit);
+    }
+
 
     /**
      * Display a listing of the resource.
@@ -142,6 +161,10 @@ class BookController extends Controller
 
     public function index(Request $request)
     {
+        if ($request->has('search')) {
+            return $this->searchBooks($request);
+        }
+
         $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
             ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
@@ -163,6 +186,7 @@ class BookController extends Controller
         }
 
         $limit = $request->has('limit') ? $request->limit : 30;
+        // return $query->paginate();
         return $query->paginate($limit);
     }
 
@@ -234,7 +258,7 @@ class BookController extends Controller
             $readInstancesData = array_filter($bookForm["readInstances"], function ($instance) {
                 return !empty($instance["date_read"]);
             });
-        
+
             $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
         }
 
@@ -313,24 +337,30 @@ class BookController extends Controller
      */
     private function updateBook($existing_book, $patch_book)
     {
-        $existing_book->fill([
-            'title' => $patch_book['title'],
-            'is_completed' => $patch_book['is_completed'],
-            'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
-        ])->save();
-
-        // Check if the book should be added to the backlog
-        if (isset($patch_book['is_backlog']) && $patch_book['is_backlog']) {
-            // Add to backlog if not already in it
-            if (!$existing_book->backlogItem) {
-                // Determine the order for the new backlog item. This is a placeholder logic.
-                // You might want to replace it with your actual logic to determine the order.
-                $order = BacklogItem::max('backlog_ordinal') + 1;
-
-                $existing_book->addToBacklog($order);
+        try {
+            // Update book properties
+            $existing_book->fill([
+                'title' => $patch_book['title'],
+                'is_completed' => $patch_book['is_completed'],
+                'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
+            ])->save();
+    
+            // Check if the book should be added to the backlog
+            if (isset($patch_book['is_backlog']) && $patch_book['is_backlog']) {
+                if (!$existing_book->backlogItem) {
+                    $order = BacklogItem::max('backlog_ordinal') + 1;
+                    $existing_book->addToBacklog($order);
+                }
             }
+    
+            // Return a successful response
+            return ['success' => true, 'book' => $existing_book];
+        } catch (\Exception $e) {
+            // Return an error response if something goes wrong
+            return ['error' => 'An error occurred while updating the book details. ' . $e->getMessage()];
         }
     }
+    
     private function updateAuthors($existing_book, $patch_authors)
     {
         $updated_authors = [];
@@ -401,10 +431,11 @@ class BookController extends Controller
         return $new_genre_instances;
     }
 
-    private function updateReadInstances($existing_book, $readInstancesData)
-    {
-        $updated_read_instances = [];
-    
+private function updateReadInstances($existing_book, $readInstancesData)
+{
+    $updated_read_instances = [];
+
+    try {
         foreach ($readInstancesData as $instanceData) {
             if (isset($instanceData['read_instances_id']) && $instanceData['read_instances_id'] != null) {
                 // Update existing read instance
@@ -425,9 +456,15 @@ class BookController extends Controller
                 $updated_read_instances[] = $new_read_instance;
             }
         }
-    
-        return $updated_read_instances;
+
+        return ['success' => true, 'readInstances' => $updated_read_instances]; // Return a success response with data
+    } catch (\Exception $e) {
+        // Return an error response if something goes wrong
+        return ['error' => 'An error occurred while updating read instances. ' . $e->getMessage()];
     }
+}
+
+    
 
     /**
      * Update the specified resource in storage.
@@ -438,32 +475,60 @@ class BookController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $existing_book = Book::findOrFail($id);
-        $data = $request->book;
-        
-        $existing_book_id = $data["book_id"];
-        $patch_book = $data["book"];
-        $existing_book->book_id = $existing_book_id; // Ensure the book_id is set to the existing book's ID
-        $patch_authors = $data["authors"];
-        $patch_versions = $data["versions"];
-        $genres_array = $data["book"]["genres"]["parsed"];
-
-        $this->updateBook($existing_book, $patch_book);
-        $existing_authors = $this->updateAuthors($existing_book, $patch_authors);
-        $existing_versions = $this->updateVersions($existing_book, $patch_versions);
-        $new_genres = $this->updateGenres($existing_book, $genres_array);
-
-        $updated_read_instances = [];
-        if (isset($data["readInstances"])) {
-            $readInstancesData = array_filter($data["readInstances"], function ($instance) {
-                return !empty($instance["date_read"]);
-            });
-        
-            $updated_read_instances = $this->updateReadInstances($existing_book, $readInstancesData);
+        DB::beginTransaction();
+        try {
+            $existing_book = Book::findOrFail($id);
+            $data = $request->book;
+    
+            // Update book details
+            $bookUpdateResponse = $this->updateBook($existing_book, $data["book"]);
+            if (isset($bookUpdateResponse['error'])) {
+                throw new \Exception($bookUpdateResponse['error']);
+            }
+    
+            // Update authors
+            $authorsUpdateResponse = $this->updateAuthors($existing_book, $data["authors"]);
+            if (isset($authorsUpdateResponse['error'])) {
+                throw new \Exception($authorsUpdateResponse['error']);
+            }
+    
+            // Update versions
+            $versionsUpdateResponse = $this->updateVersions($existing_book, $data["versions"]);
+            if (isset($versionsUpdateResponse['error'])) {
+                throw new \Exception($versionsUpdateResponse['error']);
+            }
+    
+            // Update genres
+            $genresUpdateResponse = $this->updateGenres($existing_book, $data["book"]["genres"]["parsed"]);
+            if (isset($genresUpdateResponse['error'])) {
+                throw new \Exception($genresUpdateResponse['error']);
+            }
+    
+            // Update read instances
+            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data["readInstances"]);
+            if (isset($readInstancesUpdateResponse['error'])) {
+                throw new \Exception($readInstancesUpdateResponse['error']);
+            }
+    
+            DB::commit();
+    
+            return $this->buildResponse(
+                $bookUpdateResponse['book'],
+                $authorsUpdateResponse,
+                $versionsUpdateResponse,
+                $genresUpdateResponse,
+                $readInstancesUpdateResponse['readInstances']
+            );
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error updating book: " . $e->getMessage());
+    
+            // Return a dynamic error response based on the exception thrown
+            return response()->json(['error' => $e->getMessage()], 500);
         }
-
-        return $this->buildResponse($existing_book, $existing_authors, $existing_versions, $new_genres, $updated_read_instances);
     }
+    
+
 
     /**
      * Remove the specified resource from storage.
@@ -505,12 +570,12 @@ class BookController extends Controller
         if (!is_numeric($year) || strlen($year) != 4) {
             return response()->json(['error' => 'Invalid year format'], 400);
         }
-    
+
         $read_instances = ReadInstance::whereYear('date_read', '=', $year)
             ->with('book', 'version', 'version.format', 'book.authors', 'book.genres')
             ->orderBy('date_read', 'asc')
             ->get();
-    
+
         $books = $read_instances->map(function ($instance) {
             return [
                 'book_id' => $instance->book->book_id,
@@ -582,32 +647,31 @@ class BookController extends Controller
             ];
         });
         return response()->json($books);
-    }    
+    }
     public function addReadInstance(Request $request)
     {
         $read_instance_data = $request['readInstance'];
         $book_id = $read_instance_data['book_id'];
         $version_id = $read_instance_data['version_id'];
-    
+
         $book = Book::findOrFail($book_id);
         $version = Version::findOrFail($version_id);
-    
+
         if (!$book || !$version) {
             return response()->json(['message' => 'Book or version not found'], 404);
         }
-    
+
         $read_instance = new ReadInstance($read_instance_data);
-    
+
         // Attach the read instance to the book and version
         $book->readInstances()->save($read_instance);
         $version->readInstances()->save($read_instance);
-    
+
         // Set is_completed to true and save the book
         $book->is_completed = true;
         $book->rating = $read_instance_data['rating'];
         $book->save();
-    
+
         return response()->json($read_instance);
     }
-    
 }

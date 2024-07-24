@@ -104,84 +104,7 @@
       </div>
       <!-- END GENRES -->
     </div>
-    <div class="mb-8">
-      <h3>Read History</h3>
-      <div class="mb-4 flex justify-between">
-        <div class="mt-auto">
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              v-model="bookForm.book.is_completed"
-              class="sr-only peer"
-              :true-value="1"
-              :false-value="0"
-            />
-            <div
-              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
-            ></div>
-            <span class="ml-3 font-medium">I finished this book</span>
-          </label>
-        </div>
-        <div class="mt-auto">
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              v-model="bookForm.book.is_backlog"
-              class="sr-only peer"
-              :true-value="1"
-              :false-value="0"
-            />
-            <div
-              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
-            ></div>
-            <span class="ml-3 font-medium">Add to backlog</span>
-          </label>
-        </div>
-      </div>
-      <div v-if="bookForm.book.is_completed">
-        <div class="mb-4">
-          <label for="date_read" class="block mb-2 font-bold text-zinc-600 mr-6"
-            >Date Completed</label
-          >
-          <input
-            type="text"
-            id="date_read"
-            name="date_read"
-            :value="bookForm.readInstances[0].date_read"
-            @input="updateDateCompleted"
-            placeholder="MM/DD/YYYY"
-            class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
-          />
-        </div>
-        <!-- END DATE COMPLETED -->
-        <div class="mb-4">
-          <label for="rating" class="block mb-2 font-bold text-zinc-600 mr-6"
-            >Rating</label
-          >
-          <select
-            v-model="bookForm.book.rating"
-            class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
-          >
-            <option value="" class="text-zinc-400" disabled>
-              Select a rating
-            </option>
-            <option
-              v-for="(rating, idx) in Array.from(
-                { length: 9 },
-                (_, i) => 1 + i * 0.5
-              )"
-              :key="idx"
-              :value="rating"
-              class="text-zinc-700"
-            >
-              {{ rating }}
-            </option>
-          </select>
-        </div>
-        <!-- END RATING INPUT -->
-      </div>
-      <!-- END COMPLETED CONDITIONAL -->
-    </div>
+
     <div class="w-full flex justify-between align-bottom mb-4">
       <h3>Version information</h3>
       <button
@@ -287,12 +210,105 @@
       </div>
       <!-- END CONTENT LENGTH -->
     </div>
+    <div class="mb-8">
+      <h3>Read History</h3>
+      <div class="mb-4 flex justify-between">
+        <div class="mt-auto">
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="bookForm.book.is_completed"
+              class="sr-only peer"
+              :true-value="1"
+              :false-value="0"
+            />
+            <div
+              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+            ></div>
+            <span class="ml-3 font-medium">I finished this book</span>
+          </label>
+        </div>
+        <div class="mt-auto">
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="bookForm.book.is_backlog"
+              class="sr-only peer"
+              :true-value="1"
+              :false-value="0"
+            />
+            <div
+              class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+            ></div>
+            <span class="ml-3 font-medium">Add to backlog</span>
+          </label>
+        </div>
+      </div>
+      <div v-if="bookForm.book.is_completed">
+        <div
+          v-for="readInstance in bookForm.readInstances"
+          :key="readInstance.read_instances_id"
+          class="mb-4"
+        >
+          <label for="date_read" class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Date Completed</label
+          >
+          <input
+            type="text"
+            id="date_read"
+            name="date_read"
+            :value="readInstance.date_read"
+            @input="updateDateCompleted"
+            placeholder="MM/DD/YYYY"
+            class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
+          />
+        </div>
+        <div class="grid grid-cols-3">
+          <div
+            v-for="version in currentBook.versions"
+            :key="version.version_id"
+            @click="setReadInstanceVersion(version.version_id)"
+            class="bg-zinc-100 p-4 mb-4 border rounded-md border-zinc-400"
+          >
+            <p>{{ version.format.name }}</p>
+            <p v-if="version.format_id === 2">{{ version.audio_runtime }}</p>
+            <p>{{ version.page_count }}</p>
+          </div>
+        </div>
+
+        <!-- END DATE COMPLETED -->
+        <div class="mb-4">
+          <label for="rating" class="block mb-2 font-bold text-zinc-600 mr-6"
+            >Rating</label
+          >
+          <select
+            v-model="bookForm.book.rating"
+            class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
+          >
+            <option value="" class="text-zinc-400" disabled>
+              Select a rating
+            </option>
+            <option
+              v-for="(rating, idx) in Array.from(
+                { length: 9 },
+                (_, i) => 1 + i * 0.5
+              )"
+              :key="idx"
+              :value="rating"
+              class="text-zinc-700"
+            >
+              {{ rating }}
+            </option>
+          </select>
+        </div>
+        <!-- END RATING INPUT -->
+      </div>
+      <!-- END COMPLETED CONDITIONAL -->
+    </div>
   </form>
 </template>
 
 <script>
-import _ from "lodash";
-
 import { useConfigStore, useBooksStore } from "@/stores";
 
 import { splitAndNormalizeGenres } from "@/utils/BookFormattingLibrary";
@@ -456,6 +472,9 @@ export default {
           audio_runtime: true,
         });
       }
+    },
+    setReadInstanceVersion(versionId) {
+      console.log(versionId);
     },
     formatBookToEdit(book) {
       const formattedBook = this.initializeBookForm();

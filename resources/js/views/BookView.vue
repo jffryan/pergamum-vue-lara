@@ -71,10 +71,19 @@
           </div>
 
           <div class="p-4 rounded-b-md bg-slate-200">
-            <p>
-              <span class="text-zinc-600">Date read: </span
-              >{{ formattedMostRecentDateRead }}
-            </p>
+            <div
+              v-for="readInstance in readHistory"
+              :key="readInstance.date_read"
+            >
+              <p>
+                <span class="text-zinc-600">Date read: </span
+                >{{ readInstance.date_read }}
+              </p>
+              <p>
+                <span class="text-zinc-600">Version: </span
+                >{{ readInstance.version }}
+              </p>
+            </div>
             <p>
               <span class="text-zinc-600">Rating: </span
               >{{ currentBook.rating }}
@@ -135,16 +144,36 @@ export default {
       }
       return [];
     },
-    formattedMostRecentDateRead() {
+    readHistory() {
       if (this.currentBook.read_instances.length === 0) return "";
 
-      // Get the most recent date read and format it as MM/DD/YYYY
-      const readInstance = this.currentBook.read_instances[0];
+      // Loop through all read instances and return an array in MM/DD/YYYY format
+      const readInstances = this.currentBook.read_instances;
+      const formattedReadInstances = [];
+
+      for (let i = 0; i < readInstances.length; i += 1) {
+        // Grab the instance
+        const readInstance = readInstances[i];
+        // Format date
+        const unformattedDate = readInstance.date_read;
+        const [year, month, day] = unformattedDate.split("-");
+        const formattedDateRead = `${month}/${day}/${year}`;
+        // Find the version
+        const readInstanceVersion = this.findReadInstanceVersion(
+          readInstance.version_id
+        );
+        // Grab the version's format name
+        const versionFormatName = readInstanceVersion.format.name;
+        // Format the read instance
+        const formattedReadInstance = {
+          date_read: formattedDateRead,
+          version: versionFormatName,
+        };
+        formattedReadInstances.push(formattedReadInstance);
+      }
       // MM/DD/YYYY
-      const unformattedDate = readInstance.date_read;
-      const [year, month, day] = unformattedDate.split("-");
-      const formattedDateRead = `${month}/${day}/${year}`;
-      return formattedDateRead;
+
+      return formattedReadInstances;
     },
   },
   methods: {
@@ -153,6 +182,11 @@ export default {
         book_id: this.currentBook.book_id,
         title: this.currentBook.title,
       });
+    },
+    findReadInstanceVersion(version_id) {
+      return this.currentBook.versions.find(
+        (version) => version.version_id === version_id
+      );
     },
   },
   async mounted() {

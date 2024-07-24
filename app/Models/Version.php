@@ -13,7 +13,7 @@ class Version extends Model
 
     protected $primaryKey = "version_id";
 
-    protected $fillable = ['page_count', 'format_id', 'book_id'];
+    protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id'];
 
     public function format(): BelongsTo
     {
