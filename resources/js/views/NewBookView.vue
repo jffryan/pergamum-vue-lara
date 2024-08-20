@@ -1,16 +1,16 @@
 <template>
-  <div>
-    <div
-      class="w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
-    >
-      <h1>{{ currentStep }}</h1>
-      <component
-        v-for="component in currentComponents"
-        :is="component"
-        :key="component"
-      />
+    <div>
+        <div
+            class="w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
+        >
+            <h1>{{ currentStep }}</h1>
+            <component
+                v-for="component in currentComponents"
+                :is="component"
+                :key="component"
+            />
+        </div>
     </div>
-  </div>
 </template>
 
 <script>
@@ -25,34 +25,34 @@ import NewBookSubmitControls from "@/components/newBook/NewBookSubmitControls.vu
 import NewVersionsInput from "@/components/newBook/NewVersionsInput.vue";
 
 export default {
-  name: "NewBookView",
-  components: {
-    NewAuthorsInput,
-    NewBacklogItemInput,
-    NewBookTitleInput,
-    NewBookProgressForm,
-    NewGenresInput,
-    NewReadInstanceInput,
-    NewBookSubmitControls,
-    NewVersionsInput,
-  },
-  setup() {
-    const NewBookStore = useNewBookStore();
+    name: "NewBookView",
+    components: {
+        NewAuthorsInput,
+        NewBacklogItemInput,
+        NewBookTitleInput,
+        NewBookProgressForm,
+        NewGenresInput,
+        NewReadInstanceInput,
+        NewBookSubmitControls,
+        NewVersionsInput,
+    },
+    setup() {
+        const NewBookStore = useNewBookStore();
 
-    return {
-      NewBookStore,
-    };
-  },
-  computed: {
-    currentStep() {
-      return this.NewBookStore.currentStep.heading || "Book";
+        return {
+            NewBookStore,
+        };
     },
-    currentComponents() {
-      return this.NewBookStore.currentStep.component || "div";
+    computed: {
+        currentStep() {
+            return this.NewBookStore.currentStep.heading || "Book";
+        },
+        currentComponents() {
+            return this.NewBookStore.currentStep.component || "div";
+        },
     },
-  },
-  created() {
-    this.NewBookStore.resetStore();
-  },
+    created() {
+        this.NewBookStore.resetStore();
+    },
 };
 </script>
