@@ -2,13 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\Book;
 use App\Models\Genre;
 
 use Illuminate\Http\Request;
+use App\Services\BookService;
 
 class GenreController extends Controller
 {
+    protected $bookService;
+
+    public function __construct(BookService $bookService)
+    {
+        $this->bookService = $bookService;
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -51,26 +59,46 @@ class GenreController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($genre_id)
+    public function show(Request $request, $genre_id)
     {
-        $genre = Genre::with('books.authors', 'books.versions', 'books.versions.format', 'books.genres', 'books.readInstances')
-            ->findOrFail($genre_id);
-    
-        // Get the books collection
-        $books = $genre->books;
-    
+        $genre = Genre::findOrFail($genre_id);
+
+        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
+            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
+            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+            ->whereHas('genres', function($q) use ($genre_id) {
+                $q->where('genres.genre_id', $genre_id);
+            })
+            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
+
         // Sort the books based on the last name of the first author
-        $sortedBooks = $books->sortBy(function ($book) {
-            // Return the last name of the first author as the sort key
-            return $book->authors->first()->last_name ?? null;
-        });
-    
+        $query->orderBy('primary_author_last_name', 'asc');
+
+        // Determine the pagination size, default to 20 if not specified
+        $pageSize = $request->input('limit', 20);
+
+        // Paginate the results
+        $books = $query->paginate($pageSize);
+
+        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
+
+        // Return paginated results
         return response()->json([
             'genre' => [
                 'genre_id' => $genre->genre_id,
                 'name' => $genre->name,
             ],
-            'books' => $sortedBooks->values()->all(), // Reset indices after sorting
+            'books' => $formattedBooks,
+            'pagination' => [
+                'total' => $books->total(),
+                'perPage' => $books->perPage(),
+                'currentPage' => $books->currentPage(),
+                'lastPage' => $books->lastPage(),
+                'from' => $books->firstItem(),
+                'to' => $books->lastItem()
+            ]
         ]);
     }
     

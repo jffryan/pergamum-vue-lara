@@ -79,7 +79,7 @@ export default {
             return this.BooksStore.allBooks;
         },
         currentPage() {
-            return parseInt(this.$route.query.page) || 1;
+            return this.$route.query.page || 1;
         },
         displayedBooks() {
             // This only works if the book you're looking for is on the page you're actively on.
@@ -148,10 +148,10 @@ export default {
     },
 
     watch: {
-        currentPage: "fetchData",
-    },
-    async mounted() {
-        await this.fetchData();
+        currentPage: {
+            immediate: true,
+            handler: "fetchData",
+        },
     },
 };
 </script>

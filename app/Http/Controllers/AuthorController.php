@@ -5,9 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Author;
 use Illuminate\Support\Str;
+use App\Services\AuthorService;
 
 class AuthorController extends Controller
 {
+    protected $authorService;
+
+    public function __construct(AuthorService $authorService)
+    {
+        $this->authorService = $authorService;
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -47,22 +55,14 @@ class AuthorController extends Controller
      */
     public function show($slug)
     {
-        return Author::with('books', 'books.genres')
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $response = $this->authorService->getAuthorWithRelations($slug, 'slug');
+        return response()->json($response);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function getAuthorBySlug($slug)
     {
-        return Author::with('books', 'books.genres', 'books.authors', 'books.versions', 'books.versions.format')
-            ->where('slug', $slug)
-            ->firstOrFail();
+        $response = $this->authorService->getAuthorWithRelations($slug, 'slug');
+        return response()->json($response);
     }
 
     public function getOrSetToBeCreatedAuthorsByName(Request $request)

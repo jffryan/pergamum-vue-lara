@@ -194,7 +194,6 @@ export default {
     },
     async mounted() {
         if (!this.currentBook) {
-            console.log("MOUNTED. NO CURRENT BOOK");
             try {
                 const book = await getOneBookFromSlug(this.$route.params.slug);
                 this.BooksStore.addBook(book.data);
@@ -202,7 +201,6 @@ export default {
                 console.log("ERROR: ", error);
             }
         }
-        console.log("MOUNTED, CURRENT BOOK");
     },
 };
 </script>
