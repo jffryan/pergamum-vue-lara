@@ -15,6 +15,12 @@ async function fetchBookData(slug) {
     }
 }
 
-const Book = "Book";
+function formatDateRead(date) {
+    // MM/DD/YY
+    const [year, month, day] = date.split("-");
+    const lastTwoDigitsOfYear = year.slice(-2);
+    const formattedDateRead = `${month}/${day}/${lastTwoDigitsOfYear}`;
+    return formattedDateRead;
+}
 
-export { fetchBookData, Book };
+export { fetchBookData, formatDateRead };

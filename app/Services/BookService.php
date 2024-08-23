@@ -17,7 +17,7 @@ class BookService
             $book = $query->where("book_id", $identifier)->firstOrFail();
         }
 
-        $bookAttributes = $book->only(['book_id', 'title', 'slug', 'is_completed', 'rating']);
+        $bookAttributes = $book->only(['book_id', 'title', 'slug']);
 
         return [
             'book' => $bookAttributes,
@@ -31,7 +31,7 @@ class BookService
     public function getBooksList($books)
     {
         return $books->map(function ($book) {
-            $bookAttributes = $book->only(['book_id', 'title', 'slug', 'is_completed', 'rating']);
+            $bookAttributes = $book->only(['book_id', 'title', 'slug']);
             return [
                 'book' => $bookAttributes,
                 'authors' => $book->authors,
@@ -56,7 +56,7 @@ class BookService
 
         $books = $readInstances->map(function ($instance) {
             $book = $instance->book;
-            $bookAttributes = $book->only(['book_id', 'title', 'slug', 'is_completed', 'rating']);
+            $bookAttributes = $book->only(['book_id', 'title', 'slug']);
 
             return [
                 'book' => $bookAttributes,

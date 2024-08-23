@@ -32,7 +32,7 @@ const useBooksStore = defineStore("BooksStore", {
         // Updates existing book in allBooks array
         updateBook(book) {
             const index = this.allBooks.findIndex(
-                (b) => b.book_id === book.book_id,
+                (b) => b.book.book_id === book.book.book_id,
             );
             this.allBooks[index] = book;
         },

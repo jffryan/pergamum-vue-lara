@@ -145,6 +145,7 @@ export default {
             );
         },
         bookHasBeenCompleted() {
+            // There's an error going on here
             if (this.currentBook && this.currentBook.readInstances.length > 0) {
                 return true;
             }

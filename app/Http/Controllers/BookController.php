@@ -26,157 +26,6 @@ class BookController extends Controller
     {
         $this->bookService = $bookService;
     }
-    /**
-     * Helper functions
-     * 
-     */
-
-
-    private function createOrGetBook($bookData)
-    {
-        $slug = Str::of($bookData['title'])
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(30);  // Limit to 30 characters
-
-        // Look for an existing book by the slug
-        $existingBook = Book::where('slug', $slug)->first();
-
-        if ($existingBook) {
-            return $existingBook;
-        }
-
-        $data = [
-            'title' => $bookData['title'],
-            'slug' => $slug,
-        ];
-
-        return Book::create($data);
-    }
-    private function handleAuthors($authorsData)
-    {
-        return collect($authorsData)->map(function ($author) {
-            $firstName = isset($author['first_name']) ? $author['first_name'] : '';
-            $lastName = isset($author['last_name']) ? $author['last_name'] : '';
-            $slugParts = array_filter([$firstName, $lastName]); // Remove null or empty parts
-            $slug = implode(' ', $slugParts); // Join with space
-            $slug = strtolower($slug); // Convert to lowercase
-            $slug = preg_replace('/\s+/', ' ', $slug); // Remove extra spaces
-            $slug = str_replace(' ', '-', $slug); // Replace spaces with hyphens
-
-            $author['slug'] = $slug;
-
-            return Author::firstOrCreate($author);
-        })->all();
-    }
-    private function prepareVersions($versions_data)
-    {
-        $new_versions = [];
-
-        foreach ($versions_data as $version_data) {
-            $new_version = new Version;
-            $format = Format::find($version_data['format']);
-
-            if (!$format) {
-                // Handle error here
-                continue;
-            }
-
-            $new_version['page_count'] = $version_data['page_count'];
-            $new_version['format_id'] = $version_data['format'];
-            $new_version['nickname'] = $version_data['nickname'];
-
-            if ($format->name == 'Audio') {
-                $new_version['audio_runtime'] = $version_data['audio_runtime'];
-            } elseif ($format->name == 'Paper') {
-                $new_version['audio_runtime'] = null;
-            } else {
-                $new_version['audio_runtime'] = $version_data['audio_runtime'];
-            }
-
-            $new_version->load('format');
-            $new_versions[] = $new_version;
-        }
-
-        return $new_versions;
-    }
-
-    private function handleGenres($genresData)
-    {
-        return collect($genresData)->map(function ($genre) {
-            return Genre::firstOrCreate(['name' => $genre]);
-        })->all();
-    }
-    private function attachModels($book, $authors, $versions, $genres)
-    {
-        $authorIds = array_map(function ($author) {
-            return $author->author_id;
-        }, $authors);
-
-        $genreIds = array_map(function ($genre) {
-            return $genre->genre_id;
-        }, $genres);
-
-        $book->authors()->attach($authorIds);
-        $book->versions()->saveMany($versions);
-        $book->genres()->attach($genreIds);
-    }
-    private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
-    {
-        $nestedResponse = [
-            'book' => array_merge(
-                $book->toArray(),
-                [
-                    'authors' => $authors,
-                    'versions' => $versions,
-                    'genres' => $genres,
-                    'read_instances' => $readInstances
-                ]
-            )
-        ];
-
-        return response()->json($nestedResponse);
-    }
-
-    private function searchBooks(Request $request)
-    {
-        $search = $request->search;
-
-        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
-            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->where('books.title', 'like', "%$search%")
-            ->orWhere('authors.first_name', 'like', "%$search%")
-            ->orWhere('authors.last_name', 'like', "%$search%")
-            ->groupBy('books.book_id', 'books.title', 'books.slug');
-
-        $query->orderBy('primary_author_last_name', 'asc');
-
-        // Determine the pagination size, default to 30 if not specified
-        $pageSize = $request->input('limit', 20);
-
-        // Paginate the results
-        $books = $query->paginate($pageSize);
-
-        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
-
-        // Return paginated results
-        return response()->json([
-            'books' =>  $formattedBooks,
-            'pagination' => [
-                'total' => $books->total(),
-                'perPage' => $books->perPage(),
-                'currentPage' => $books->currentPage(),
-                'lastPage' => $books->lastPage(),
-                'from' => $books->firstItem(),
-                'to' => $books->lastItem()
-            ]
-        ]);
-    }
-
 
     /**
      * Display a listing of the resource.
@@ -228,8 +77,6 @@ class BookController extends Controller
         ]);
     }
 
-
-
     public function getBooksByFormat(Request $request)
     {
         // Get format parameter from request
@@ -253,17 +100,6 @@ class BookController extends Controller
         })->paginate(20);
 
         return response()->json($books);
-    }
-
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
-    {
-        //
     }
 
     /**
@@ -341,7 +177,6 @@ class BookController extends Controller
         return response()->json(['books' => $responses]);
     }
 
-
     /**
      * Display the specified resource.
      *
@@ -361,38 +196,26 @@ class BookController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(Book $book)
-    {
-        //
-    }
-
-    /**
      * Helper functions for update
      * 
      */
     private function updateBook($existing_book, $patch_book)
     {
         try {
+            $slug = Str::of($patch_book['title'])
+                ->lower()
+                ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+                ->replace(' ', '-')  // Replace spaces with hyphens
+                ->limit(30);  // Limit to 30 characters
+
             // Update book properties
             $existing_book->fill([
                 'title' => $patch_book['title'],
+                'slug' => $slug,
             ])->save();
 
-            // Check if the book should be added to the backlog
-            if (isset($patch_book['is_backlog']) && $patch_book['is_backlog']) {
-                if (!$existing_book->backlogItem) {
-                    $order = BacklogItem::max('backlog_ordinal') + 1;
-                    $existing_book->addToBacklog($order);
-                }
-            }
-
             // Return a successful response
-            return ['success' => true, 'book' => $existing_book];
+            return ['book' => $existing_book];
         } catch (\Exception $e) {
             // Return an error response if something goes wrong
             return ['error' => 'An error occurred while updating the book details. ' . $e->getMessage()];
@@ -524,7 +347,7 @@ class BookController extends Controller
             if (isset($bookUpdateResponse['error'])) {
                 throw new \Exception($bookUpdateResponse['error']);
             }
-/*
+            /*
             // Update authors
             $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData["authors"]);
             if (isset($authorsUpdateResponse['error'])) {
@@ -553,7 +376,10 @@ class BookController extends Controller
 
             return $this->buildResponse(
                 $bookUpdateResponse['book'],
-                null, null, null
+                $data['authors'],
+                $data['versions'],
+                $data['genres'],
+                $data['readInstances']
                 // $authorsUpdateResponse,
                 // $versionsUpdateResponse,
                 // $genresUpdateResponse,
@@ -567,7 +393,7 @@ class BookController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-/*
+    /*
     public function update(Request $request, $id)
     {
         DB::beginTransaction();
@@ -685,5 +511,152 @@ class BookController extends Controller
         $book->save();
 
         return response()->json($read_instance);
+    }
+
+    /**
+     * Helper functions
+     * 
+     */
+
+
+    private function createOrGetBook($bookData)
+    {
+        $slug = Str::of($bookData['title'])
+            ->lower()
+            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+            ->replace(' ', '-')  // Replace spaces with hyphens
+            ->limit(30);  // Limit to 30 characters
+
+        // Look for an existing book by the slug
+        $existingBook = Book::where('slug', $slug)->first();
+
+        if ($existingBook) {
+            return $existingBook;
+        }
+
+        $data = [
+            'title' => $bookData['title'],
+            'slug' => $slug,
+        ];
+
+        return Book::create($data);
+    }
+    private function handleAuthors($authorsData)
+    {
+        return collect($authorsData)->map(function ($author) {
+            $firstName = isset($author['first_name']) ? $author['first_name'] : '';
+            $lastName = isset($author['last_name']) ? $author['last_name'] : '';
+            $slugParts = array_filter([$firstName, $lastName]); // Remove null or empty parts
+            $slug = implode(' ', $slugParts); // Join with space
+            $slug = strtolower($slug); // Convert to lowercase
+            $slug = preg_replace('/\s+/', ' ', $slug); // Remove extra spaces
+            $slug = str_replace(' ', '-', $slug); // Replace spaces with hyphens
+
+            $author['slug'] = $slug;
+
+            return Author::firstOrCreate($author);
+        })->all();
+    }
+    private function prepareVersions($versions_data)
+    {
+        $new_versions = [];
+
+        foreach ($versions_data as $version_data) {
+            $new_version = new Version;
+            $format = Format::find($version_data['format']);
+
+            if (!$format) {
+                // Handle error here
+                continue;
+            }
+
+            $new_version['page_count'] = $version_data['page_count'];
+            $new_version['format_id'] = $version_data['format'];
+            $new_version['nickname'] = $version_data['nickname'];
+
+            if ($format->name == 'Audio') {
+                $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            } elseif ($format->name == 'Paper') {
+                $new_version['audio_runtime'] = null;
+            } else {
+                $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            }
+
+            $new_version->load('format');
+            $new_versions[] = $new_version;
+        }
+
+        return $new_versions;
+    }
+
+    private function handleGenres($genresData)
+    {
+        return collect($genresData)->map(function ($genre) {
+            return Genre::firstOrCreate(['name' => $genre]);
+        })->all();
+    }
+    private function attachModels($book, $authors, $versions, $genres)
+    {
+        $authorIds = array_map(function ($author) {
+            return $author->author_id;
+        }, $authors);
+
+        $genreIds = array_map(function ($genre) {
+            return $genre->genre_id;
+        }, $genres);
+
+        $book->authors()->attach($authorIds);
+        $book->versions()->saveMany($versions);
+        $book->genres()->attach($genreIds);
+    }
+    private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
+    {
+        $nestedResponse = [
+            'book' => $book,
+            'authors' => $authors,
+            'versions' => $versions,
+            'genres' => $genres,
+            'read_instances' => $readInstances
+        ];
+
+        return response()->json($nestedResponse);
+    }
+
+    private function searchBooks(Request $request)
+    {
+        $search = $request->search;
+
+        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
+            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
+            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+            ->where('books.title', 'like', "%$search%")
+            ->orWhere('authors.first_name', 'like', "%$search%")
+            ->orWhere('authors.last_name', 'like', "%$search%")
+            ->groupBy('books.book_id', 'books.title', 'books.slug');
+
+        $query->orderBy('primary_author_last_name', 'asc');
+
+        // Determine the pagination size, default to 30 if not specified
+        $pageSize = $request->input('limit', 20);
+
+        // Paginate the results
+        $books = $query->paginate($pageSize);
+
+        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
+
+        // Return paginated results
+        return response()->json([
+            'books' =>  $formattedBooks,
+            'pagination' => [
+                'total' => $books->total(),
+                'perPage' => $books->perPage(),
+                'currentPage' => $books->currentPage(),
+                'lastPage' => $books->lastPage(),
+                'from' => $books->firstItem(),
+                'to' => $books->lastItem()
+            ]
+        ]);
     }
 }
