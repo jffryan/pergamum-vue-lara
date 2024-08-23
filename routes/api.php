@@ -26,7 +26,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::resource("/books", BookController::class);
-Route::patch("/book/{id}", [BookController::class, "patch"]);
 Route::resource("/genres", GenreController::class);
 Route::post("books/bulk", [BookController::class, "bulkCreate"]);
 

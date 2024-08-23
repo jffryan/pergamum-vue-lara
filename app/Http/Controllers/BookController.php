@@ -50,8 +50,6 @@ class BookController extends Controller
         $data = [
             'title' => $bookData['title'],
             'slug' => $slug,
-            'is_completed' => $bookData['is_completed'],
-            'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
         ];
 
         return Book::create($data);
@@ -146,18 +144,37 @@ class BookController extends Controller
         $search = $request->search;
 
         $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
+            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
             ->where('books.title', 'like', "%$search%")
             ->orWhere('authors.first_name', 'like', "%$search%")
             ->orWhere('authors.last_name', 'like', "%$search%")
-            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
+            ->groupBy('books.book_id', 'books.title', 'books.slug');
 
-        $limit = $request->has('limit') ? $request->limit : 30;
+        $query->orderBy('primary_author_last_name', 'asc');
 
-        return $query->paginate($limit);
+        // Determine the pagination size, default to 30 if not specified
+        $pageSize = $request->input('limit', 20);
+
+        // Paginate the results
+        $books = $query->paginate($pageSize);
+
+        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
+
+        // Return paginated results
+        return response()->json([
+            'books' =>  $formattedBooks,
+            'pagination' => [
+                'total' => $books->total(),
+                'perPage' => $books->perPage(),
+                'currentPage' => $books->currentPage(),
+                'lastPage' => $books->lastPage(),
+                'from' => $books->firstItem(),
+                'to' => $books->lastItem()
+            ]
+        ]);
     }
 
 
@@ -174,11 +191,11 @@ class BookController extends Controller
         }
 
         $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
+            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
+            ->groupBy('books.book_id', 'books.title', 'books.slug');
 
         if ($request->has('format')) {
             $format = $request->get('format');
@@ -364,8 +381,6 @@ class BookController extends Controller
             // Update book properties
             $existing_book->fill([
                 'title' => $patch_book['title'],
-                'is_completed' => $patch_book['is_completed'],
-                'rating' => $patch_book['is_completed'] ? $patch_book['rating'] : null,
             ])->save();
 
             // Check if the book should be added to the backlog
@@ -501,6 +516,63 @@ class BookController extends Controller
         DB::beginTransaction();
         try {
             $existing_book = Book::findOrFail($id);
+            $request_data = $request->all();
+            $data = $request_data['request']['formData'];
+
+            // Update book details
+            $bookUpdateResponse = $this->updateBook($existing_book, $data["book"]);
+            if (isset($bookUpdateResponse['error'])) {
+                throw new \Exception($bookUpdateResponse['error']);
+            }
+/*
+            // Update authors
+            $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData["authors"]);
+            if (isset($authorsUpdateResponse['error'])) {
+                throw new \Exception($authorsUpdateResponse['error']);
+            }
+
+            // Update versions
+            $versionsUpdateResponse = $this->updateVersions($existing_book, $formData["versions"]);
+            if (isset($versionsUpdateResponse['error'])) {
+                throw new \Exception($versionsUpdateResponse['error']);
+            }
+
+            // Update genres
+            $genresUpdateResponse = $this->updateGenres($existing_book, $formData["genres"]["parsed"]);
+            if (isset($genresUpdateResponse['error'])) {
+                throw new \Exception($genresUpdateResponse['error']);
+            }
+
+            // Update read instances
+            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $formData["readInstances"]);
+            if (isset($readInstancesUpdateResponse['error'])) {
+                throw new \Exception($readInstancesUpdateResponse['error']);
+            }
+*/
+            DB::commit();
+
+            return $this->buildResponse(
+                $bookUpdateResponse['book'],
+                null, null, null
+                // $authorsUpdateResponse,
+                // $versionsUpdateResponse,
+                // $genresUpdateResponse,
+                // $readInstancesUpdateResponse['readInstances']
+            );
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error updating book: " . $e->getMessage());
+
+            // Return a dynamic error response based on the exception thrown
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+/*
+    public function update(Request $request, $id)
+    {
+        DB::beginTransaction();
+        try {
+            $existing_book = Book::findOrFail($id);
             $data = $request->book;
 
             // Update book details
@@ -550,32 +622,7 @@ class BookController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-    public function patch(Request $request, $id)
-    {
-        // Fetch the existing book record
-        $existing_book = Book::findOrFail($id);
-
-        // Get all the incoming request data
-        $data = $request->all();
-
-        // Initialize an array to hold changed fields
-        $changes = [];
-
-        // Loop through each field in the request data
-        foreach ($data as $key => $value) {
-            // Check if the value in the request is different from the existing value
-            if ($existing_book->$key !== $value) {
-                // If different, add it to the changes array
-                $changes[$key] = $value;
-            }
-        }
-
-        // Dump out the changes for now to see what has changed
-        dd($changes);
-
-        // Later on, you will use this $changes array to update the model
-    }
+*/
 
 
     /**
@@ -635,9 +682,6 @@ class BookController extends Controller
         $book->readInstances()->save($read_instance);
         $version->readInstances()->save($read_instance);
 
-        // Set is_completed to true and save the book
-        $book->is_completed = true;
-        $book->rating = $read_instance_data['rating'];
         $book->save();
 
         return response()->json($read_instance);

@@ -63,8 +63,11 @@ export default {
     methods: {
         async fetchAndSetGenreData() {
             const genreId = this.$route.params.id;
+            const options = {
+                page: this.currentPage,
+            };
             try {
-                const res = await getOneGenre(genreId);
+                const res = await getOneGenre(genreId, options);
                 if (!res.data || res.status !== 200) {
                     throw new Error(
                         "Failed to fetch data: Invalid response from the server",

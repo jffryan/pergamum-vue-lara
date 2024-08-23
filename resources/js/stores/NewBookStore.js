@@ -7,8 +7,6 @@ function initializeBookData() {
             book_id: null,
             title: "",
             slug: "",
-            is_completed: false,
-            rating: null,
         },
         authors: [],
         genres: [],
@@ -158,9 +156,6 @@ const useNewBookStore = defineStore("NewBookStore", {
 
             this.currentBookData.read_instances.push(formattedReadInstance);
 
-            this.currentBookData.book.is_completed = true;
-            this.currentBookData.book.rating = readInstance.rating;
-
             this.setCurrentStepComponent([
                 "NewBookProgressForm",
                 "NewBookSubmitControls",
@@ -178,8 +173,6 @@ const useNewBookStore = defineStore("NewBookStore", {
             formattedReadInstance.version_id = selectedVersion.version_id;
             formattedReadInstance.book_id = selectedVersion.book_id;
 
-            this.currentBookData.book.is_completed = true;
-            this.currentBookData.book.rating = readInstance.rating;
             this.currentBookData.read_instances.push(formattedReadInstance);
         },
         setBacklogItemToNewBook(backlogItem) {
@@ -214,8 +207,6 @@ const useNewBookStore = defineStore("NewBookStore", {
                 this.setTitle(book.title);
             }
             this.setSlug(book.slug);
-            this.setIsCompleted(book.is_completed);
-            this.setRating(book.rating);
             this.setBookId(book.book_id);
             this.setBookAuthors(book.authors);
             this.setBookGenres(book.genres);
@@ -231,12 +222,6 @@ const useNewBookStore = defineStore("NewBookStore", {
         },
         setSlug(slug) {
             this.currentBookData.book.slug = slug;
-        },
-        setIsCompleted(isCompleted) {
-            this.currentBookData.book.is_completed = isCompleted;
-        },
-        setRating(rating) {
-            this.currentBookData.book.rating = rating;
         },
         setBookId(id) {
             this.currentBookData.book.book_id = id;

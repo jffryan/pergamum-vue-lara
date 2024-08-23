@@ -126,11 +126,28 @@ export default {
             }
         },
         async searchForBookByTitle() {
-            const res = await getAllBooks({
-                search: this.searchTerm,
-            });
+            try {
+                const res = await getAllBooks({
+                    search: this.searchTerm,
+                });
+                if (!res.data || res.status !== 200) {
+                    throw new Error(
+                        "Failed to fetch data: Invalid response from the server",
+                    );
+                }
+                this.BooksStore.setAllBooks(res.data.books);
+                this.pagination = this.setPaginationLinks(res.data.pagination);
+            } catch (error) {
+                // Log the error for debugging purposes
+                console.error("Error fetching books:", error);
 
-            this.BooksStore.setAllBooks(res.data.data);
+                // Provide user feedback
+                this.showErrorMessage = true;
+                this.error =
+                    "Unable to load books at this time. Please try again later.";
+            } finally {
+                this.isLoading = false;
+            }
         },
         setPaginationLinks(paginationData) {
             const { currentPage, lastPage } = paginationData;

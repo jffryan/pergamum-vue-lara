@@ -34,13 +34,9 @@ const createBooks = async (books) => {
 };
 
 // UPDATE
-const updateBook = async (book) =>
-    makeRequest("patch", buildUrl("books", book.book_id), { book });
-
-const patchBook = async (book) => {
-    console.log(buildUrl("book", book.book_id));
-    return makeRequest("patch", buildUrl("book", book.book_id), {
-        book,
+const updateBook = async (request) => {
+    return makeRequest("patch", buildUrl("books", request.book_id), {
+        request,
     });
 };
 
@@ -81,7 +77,6 @@ export {
     createBook,
     createBooks,
     updateBook,
-    patchBook,
     removeGenreInstance,
     removeAuthorInstance,
     deleteBook,

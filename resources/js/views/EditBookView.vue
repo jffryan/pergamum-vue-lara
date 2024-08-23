@@ -1,7 +1,9 @@
 <template>
-    <div v-if="!currentBook">
-        <div class="bg-slate-400 p-4 w-1/2 mb-4"></div>
-        <div class="bg-slate-400 p-4 w-1/2 mb-4"></div>
+    <div v-if="isLoading">
+        <PageLoadingIndicator />
+    </div>
+    <div v-else-if="showErrorMessage">
+        <AlertBox :message="error" alert-type="danger" />
     </div>
     <div v-else>
         <div
@@ -64,12 +66,39 @@
             <h2>Read History</h2>
             <div class="grid grid-cols-2">
                 <div
-                    v-for="history in bookData.read_instances"
+                    v-for="history in bookData.readInstances"
                     :key="history.read_instances_id"
                     class="p-4 mb-4 bg-zinc-100 border rounded-md border-zinc-400 shadow-md"
                 >
                     <p>{{ history.date_read }}</p>
                     <p>Need to get version associated via version_id</p>
+                    <div class="mb-4">
+                        <label
+                            for="rating"
+                            class="block mb-2 font-bold text-zinc-600 mr-6"
+                            >Rating</label
+                        >
+                        <select
+                            v-model="history.rating"
+                            class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none"
+                            disabled
+                        >
+                            <option value="" class="text-zinc-400" disabled>
+                                Select a rating
+                            </option>
+                            <option
+                                v-for="(rating, idx) in Array.from(
+                                    { length: 9 },
+                                    (_, i) => 1 + i * 0.5,
+                                )"
+                                :key="idx"
+                                :value="rating * 2"
+                                class="text-zinc-700"
+                            >
+                                {{ rating }}
+                            </option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -89,31 +118,41 @@
 <script>
 import { useBooksStore } from "@/stores";
 
-// import checkForChanges from "@/utils/checkForChanges";
+import { fetchBookData } from "@/services/BookServices";
 
-import { getOneBookFromSlug, patchBook } from "@/api/BookController";
+import { updateBook } from "@/api/BookController";
+
+import AlertBox from "@/components/globals/alerts/AlertBox.vue";
+import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 
 export default {
     name: "EditBookView",
-
     setup() {
         const BooksStore = useBooksStore();
-
         return {
             BooksStore,
         };
     },
+    components: {
+        AlertBox,
+        PageLoadingIndicator,
+    },
     data() {
         return {
-            currentSlug: this.$route.params.slug,
+            isLoading: true,
+            showErrorMessage: false,
+            error: "",
             bookData: null,
         };
     },
     computed: {
         currentBook() {
             return this.BooksStore.allBooks.find(
-                (b) => b.book.slug === this.$route.params.slug,
+                (b) => b.book.slug === this.currentSlug,
             );
+        },
+        currentSlug() {
+            return this.$route.params.slug;
         },
     },
     methods: {
@@ -121,29 +160,39 @@ export default {
             this.bookData = JSON.parse(JSON.stringify(bookData));
         },
         async initBookEdit() {
-            const { book_id } = this.currentBook;
+            const { book_id } = this.currentBook.book;
             const request = {
                 book_id,
-                book: this.bookData,
+                formData: this.bookData,
             };
-            await patchBook(request);
+            await updateBook(request);
+            this.$router.push({ name: "books.show", slug: this.currentSlug });
+        },
+        async findAndSetBookData() {
+            // This is basically entirely repeated in BookView but with some
+            // minor changes here to account for the mutations inherent to editing
+            if (this.currentBook) {
+                this.setBookData(this.currentBook);
+                this.isLoading = false;
+                return;
+            }
+            const bookData = await fetchBookData(this.currentSlug);
+            if (bookData instanceof Error) {
+                this.showErrorMessage = true;
+                this.error = bookData;
+                this.isLoading = false;
+                return;
+            }
+            this.BooksStore.addBook(bookData);
+            this.setBookData(bookData);
+            this.isLoading = false;
         },
     },
-    async created() {
-        if (!this.currentBook) {
-            try {
-                const book = await getOneBookFromSlug(this.currentSlug);
-                if (!book.data) {
-                    this.$router.push({ name: "NotFound" });
-                }
-                this.BooksStore.addBook(book.data);
-            } catch (error) {
-                console.log("404!!");
-                console.log(error);
-                this.$router.push({ name: "NotFound" });
-            }
-        }
-        this.setBookData(this.currentBook);
+    watch: {
+        currentSlug: {
+            immediate: true,
+            handler: "findAndSetBookData",
+        },
     },
 };
 </script>

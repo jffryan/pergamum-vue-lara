@@ -1,7 +1,9 @@
 <template>
-    <div v-if="!currentBook">
-        <div class="bg-slate-400 p-4 w-1/2 mb-4"></div>
-        <div class="bg-slate-400 p-4 w-1/2 mb-4"></div>
+    <div v-if="isLoading">
+        <PageLoadingIndicator />
+    </div>
+    <div v-else-if="showErrorMessage">
+        <AlertBox :message="error" alert-type="danger" />
     </div>
     <div v-else>
         <div class="grid grid-cols-2">
@@ -76,7 +78,7 @@
                     <h3>Versions</h3>
                     <VersionTable :versions="currentBook.versions" />
                 </div>
-                <div v-if="currentBook.is_completed">
+                <div v-if="bookHasBeenCompleted">
                     <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
                         <h3 class="mb-0">Read History</h3>
                     </div>
@@ -95,10 +97,7 @@
                                 >{{ readInstance.version }}
                             </p>
                         </div>
-                        <p>
-                            <span class="text-zinc-600">Rating: </span
-                            >{{ currentBook.rating }}
-                        </p>
+                        <p><span class="text-zinc-600">Rating: </span>ERR</p>
                     </div>
                 </div>
             </div>
@@ -109,8 +108,10 @@
 <script>
 import { useBooksStore } from "@/stores";
 
-import { getOneBookFromSlug } from "@/api/BookController";
+import { fetchBookData } from "@/services/BookServices";
 
+import AlertBox from "@/components/globals/alerts/AlertBox.vue";
+import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 import VersionTable from "@/components/books/table/VersionTable.vue";
 
 export default {
@@ -123,18 +124,31 @@ export default {
         };
     },
     components: {
+        AlertBox,
+        PageLoadingIndicator,
         VersionTable,
     },
     data() {
         return {
-            currentSlug: this.$route.params.slug,
+            isLoading: true,
+            showErrorMessage: false,
+            error: "",
         };
     },
     computed: {
+        currentSlug() {
+            return this.$route.params.slug;
+        },
         currentBook() {
             return this.BooksStore.allBooks.find(
                 (b) => b.book.slug === this.$route.params.slug,
             );
+        },
+        bookHasBeenCompleted() {
+            if (this.currentBook && this.currentBook.readInstances.length > 0) {
+                return true;
+            }
+            return false;
         },
         currentAuthors() {
             if (this.currentBook) {
@@ -154,10 +168,10 @@ export default {
             return [];
         },
         readHistory() {
-            if (this.currentBook.read_instances.length === 0) return "";
+            if (this.currentBook.readInstances.length === 0) return "";
 
             // Loop through all read instances and return an array in MM/DD/YYYY format
-            const readInstances = this.currentBook.read_instances;
+            const { readInstances } = this.currentBook;
             const formattedReadInstances = [];
 
             for (let i = 0; i < readInstances.length; i += 1) {
@@ -191,16 +205,28 @@ export default {
                 (version) => version.version_id === version_id,
             );
         },
-    },
-    async mounted() {
-        if (!this.currentBook) {
-            try {
-                const book = await getOneBookFromSlug(this.$route.params.slug);
-                this.BooksStore.addBook(book.data);
-            } catch (error) {
-                console.log("ERROR: ", error);
+        async setBookData() {
+            // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard
+            if (this.currentBook) {
+                this.isLoading = false;
+                return;
             }
-        }
+            const bookData = await fetchBookData(this.currentSlug);
+            if (bookData instanceof Error) {
+                this.showErrorMessage = true;
+                this.error = bookData;
+                this.isLoading = false;
+                return;
+            }
+            this.BooksStore.addBook(bookData);
+            this.isLoading = false;
+        },
+    },
+    watch: {
+        currentSlug: {
+            immediate: true,
+            handler: "setBookData",
+        },
     },
 };
 </script>
