@@ -17,7 +17,7 @@ class StatisticsController extends Controller
      */
     public function index()
     {
-        $completedBooks = Book::where('is_completed', 1)
+        $completedBooks = Book::whereHas('readInstances')
             ->with("authors", "versions.format", "genres", "readInstances")
             ->get();
 
@@ -39,7 +39,7 @@ class StatisticsController extends Controller
 
     public function calculateTotalBooksRead()
     {
-        return Book::where('is_completed', 1)->count();
+        return Book::whereHas('readInstances')->count();
     }
 
     public function calculateBooksReadByYear()
@@ -78,7 +78,7 @@ class StatisticsController extends Controller
     public function calculatePercentageOfBooksRead()
     {
         $totalBooks = Book::count(); // Count of all books
-        $completedBooks = Book::where('is_completed', 1)->count(); // Count of completed books
+        $completedBooks = Book::whereHas('readInstances')->count(); // Count of completed books
 
         if ($totalBooks == 0) {
             return 0; // To avoid division by zero

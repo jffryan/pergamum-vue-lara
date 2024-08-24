@@ -96,8 +96,11 @@
                                 <span class="text-zinc-600">Version: </span
                                 >{{ readInstance.version }}
                             </p>
+                            <p>
+                                <span class="text-zinc-600">Rating: </span
+                                >{{ readInstance.rating }}
+                            </p>
                         </div>
-                        <p><span class="text-zinc-600">Rating: </span>ERR</p>
                     </div>
                 </div>
             </div>
@@ -145,11 +148,10 @@ export default {
             );
         },
         bookHasBeenCompleted() {
-            // There's an error going on here
-            if (this.currentBook && this.currentBook.readInstances.length > 0) {
-                return true;
+            if (!this.currentBook || !this.currentBook.readInstances) {
+                return false;
             }
-            return false;
+            return this.currentBook.readInstances.length > 0;
         },
         currentAuthors() {
             if (this.currentBook) {
@@ -169,7 +171,7 @@ export default {
             return [];
         },
         readHistory() {
-            if (this.currentBook.readInstances.length === 0) return "";
+            if (!this.bookHasBeenCompleted) return "";
 
             // Loop through all read instances and return an array in MM/DD/YYYY format
             const { readInstances } = this.currentBook;
@@ -188,10 +190,16 @@ export default {
                 );
                 // Grab the version's format name
                 const versionFormatName = readInstanceVersion.format.name;
+                // Set rating to 5-point scale
+                if (!readInstance.rating) {
+                    readInstance.rating = 0;
+                }
+                const rating = readInstance.rating / 2;
                 // Format the read instance
                 const formattedReadInstance = {
                     date_read: formattedDateRead,
                     version: versionFormatName,
+                    rating,
                 };
                 formattedReadInstances.push(formattedReadInstance);
             }

@@ -58,7 +58,7 @@
                         </p>
                         <p>{{ version.page_count }}</p>
                         <p v-if="version.format_id === 2">
-                            {{ version.audio_runtime }}
+                            {{ calculateRuntime(version.audio_runtime) }}
                         </p>
                     </div>
                 </div>
@@ -87,7 +87,6 @@
                             <select
                                 v-model="history.rating"
                                 class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none"
-                                disabled
                             >
                                 <option value="" class="text-zinc-400" disabled>
                                     Select a rating
@@ -124,7 +123,11 @@
 
 <script>
 import { useBooksStore } from "@/stores";
-import { fetchBookData, formatDateRead } from "@/services/BookServices";
+import {
+    calculateRuntime,
+    fetchBookData,
+    formatDateRead,
+} from "@/services/BookServices";
 import { updateBook } from "@/api/BookController";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
@@ -136,6 +139,7 @@ export default {
         const BooksStore = useBooksStore();
         return {
             BooksStore,
+            calculateRuntime,
             formatDateRead,
         };
     },

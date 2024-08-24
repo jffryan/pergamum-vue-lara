@@ -64,14 +64,14 @@ class GenreController extends Controller
         $genre = Genre::findOrFail($genre_id);
 
         $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->selectRaw('books.book_id, books.title, books.slug, books.is_completed, books.rating, MIN(authors.last_name) as primary_author_last_name')
+            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
             ->whereHas('genres', function($q) use ($genre_id) {
                 $q->where('genres.genre_id', $genre_id);
             })
-            ->groupBy('books.book_id', 'books.title', 'books.slug', 'books.is_completed', 'books.rating');
+            ->groupBy('books.book_id', 'books.title', 'books.slug');
 
         // Sort the books based on the last name of the first author
         $query->orderBy('primary_author_last_name', 'asc');

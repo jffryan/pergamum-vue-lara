@@ -302,16 +302,16 @@ class BookController extends Controller
                     // Update existing read instance
                     $existing_read_instance = ReadInstance::findOrFail($instanceData['read_instances_id']);
                     $existing_read_instance->update([
-                        'date_read' => Carbon::createFromFormat("m/d/Y", $instanceData['date_read']),
-                        // Update other fields as necessary
+                        'date_read' => Carbon::createFromFormat("Y-m-d", $instanceData['date_read']),
+                        'rating' => $instanceData['rating'],
                     ]);
                     $updated_read_instances[] = $existing_read_instance;
                 } else {
                     // Create new read instance
                     $new_read_instance = new ReadInstance([
                         'book_id' => $existing_book->book_id,
-                        'date_read' => Carbon::createFromFormat("m/d/Y", $instanceData['date_read']),
-                        // Set other fields as necessary
+                        'date_read' => Carbon::createFromFormat("Y-m-d", $instanceData['date_read']),
+                        'rating' => $instanceData['rating'],
                     ]);
                     $existing_book->readInstances()->save($new_read_instance);
                     $updated_read_instances[] = $new_read_instance;
@@ -365,13 +365,13 @@ class BookController extends Controller
             if (isset($genresUpdateResponse['error'])) {
                 throw new \Exception($genresUpdateResponse['error']);
             }
-
+*/
             // Update read instances
-            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $formData["readInstances"]);
+            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data["readInstances"]);
             if (isset($readInstancesUpdateResponse['error'])) {
                 throw new \Exception($readInstancesUpdateResponse['error']);
             }
-*/
+
             DB::commit();
 
             return $this->buildResponse(
@@ -379,11 +379,10 @@ class BookController extends Controller
                 $data['authors'],
                 $data['versions'],
                 $data['genres'],
-                $data['readInstances']
                 // $authorsUpdateResponse,
                 // $versionsUpdateResponse,
                 // $genresUpdateResponse,
-                // $readInstancesUpdateResponse['readInstances']
+                $readInstancesUpdateResponse['readInstances']
             );
         } catch (\Exception $e) {
             DB::rollBack();
@@ -616,7 +615,7 @@ class BookController extends Controller
             'authors' => $authors,
             'versions' => $versions,
             'genres' => $genres,
-            'read_instances' => $readInstances
+            'readInstances' => $readInstances
         ];
 
         return response()->json($nestedResponse);

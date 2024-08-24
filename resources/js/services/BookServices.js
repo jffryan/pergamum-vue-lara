@@ -1,5 +1,11 @@
 import { getOneBookFromSlug } from "@/api/BookController";
 
+function calculateRuntime(runtime) {
+    const hours = Math.floor(runtime / 60);
+    const minutes = runtime % 60;
+    return `${hours}h ${minutes}m`;
+}
+
 async function fetchBookData(slug) {
     try {
         const res = await getOneBookFromSlug(slug);
@@ -23,4 +29,4 @@ function formatDateRead(date) {
     return formattedDateRead;
 }
 
-export { fetchBookData, formatDateRead };
+export { calculateRuntime, fetchBookData, formatDateRead };
