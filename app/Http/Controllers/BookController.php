@@ -485,7 +485,7 @@ class BookController extends Controller
     }
     public function getBooksByYear($year)
     {
-        $books = $this->bookService->getBooksByYear($year);
+        $books = $this->bookService->getCompletedItemsForYear($year);
         return response()->json($books);
     }
     public function addReadInstance(Request $request)

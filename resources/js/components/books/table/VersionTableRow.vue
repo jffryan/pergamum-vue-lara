@@ -17,7 +17,7 @@ defineProps({
         <div class="col-span-3 p-2">
             {{ version.page_count }}
         </div>
-        <div class="col-span-3 p-2">
+        <div v-if="version.audio_runtime" class="col-span-3 p-2">
             {{ calculateRuntime(version.audio_runtime) }}
         </div>
         <div class="col-span-3 p-2">

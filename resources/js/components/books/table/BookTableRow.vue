@@ -2,10 +2,10 @@
     <div class="grid grid-cols-12">
         <div class="col-span-3 p-2">
             <router-link
-                :to="{ name: 'books.show', params: { slug: bookInfo.slug } }"
+                :to="{ name: 'books.show', params: { slug: bookData.slug } }"
                 class="block h-full w-full"
             >
-                {{ bookInfo.title }}
+                {{ bookData.title }}
             </router-link>
         </div>
         <div class="col-span-2 p-2">
@@ -43,7 +43,9 @@
         </div>
 
         <div class="col-span-1 p-2">{{ formattedMostRecentDateRead }}</div>
-        <div class="col-span-1 p-2">{{ bookInfo.rating }}</div>
+        <div v-if="calculatedRating" class="col-span-1 p-2">
+            {{ calculatedRating }}
+        </div>
     </div>
 </template>
 
@@ -57,7 +59,7 @@ export default {
         },
     },
     computed: {
-        bookInfo() {
+        bookData() {
             return this.book.book;
         },
         authorInfo() {
@@ -110,6 +112,13 @@ export default {
         },
         pageCount() {
             return this.book.versions[0].page_count || "";
+        },
+        readInstance() {
+            return this.book.readInstances[0];
+        },
+        calculatedRating() {
+            if (!this.readInstance) return null;
+            return this.readInstance.rating / 2;
         },
     },
 };

@@ -191,10 +191,10 @@ export default {
                 // Grab the version's format name
                 const versionFormatName = readInstanceVersion.format.name;
                 // Set rating to 5-point scale
-                if (!readInstance.rating) {
-                    readInstance.rating = 0;
+                let rating = readInstance.rating / 2;
+                if (rating === 0) {
+                    rating = null;
                 }
-                const rating = readInstance.rating / 2;
                 // Format the read instance
                 const formattedReadInstance = {
                     date_read: formattedDateRead,
