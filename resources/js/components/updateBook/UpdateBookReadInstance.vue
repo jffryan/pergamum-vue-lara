@@ -40,7 +40,7 @@
                             (_, i) => 1 + i * 0.5,
                         )"
                         :key="idx"
-                        :value="rating"
+                        :value="rating * 2"
                         class="text-zinc-700"
                     >
                         {{ rating }}

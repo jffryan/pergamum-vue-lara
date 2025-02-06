@@ -68,8 +68,6 @@ class NewBookController extends Controller
         $data = [
             'title' => $bookData['title'],
             'slug' => $slug,
-            'is_completed' => $bookData['is_completed'],
-            'rating' => $bookData['is_completed'] ? $bookData['rating'] : null,
         ];
 
         return Book::create($data);

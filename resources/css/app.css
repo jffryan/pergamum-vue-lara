@@ -38,7 +38,7 @@ p {
 }
 
 .btn-danger {
-  @apply bg-red-100  text-red-700;
+  @apply bg-red-100  text-red-700 hover:bg-red-300;
 }
 
 /* Alerts */

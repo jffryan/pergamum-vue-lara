@@ -111,11 +111,31 @@
                 <button class="btn btn-primary mr-4" @click="initBookEdits">
                     Save changes
                 </button>
+                <button
+                    class="btn btn-danger mr-4"
+                    @click="deleteConfirmation = true"
+                >
+                    Delete Book
+                </button>
                 <router-link
                     :to="{ name: 'books.show', slug: currentSlug }"
                     class="btn btn-secondary"
                     >Cancel</router-link
                 >
+            </div>
+            <div v-if="deleteConfirmation" class="pt-6">
+                <p class="font-bold">
+                    Are you sure you want to delete this book?
+                </p>
+                <button class="btn btn-danger mr-4" @click="requestDeleteBook">
+                    Yes, delete
+                </button>
+                <button
+                    class="btn btn-secondary"
+                    @click="deleteConfirmation = false"
+                >
+                    No, cancel
+                </button>
             </div>
         </section>
     </div>
@@ -128,7 +148,7 @@ import {
     fetchBookData,
     formatDateRead,
 } from "@/services/BookServices";
-import { updateBook } from "@/api/BookController";
+import { updateBook, deleteBook } from "@/api/BookController";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -153,6 +173,7 @@ export default {
             showErrorMessage: false,
             error: "",
             bookData: null,
+            deleteConfirmation: false,
         };
     },
     computed: {
@@ -169,6 +190,12 @@ export default {
         setBookData(bookData) {
             this.bookData = JSON.parse(JSON.stringify(bookData));
         },
+        async requestDeleteBook() {
+            const { book_id } = this.currentBook.book;
+            const response = await deleteBook(book_id);
+            console.log(response);
+        },
+        // Come back to this
         async initBookEdits() {
             const { book_id } = this.currentBook.book;
             const bookEdits = {

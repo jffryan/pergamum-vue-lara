@@ -20,6 +20,7 @@ defineProps({
         <div v-if="version.audio_runtime" class="col-span-3 p-2">
             {{ calculateRuntime(version.audio_runtime) }}
         </div>
+        <div v-else class="col-span-3 p-2"></div>
         <div class="col-span-3 p-2">
             {{ version.nickname }}
         </div>

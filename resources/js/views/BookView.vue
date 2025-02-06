@@ -50,7 +50,15 @@
             <div class="pl-12">
                 <div class="mb-4">
                     <router-link
-                        class="btn btn-primary mr-4"
+                        class="btn btn-secondary mr-4"
+                        :to="{
+                            name: 'books.edit',
+                            params: { slug: currentBook.slug },
+                        }"
+                        >Edit book</router-link
+                    >
+                    <router-link
+                        class="btn btn-secondary mr-4"
                         :to="{
                             name: 'books.add-read-history',
                             params: { slug: currentBook.slug },
@@ -60,10 +68,10 @@
                     <router-link
                         class="btn btn-secondary mr-4"
                         :to="{
-                            name: 'books.edit',
+                            name: 'books.add-version',
                             params: { slug: currentBook.slug },
                         }"
-                        >Edit book</router-link
+                        >Add version</router-link
                     >
                 </div>
                 <div class="mb-8">

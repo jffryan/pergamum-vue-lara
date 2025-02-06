@@ -8,7 +8,7 @@ class AuthorService
 {
     public function getAuthorWithRelations($identifier, $type = 'slug')
     {
-        $query = Author::with('books.authors', 'books.genres', 'books.versions', 'books.versions.format');
+        $query = Author::with('books.authors', 'books.genres', 'books.readInstances', 'books.versions', 'books.versions.format');
 
         if ($type === 'id') {
             $author = $query->where('author_id', $identifier)->firstOrFail();
@@ -22,10 +22,11 @@ class AuthorService
             'author' => $authorAttributes,
             'books' => $author->books->map(function ($book) {
                 return [
-                    'book' => $book->only(['book_id', 'title', 'slug', 'is_completed', 'rating']),
+                    'book' => $book->only(['book_id', 'title', 'slug']),
                     'authors' => $book->authors,
                     'genres' => $book->genres,
                     'versions' => $book->versions,
+                    'read_instances' => $book->readInstances,
                 ];
             }),
         ];

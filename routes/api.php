@@ -9,6 +9,7 @@ use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\GenreController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\NewBookController;
+use App\Http\Controllers\VersionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +39,7 @@ Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByT
 Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);
 Route::post("/create-authors", [AuthorController::class, "getOrSetToBeCreatedAuthorsByName"]);
 Route::post("/add-read-instance", [BookController::class, "addReadInstance"]);
+Route::post("/versions", [VersionController::class, "addNewVersion"]);
 
 // Statistics
 Route::get("/statistics", [StatisticsController::class, "fetchUserStats"]);

@@ -15,7 +15,7 @@ class Book extends Model
 
     protected $primaryKey = "book_id";
 
-    protected $fillable = ['title', 'slug', 'is_completed', 'rating', 'date_completed'];
+    protected $fillable = ['title', 'slug', 'date_completed'];
 
     public function authors(): BelongsToMany
     {
@@ -53,15 +53,5 @@ class Book extends Model
     {
         $backlogData = array_merge(['backlog_ordinal' => $order], $additionalProperties);
         $this->backlogItem()->create($backlogData);
-    }
-
-    // Null backlog ordinal
-    public function setIsCompletedAttribute($value)
-    {
-        $this->attributes['is_completed'] = $value;
-
-        if ($value) {
-            $this->backlogItem()->update(['backlog_ordinal' => null]);
-        }
     }
 }

@@ -35,7 +35,7 @@ class BacklogController extends Controller
     protected function transformBacklogItem($item)
     {
         $book = $item->book;
-        $bookAttributes = $book->only(['book_id', 'title', 'slug', 'is_completed', 'rating']);
+        $bookAttributes = $book->only(['book_id', 'title', 'slug']);
     
         return [
             'book' => $bookAttributes,

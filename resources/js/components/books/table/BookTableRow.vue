@@ -114,7 +114,10 @@ export default {
             return this.book.versions[0].page_count || "";
         },
         readInstance() {
-            return this.book.readInstances[0];
+            if (this.book && this.book.readInstances) {
+                return this.book.readInstances[0];
+            }
+            return null;
         },
         calculatedRating() {
             if (!this.readInstance) return null;

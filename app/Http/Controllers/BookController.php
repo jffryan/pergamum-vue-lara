@@ -464,6 +464,9 @@ class BookController extends Controller
 
             $authors = $existingBook->authors;
 
+            ReadInstance::where('book_id', $book_id)->delete();
+            Version::where('book_id', $book_id)->delete();
+
             $existingBook->delete();
 
             $authorsToBeDeleted = [];
