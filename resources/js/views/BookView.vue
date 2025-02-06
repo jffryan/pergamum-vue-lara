@@ -48,9 +48,9 @@
                 </p>
             </div>
             <div class="pl-12">
-                <div class="mb-4">
+                <div class="mb-4 flex items-center flex-wrap gap-2">
                     <router-link
-                        class="btn btn-secondary mr-4"
+                        class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.edit',
                             params: { slug: currentBook.slug },
@@ -58,7 +58,7 @@
                         >Edit book</router-link
                     >
                     <router-link
-                        class="btn btn-secondary mr-4"
+                        class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.add-read-history',
                             params: { slug: currentBook.slug },
@@ -66,7 +66,7 @@
                         >Add read history</router-link
                     >
                     <router-link
-                        class="btn btn-secondary mr-4"
+                        class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.add-version',
                             params: { slug: currentBook.slug },

@@ -8,42 +8,58 @@
         </div>
         <section v-if="bookData">
             <div
-                class="p-4 mb-4 bg-zinc-300 border rounded-md border-zinc-400 shadow-md"
+                class="p-6 mb-4 bg-zinc-300 border rounded-md border-zinc-400 shadow-md"
             >
-                <h1 class="flex items-center gap-x-4">
-                    Edit <input type="text" v-model="bookData.book.title" />
-                </h1>
-                <h2 class="flex items-center gap-x-4">
-                    Author<span v-if="bookData.authors.length > 1">s</span>:
+                <h1>Edit Book</h1>
+                <div class="mb-4">
+                    <h2 class="mb-2">Title:</h2>
+                    <input type="text" v-model="bookData.book.title" />
+                </div>
+                <div class="mb-4">
+                    <h2 class="flex items-center gap-x-4">
+                        Author<span v-if="bookData.authors.length > 1">s</span>:
+                    </h2>
                     <div
                         v-for="author in bookData.authors"
                         :key="author.author_id"
-                        class="flex gap-x-4"
+                        class="flex gap-x-4 mb-2"
                     >
                         <input type="text" v-model="author.first_name" />
                         <input type="text" v-model="author.last_name" />
                     </div>
-                </h2>
-                <p>
-                    <span class="font-bold">Genres: </span>
-                    <router-link
-                        v-for="(genre, index) in bookData.genres"
+                </div>
+                <div class="mb-4">
+                    <h2>Genres:</h2>
+                    <div
+                        v-for="genre in bookData.genres"
                         :key="genre.genre_id"
-                        :to="{
-                            name: 'genres.show',
-                            params: { id: genre.genre_id },
-                        }"
-                        class="capitalize hover:underline"
+                        class="flex gap-x-4"
                     >
-                        {{ genre.name
-                        }}<span v-if="index < bookData.genres.length - 1"
-                            >,
-                        </span>
-                    </router-link>
-                </p>
+                        <input
+                            type="text"
+                            v-model="genre.name"
+                            class="capitalize mb-2"
+                        />
+                        <span
+                            @click="
+                                bookData.genres.splice(
+                                    bookData.genres.indexOf(genre),
+                                    1,
+                                )
+                            "
+                            class="text-sm hover:underline cursor-pointer"
+                            >Remove</span
+                        >
+                    </div>
+                    <span
+                        @click="addBlankGenre"
+                        class="text-sm hover:underline cursor-pointer"
+                        >Add new genre +</span
+                    >
+                </div>
             </div>
             <div
-                class="p-4 mb-4 bg-zinc-300 border rounded-md border-zinc-400 shadow-md"
+                class="p-6 mb-4 bg-zinc-300 border rounded-md border-zinc-400 shadow-md"
             >
                 <h2>Versions</h2>
                 <div class="grid grid-cols-2">
@@ -192,8 +208,16 @@ export default {
         },
         async requestDeleteBook() {
             const { book_id } = this.currentBook.book;
-            const response = await deleteBook(book_id);
-            console.log(response);
+            await deleteBook(book_id);
+            this.router.push({ name: "books.index" });
+        },
+        addBlankGenre() {
+            // If last genre name isn't blank, add a new genre entry with a blank name
+            const lastGenre =
+                this.bookData.genres[this.bookData.genres.length - 1];
+            if (lastGenre.name) {
+                this.bookData.genres.push({ name: "" });
+            }
         },
         // Come back to this
         async initBookEdits() {

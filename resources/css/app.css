@@ -26,7 +26,7 @@ p {
 /* Buttons */
 
 .btn {
-  @apply rounded-lg text-sm px-5 py-2.5 font-bold transition-all;
+  @apply rounded-lg text-sm px-5 py-2.5 font-bold inline-block transition-all;
 }
 
 .btn-primary {

@@ -279,17 +279,42 @@ class BookController extends Controller
         return $updated_versions;
     }
 
-    private function updateGenres($existing_book, $genres_array)
+    private function updateGenres($existingBook, $genresInput)
     {
-        $new_genres = array_map(function ($genre) {
-            return Genre::firstOrCreate(['name' => $genre])->genre_id;
-        }, $genres_array);
-
-        $existing_book->genres()->sync($new_genres);
-
-        $new_genre_instances = Genre::findMany($new_genres);
-
-        return $new_genre_instances;
+        // We'll collect all genre IDs for syncing here.
+        $genreIds = [];
+    
+        foreach ($genresInput as $input) {
+            // Check if an ID is present and valid
+            if (!empty($input['genre_id'])) {
+                // Make sure this ID actually exists in the DB
+                $existingGenre = Genre::find($input['genre_id']);
+    
+                if ($existingGenre) {
+                    // Use the existing ID; ignore any name changes
+                    $genreIds[] = $existingGenre->genre_id;
+                } else {
+                    // If somehow the ID isn't valid, but we do have a name, treat it like a new record
+                    if (!empty($input['name'])) {
+                        $genre = Genre::firstOrCreate(['name' => $input['name']]);
+                        $genreIds[] = $genre->genre_id;
+                    }
+                }
+            } else {
+                // No genre_id, must rely on name
+                if (!empty($input['name'])) {
+                    // Look up existing genre by name, or create
+                    $genre = Genre::firstOrCreate(['name' => $input['name']]);
+                    $genreIds[] = $genre->genre_id;
+                }
+            }
+        }
+    
+        // Sync the collected IDs
+        $existingBook->genres()->sync($genreIds);
+    
+        // Return the Genre instances for convenience
+        return Genre::findMany($genreIds);
     }
 
     private function updateReadInstances($existing_book, $readInstancesData)
@@ -347,6 +372,13 @@ class BookController extends Controller
             if (isset($bookUpdateResponse['error'])) {
                 throw new \Exception($bookUpdateResponse['error']);
             }
+
+            // Update genres
+            $genresUpdateResponse = $this->updateGenres($existing_book, $data["genres"]);
+            if (isset($genresUpdateResponse['error'])) {
+                throw new \Exception($genresUpdateResponse['error']);
+            }
+
             /*
             // Update authors
             $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData["authors"]);
@@ -360,11 +392,7 @@ class BookController extends Controller
                 throw new \Exception($versionsUpdateResponse['error']);
             }
 
-            // Update genres
-            $genresUpdateResponse = $this->updateGenres($existing_book, $formData["genres"]["parsed"]);
-            if (isset($genresUpdateResponse['error'])) {
-                throw new \Exception($genresUpdateResponse['error']);
-            }
+
 */
             // Update read instances
             $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data["readInstances"]);
@@ -378,7 +406,7 @@ class BookController extends Controller
                 $bookUpdateResponse['book'],
                 $data['authors'],
                 $data['versions'],
-                $data['genres'],
+                $genresUpdateResponse,
                 // $authorsUpdateResponse,
                 // $versionsUpdateResponse,
                 // $genresUpdateResponse,
@@ -392,62 +420,6 @@ class BookController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-    /*
-    public function update(Request $request, $id)
-    {
-        DB::beginTransaction();
-        try {
-            $existing_book = Book::findOrFail($id);
-            $data = $request->book;
-
-            // Update book details
-            $bookUpdateResponse = $this->updateBook($existing_book, $data["book"]);
-            if (isset($bookUpdateResponse['error'])) {
-                throw new \Exception($bookUpdateResponse['error']);
-            }
-
-            // Update authors
-            $authorsUpdateResponse = $this->updateAuthors($existing_book, $data["authors"]);
-            if (isset($authorsUpdateResponse['error'])) {
-                throw new \Exception($authorsUpdateResponse['error']);
-            }
-
-            // Update versions
-            $versionsUpdateResponse = $this->updateVersions($existing_book, $data["versions"]);
-            if (isset($versionsUpdateResponse['error'])) {
-                throw new \Exception($versionsUpdateResponse['error']);
-            }
-
-            // Update genres
-            $genresUpdateResponse = $this->updateGenres($existing_book, $data["book"]["genres"]["parsed"]);
-            if (isset($genresUpdateResponse['error'])) {
-                throw new \Exception($genresUpdateResponse['error']);
-            }
-
-            // Update read instances
-            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data["readInstances"]);
-            if (isset($readInstancesUpdateResponse['error'])) {
-                throw new \Exception($readInstancesUpdateResponse['error']);
-            }
-
-            DB::commit();
-
-            return $this->buildResponse(
-                $bookUpdateResponse['book'],
-                $authorsUpdateResponse,
-                $versionsUpdateResponse,
-                $genresUpdateResponse,
-                $readInstancesUpdateResponse['readInstances']
-            );
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Error updating book: " . $e->getMessage());
-
-            // Return a dynamic error response based on the exception thrown
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-*/
 
 
     /**

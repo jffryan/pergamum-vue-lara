@@ -128,6 +128,10 @@ export default {
             type: Boolean,
             default: false,
         },
+        bookId: {
+            type: Number,
+            default: null,
+        },
     },
     setup() {
         const BooksStore = useBooksStore();
@@ -174,8 +178,8 @@ export default {
             const isValid = this.validateVersion();
             if (!isValid) return;
             if (this.existingBook) {
-                // @TODO: THIS DOESN'T ACTUALLY DO ANYTHING
-                this.BooksStore.addVersionToBook(this.version);
+                console.log("Existing book", this.bookId);
+                this.BooksStore.addVersionToBook(this.bookId, this.version);
             } else {
                 this.NewBookStore.addVersionToNewBook(this.version);
             }

@@ -1,5 +1,8 @@
 import { defineStore } from "pinia";
 
+// Probably shouldn't do this here
+import { createVersion } from "@/api/VersionController";
+
 const useBooksStore = defineStore("BooksStore", {
     state: () => ({
         allBooks: [],
@@ -28,6 +31,17 @@ const useBooksStore = defineStore("BooksStore", {
                 // If the book is completely new
                 this.allBooks.push(book);
             }
+        },
+        async addVersionToBook(bookId, version) {
+            const index = this.allBooks.findIndex(
+                (b) => b.book.book_id === bookId,
+            );
+            this.allBooks[index].versions.push(version);
+            const newVersion = {
+                book_id: bookId,
+                ...version,
+            };
+            await createVersion(newVersion);
         },
         // Updates existing book in allBooks array
         updateBook(book) {

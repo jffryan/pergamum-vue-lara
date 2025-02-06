@@ -35,7 +35,7 @@
                         class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
                     >
                         <p v-if="version.nickname">{{ version.nickname }}</p>
-                        <p>
+                        <p class="capitalize">
                             <strong>{{ version.format.name }}</strong>
                         </p>
                         <p>{{ version.page_count }}</p>
@@ -45,7 +45,10 @@
                     </div>
                 </div>
                 <!-- End versions -->
-                <NewVersionsInput :existing-book="true" />
+                <NewVersionsInput
+                    :existing-book="true"
+                    :book-id="currentBook.book.book_id"
+                />
             </div>
         </div>
     </div>
