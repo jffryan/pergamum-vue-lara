@@ -61,10 +61,22 @@ const useNewBookStore = defineStore("NewBookStore", {
             if (res.exists) {
                 this.setBookFromExisting(res.book);
                 this.setCurrentStepComponent([
-                    "NewVersionsInput",
+                    "NewBookVersionConfirmation",
                     "NewBookProgressForm",
                 ]);
             }
+        },
+        resetToAuthors() {
+            const bookTitle = this.currentBookData.book.title;
+            // Set bookslug to a random string to avoid conflicts with existing books
+            const bookSlug = Math.random().toString(36).substring(7);
+            this.currentBookData = initializeBookData();
+            this.setTitle(bookTitle);
+            this.setSlug(bookSlug);
+            this.setCurrentStepComponent([
+                "NewAuthorsInput",
+                "NewBookProgressForm",
+            ]);
         },
         addAuthorsToNewBook(authors) {
             // Check to ensure authors exists on the request
@@ -211,7 +223,7 @@ const useNewBookStore = defineStore("NewBookStore", {
             this.setBookAuthors(book.authors);
             this.setBookGenres(book.genres);
             this.setBookVersions(book.versions);
-            this.setCurrentStepHeading("Add new version");
+            this.setCurrentStepHeading("Select an option");
         },
 
         // ------------------------------

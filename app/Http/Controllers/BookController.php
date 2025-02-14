@@ -206,7 +206,7 @@ class BookController extends Controller
                 ->lower()
                 ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
                 ->replace(' ', '-')  // Replace spaces with hyphens
-                ->limit(30);  // Limit to 30 characters
+                ->limit(50);  // Limit to 50 characters
 
             // Update book properties
             $existing_book->fill([
@@ -499,7 +499,7 @@ class BookController extends Controller
             ->lower()
             ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
             ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(30);  // Limit to 30 characters
+            ->limit(50);  // Limit to 50 characters
 
         // Look for an existing book by the slug
         $existingBook = Book::where('slug', $slug)->first();

@@ -24,7 +24,7 @@ class NewBookController extends Controller
             ->lower()
             ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
             ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(30);  // Limit to 30 characters
+            ->limit(50);  // Limit to 50 characters
 
         // Look for an existing book by the slug
         $existingBook = Book::with("authors", "genres", "versions", "versions.format", "versions.readInstances")->where('slug', $slug)->first();
@@ -53,10 +53,8 @@ class NewBookController extends Controller
 
     private function createOrGetBook($bookData)
     {
-        $slug = Str::of($bookData['title'])
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-');  // Replace spaces with hyphens
+        $slug = Str::of($bookData['slug'])
+            ->lower();
 
         // Look for an existing book by the slug
         $existingBook = Book::where('slug', $slug)->first();
@@ -65,6 +63,15 @@ class NewBookController extends Controller
             return $existingBook;
         }
 
+        // We want to avoid duplicating slugs so we need to increment if we reach this logic
+
+        $slug = Str::of($bookData['title'])
+            ->lower()
+            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
+            ->replace(' ', '-');  // Replace spaces with hyphens
+
+        $slug = $slug . '-2';
+
         $data = [
             'title' => $bookData['title'],
             'slug' => $slug,
@@ -72,6 +79,7 @@ class NewBookController extends Controller
 
         return Book::create($data);
     }
+
     private function handleAuthors($authorsData)
     {
         return collect($authorsData)->map(function ($author) {

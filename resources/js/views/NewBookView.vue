@@ -23,6 +23,7 @@ import NewGenresInput from "@/components/newBook/NewGenresInput.vue";
 import NewReadInstanceInput from "@/components/newBook/NewReadInstanceInput.vue";
 import NewBookSubmitControls from "@/components/newBook/NewBookSubmitControls.vue";
 import NewVersionsInput from "@/components/newBook/NewVersionsInput.vue";
+import NewBookVersionConfirmation from "@/components/newBook/NewBookVersionConfirmation.vue";
 
 export default {
     name: "NewBookView",
@@ -35,6 +36,7 @@ export default {
         NewReadInstanceInput,
         NewBookSubmitControls,
         NewVersionsInput,
+        NewBookVersionConfirmation,
     },
     setup() {
         const NewBookStore = useNewBookStore();

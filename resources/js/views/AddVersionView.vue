@@ -28,7 +28,7 @@
                     </p>
                 </div>
                 <!-- End book information -->
-                <div class="grid grid-cols-2">
+                <div class="grid grid-cols-2 gap-x-4">
                     <div
                         v-for="version in currentVersions"
                         :key="version.version_id"
