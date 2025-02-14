@@ -15,11 +15,6 @@ const bookRoutes = [
         component: () => import("@/views/NewBookView.vue"),
     },
     {
-        path: "/add-books/bulk-upload",
-        name: "books.bulk-add",
-        component: () => import("@/views/BulkAddBooksView.vue"),
-    },
-    {
         path: "/books/:slug/edit",
         name: "books.edit",
         component: () => import("@/views/EditBookView.vue"),

@@ -344,7 +344,7 @@
 <script>
 import { useConfigStore, useBooksStore } from "@/stores";
 
-import { splitAndNormalizeGenres } from "@/utils/BookFormattingLibrary";
+import { splitAndNormalizeGenres } from "@/services/BookServices";
 
 import {
     createBook,

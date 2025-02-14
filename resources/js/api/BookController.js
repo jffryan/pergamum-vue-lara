@@ -29,10 +29,6 @@ const getBooksByYear = async (year) => {
 const createBook = async (book) =>
     makeRequest("post", buildUrl("books"), { book });
 
-const createBooks = async (books) => {
-    return makeRequest("post", buildUrl("books", "bulk"), { books });
-};
-
 // UPDATE
 const updateBook = async (request) => {
     return makeRequest("patch", buildUrl("books", request.book_id), {
@@ -85,7 +81,6 @@ export {
     getBooksByFormat,
     getBooksByYear,
     createBook,
-    createBooks,
     updateBook,
     removeGenreInstance,
     removeAuthorInstance,

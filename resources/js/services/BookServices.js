@@ -35,9 +35,17 @@ function formatDateRead(date) {
     return formattedDateRead;
 }
 
+const splitAndNormalizeGenres = (genres) => {
+    return genres
+        .split(",")
+        .map((genre) => genre.trim().toLowerCase())
+        .filter((genre) => genre !== "");
+};
+
 export {
     addVersionToBookService,
     calculateRuntime,
     fetchBookData,
     formatDateRead,
+    splitAndNormalizeGenres,
 };
