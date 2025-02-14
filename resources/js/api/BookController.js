@@ -44,6 +44,16 @@ const updateBook = async (request) => {
 const deleteBook = async (book_id) =>
     makeRequest("delete", buildUrl("books", book_id));
 
+const createOrGetBookByTitle = async (title) => {
+    const url = buildUrl("create-book", "title");
+    return makeRequest("POST", url, { title });
+};
+
+const submitNewBook = async (bookData) => {
+    const url = buildUrl("create-book");
+    return makeRequest("POST", url, { bookData });
+};
+
 // ------------------------------
 // Let's come back to these two functions later
 // ------------------------------
@@ -80,4 +90,6 @@ export {
     removeGenreInstance,
     removeAuthorInstance,
     deleteBook,
+    createOrGetBookByTitle,
+    submitNewBook,
 };

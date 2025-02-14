@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 
+import bookRoutes from "./book-routes";
+import authorRoutes from "./author-routes";
+
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
@@ -8,51 +11,9 @@ const router = createRouter({
             name: "home",
             component: () => import("@/views/HomeView.vue"),
         },
-        {
-            path: "/library",
-            name: "library.index",
-            component: () => import("@/views/LibraryView.vue"),
-        },
-        {
-            path: "/add-books",
-            name: "books.create",
-            component: () => import("@/views/AddBooksView.vue"),
-        },
-        {
-            path: "/new-book/",
-            name: "books.new",
-            component: () => import("@/views/NewBookView.vue"),
-        },
-        {
-            path: "/add-books/bulk-upload",
-            name: "books.bulk-add",
-            component: () => import("@/views/BulkAddBooksView.vue"),
-        },
-        {
-            path: "/books/:slug/edit",
-            name: "books.edit",
-            component: () => import("@/views/EditBookView.vue"),
-        },
-        {
-            path: "/books/:slug",
-            name: "books.show",
-            component: () => import("@/views/BookView.vue"),
-        },
-        {
-            path: "/books/:slug/add-read-history",
-            name: "books.add-read-history",
-            component: () => import("@/views/AddReadHistoryView.vue"),
-        },
-        {
-            path: "/books/:slug/new-version",
-            name: "books.add-version",
-            component: () => import("@/views/AddVersionView.vue"),
-        },
-        {
-            path: "/authors/:slug",
-            name: "authors.show",
-            component: () => import("@/views/AuthorView.vue"),
-        },
+        ...bookRoutes,
+        ...authorRoutes,
+        // Before I reorganize this, I actually ought to just fix bookshelves to use query parameters and a single template
         {
             path: "/formats/:format",
             name: "formats.show",

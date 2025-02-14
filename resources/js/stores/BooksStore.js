@@ -1,49 +1,52 @@
 import { defineStore } from "pinia";
-
-// Probably shouldn't do this here
-import { createVersion } from "@/api/VersionController";
+import { addVersionToBookService } from "@/services/BookServices";
 
 const useBooksStore = defineStore("BooksStore", {
     state: () => ({
         allBooks: [],
         sortedBy: "default",
     }),
+    getters: {
+        sortedBooks(state) {
+            if (state.sortedBy === "default") return state.allBooks;
+            return [...state.allBooks].sort((a, b) =>
+                a.book.title.localeCompare(b.book.title),
+            );
+        },
+    },
     actions: {
-        // ---------------------
-        // Set books
-        // ---------------------
         setAllBooks(books) {
             this.allBooks = books;
         },
         addBook(book) {
-            const existingBookIndex = this.allBooks.findIndex(
+            const existingBook = this.allBooks.find(
                 (b) => b.book.book_id === book.book.book_id,
             );
 
-            // If book already exists in the state
-            if (existingBookIndex !== -1) {
-                // Merge the new versions with the existing book's versions
-                this.allBooks[existingBookIndex].versions = [
-                    ...this.allBooks[existingBookIndex].versions,
-                    ...book.versions,
-                ];
+            if (existingBook) {
+                // Deduplicate versions
+                const mergedVersions = new Map();
+                [...existingBook.versions, ...book.versions].forEach((v) => {
+                    mergedVersions.set(v.version_id, v);
+                });
+                existingBook.versions = Array.from(mergedVersions.values());
             } else {
-                // If the book is completely new
                 this.allBooks.push(book);
             }
         },
         async addVersionToBook(bookId, version) {
-            const index = this.allBooks.findIndex(
-                (b) => b.book.book_id === bookId,
-            );
-            this.allBooks[index].versions.push(version);
-            const newVersion = {
-                book_id: bookId,
-                ...version,
-            };
-            await createVersion(newVersion);
+            try {
+                const index = this.allBooks.findIndex(
+                    (b) => b.book.book_id === bookId,
+                );
+                if (index === -1) throw new Error("Book not found");
+
+                this.allBooks[index].versions.push(version);
+                await addVersionToBookService(bookId, version);
+            } catch (error) {
+                console.error("Failed to add version:", error);
+            }
         },
-        // Updates existing book in allBooks array
         updateBook(book) {
             const index = this.allBooks.findIndex(
                 (b) => b.book.book_id === book.book.book_id,
@@ -51,10 +54,9 @@ const useBooksStore = defineStore("BooksStore", {
             this.allBooks[index] = book;
         },
         deleteBook(book) {
-            const index = this.allBooks.findIndex(
-                (b) => b.book_id === book.book_id,
+            this.allBooks = this.allBooks.filter(
+                (b) => b.book.book_id !== book.book.book_id,
             );
-            this.allBooks.splice(index, 1);
         },
     },
 });

@@ -1,4 +1,10 @@
 import { getOneBookFromSlug } from "@/api/BookController";
+import { createVersion } from "@/api/VersionController";
+
+const addVersionToBookService = async (bookId, version) => {
+    const newVersion = { book_id: bookId, ...version };
+    return createVersion(newVersion);
+};
 
 function calculateRuntime(runtime) {
     const hours = Math.floor(runtime / 60);
@@ -29,4 +35,9 @@ function formatDateRead(date) {
     return formattedDateRead;
 }
 
-export { calculateRuntime, fetchBookData, formatDateRead };
+export {
+    addVersionToBookService,
+    calculateRuntime,
+    fetchBookData,
+    formatDateRead,
+};
