@@ -50,6 +50,17 @@ const submitNewBook = async (bookData) => {
     return makeRequest("POST", url, { bookData });
 };
 
+// Add book to backlog
+const addBookToBacklog = async (bookId) => {
+    const url = buildUrl("backlog");
+    return makeRequest("POST", url, { book_id: bookId });
+};
+
+const removeBookFromBacklog = async (bookId) => {
+    const url = buildUrl("backlog", bookId);
+    return makeRequest("DELETE", url);
+};
+
 // ------------------------------
 // Let's come back to these two functions later
 // ------------------------------
@@ -87,4 +98,6 @@ export {
     deleteBook,
     createOrGetBookByTitle,
     submitNewBook,
+    addBookToBacklog,
+    removeBookFromBacklog,
 };

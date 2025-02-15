@@ -8,6 +8,11 @@
     <div v-else>
         <div class="grid grid-cols-2">
             <div class="mb-12">
+                <div class="mb-4">
+                    <router-link :to="{ name: 'library.index' }" class="block"
+                        >Back to Library</router-link
+                    >
+                </div>
                 <h1>{{ currentBook.book.title }}</h1>
                 <h2>
                     <span
@@ -48,7 +53,7 @@
                 </p>
             </div>
             <div class="pl-12">
-                <div class="mb-4 flex items-center flex-wrap gap-2">
+                <div class="mb-8 flex items-center flex-wrap gap-2">
                     <router-link
                         class="btn btn-secondary text-center mr-4"
                         :to="{
@@ -75,13 +80,23 @@
                     >
                 </div>
                 <div class="mb-8">
-                    <router-link
-                        :to="{ name: 'library.index' }"
-                        class="block mb-4"
-                        >Back to Library</router-link
+                    <label
+                        class="relative inline-flex items-center cursor-pointer"
                     >
+                        <input
+                            type="checkbox"
+                            :checked="isBacklog"
+                            class="sr-only peer"
+                            @click="toggleAddToBacklog"
+                        />
+                        <div
+                            class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
+                        ></div>
+                        <span class="ml-3 font-medium">{{
+                            isBacklog ? "On Backlog" : "Add to backlog"
+                        }}</span>
+                    </label>
                 </div>
-
                 <div class="mb-8">
                     <h3>Versions</h3>
                     <VersionTable :versions="currentBook.versions" />
@@ -144,6 +159,7 @@ export default {
             isLoading: true,
             showErrorMessage: false,
             error: "",
+            flagChanges: false,
         };
     },
     computed: {
@@ -177,6 +193,12 @@ export default {
                 return this.currentBook.genres;
             }
             return [];
+        },
+        isBacklog() {
+            if (!this.currentBook || !this.currentBook.backlogItem) {
+                return false;
+            }
+            return this.currentBook.backlogItem.backlog_id !== null;
         },
         readHistory() {
             if (!this.bookHasBeenCompleted) return "";
@@ -221,6 +243,15 @@ export default {
             return this.currentBook.versions.find(
                 (version) => version.version_id === version_id,
             );
+        },
+        toggleAddToBacklog() {
+            if (this.isBacklog) {
+                this.BooksStore.removeBookFromBacklog(
+                    this.currentBook.book.book_id,
+                );
+            } else {
+                this.BooksStore.addBookToBacklog(this.currentBook.book.book_id);
+            }
         },
         async setBookData() {
             // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard

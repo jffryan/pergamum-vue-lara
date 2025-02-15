@@ -30,7 +30,27 @@ class BacklogController extends Controller
         ]);
     }
     
+    public function store(Request $request)
+    {
+        $this->validate($request, [
+            'book_id' => 'required|exists:books,book_id',
+        ]);
     
+        $book = Book::find($request->book_id);
+        // Get the next ordinal
+        $nextOrdinal = BacklogItem::max('backlog_ordinal') + 1;
+        $book->addToBacklog($nextOrdinal);
+    
+        return response()->json(['message' => 'Book added to backlog successfully']);
+    }
+
+    public function destroy($id)
+    {
+        $backlogItem = BacklogItem::find($id);
+        $backlogItem->delete();
+    
+        return response()->json(['message' => 'Backlog item deleted successfully']);
+    }
 
     protected function transformBacklogItem($item)
     {

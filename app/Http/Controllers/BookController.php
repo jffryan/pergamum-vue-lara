@@ -39,12 +39,13 @@ class BookController extends Controller
             return $this->searchBooks($request);
         }
 
-        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
-            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
+        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances', 'backlogItem')
+            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name, backlog_items.backlog_item_id')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->groupBy('books.book_id', 'books.title', 'books.slug');
+            ->leftJoin('backlog_items', 'books.book_id', '=', 'backlog_items.book_id')
+            ->groupBy('books.book_id', 'books.title', 'books.slug', 'backlog_items.backlog_item_id');
 
         if ($request->has('format')) {
             $format = $request->get('format');
@@ -112,69 +113,40 @@ class BookController extends Controller
     {
         $bookForm = $request->book;
 
-        $book = $this->createOrGetBook($bookForm["book"]);
+        $book = $this->createOrGetBook($bookForm['book']);
 
         if (!$book->wasRecentlyCreated) {
             // If the book was not recently created (i.e., it existed), we'll just add a new version
-            $new_versions = $this->prepareVersions($bookForm["versions"]);
+            $new_versions = $this->prepareVersions($bookForm['versions']);
             $book->versions()->saveMany($new_versions);
 
             return $this->buildResponse($book, [], $new_versions, []);
         }
 
-        $new_authors = $this->handleAuthors($bookForm["authors"]);
-        $new_versions = $this->prepareVersions($bookForm["versions"]);
-        $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
+        $new_authors = $this->handleAuthors($bookForm['authors']);
+        $new_versions = $this->prepareVersions($bookForm['versions']);
+        $new_genres = $this->handleGenres($bookForm['book']['genres']['parsed']);
 
         $this->attachModels($book, $new_authors, $new_versions, $new_genres);
 
         $new_read_instances = [];
 
-        if (isset($bookForm["readInstances"])) {
-            $readInstancesData = array_filter($bookForm["readInstances"], function ($instance) {
-                return !empty($instance["date_read"]);
+        if (isset($bookForm['readInstances'])) {
+            $readInstancesData = array_filter($bookForm['readInstances'], function ($instance) {
+                return !empty($instance['date_read']);
             });
 
             $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
         }
 
         // Check if the book should be added to the backlog
-        if ($bookForm["book"]["is_backlog"]) {
+        if ($bookForm['book']['is_backlog']) {
             // Add the book to the backlog. Determine the order as needed.
             $order = BacklogItem::max('backlog_ordinal') + 1;
             $book->addToBacklog($order);
         }
 
         return $this->buildResponse($book, $new_authors, $new_versions, $new_genres, $new_read_instances);
-    }
-
-    public function bulkCreate(Request $request)
-    {
-        $booksForm = $request->input('books');
-
-        $responses = [];
-
-        DB::beginTransaction();
-
-        try {
-            foreach ($booksForm as $bookForm) {
-                $new_book = $this->createOrGetBook($bookForm["book"]);
-                $new_authors = $this->handleAuthors($bookForm["authors"]);
-                $new_versions = $this->prepareVersions($bookForm["versions"]);
-                $new_genres = $this->handleGenres($bookForm["book"]["genres"]["parsed"]);
-
-                $this->attachModels($new_book, $new_authors, $new_versions, $new_genres);
-
-                $responses[] = $this->buildResponse($new_book, $new_authors, $new_versions, $new_genres);
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'An error occurred', 'error' => $e->getMessage()], 500);
-        }
-
-        return response()->json(['books' => $responses]);
     }
 
     /**
@@ -327,7 +299,7 @@ class BookController extends Controller
                     // Update existing read instance
                     $existing_read_instance = ReadInstance::findOrFail($instanceData['read_instances_id']);
                     $existing_read_instance->update([
-                        'date_read' => Carbon::createFromFormat("Y-m-d", $instanceData['date_read']),
+                        'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
                         'rating' => $instanceData['rating'],
                     ]);
                     $updated_read_instances[] = $existing_read_instance;
@@ -335,7 +307,7 @@ class BookController extends Controller
                     // Create new read instance
                     $new_read_instance = new ReadInstance([
                         'book_id' => $existing_book->book_id,
-                        'date_read' => Carbon::createFromFormat("Y-m-d", $instanceData['date_read']),
+                        'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
                         'rating' => $instanceData['rating'],
                     ]);
                     $existing_book->readInstances()->save($new_read_instance);
@@ -368,26 +340,26 @@ class BookController extends Controller
             $data = $request_data['request']['formData'];
 
             // Update book details
-            $bookUpdateResponse = $this->updateBook($existing_book, $data["book"]);
+            $bookUpdateResponse = $this->updateBook($existing_book, $data['book']);
             if (isset($bookUpdateResponse['error'])) {
                 throw new \Exception($bookUpdateResponse['error']);
             }
 
             // Update genres
-            $genresUpdateResponse = $this->updateGenres($existing_book, $data["genres"]);
+            $genresUpdateResponse = $this->updateGenres($existing_book, $data['genres']);
             if (isset($genresUpdateResponse['error'])) {
                 throw new \Exception($genresUpdateResponse['error']);
             }
 
             /*
             // Update authors
-            $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData["authors"]);
+            $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData['authors']);
             if (isset($authorsUpdateResponse['error'])) {
                 throw new \Exception($authorsUpdateResponse['error']);
             }
 
             // Update versions
-            $versionsUpdateResponse = $this->updateVersions($existing_book, $formData["versions"]);
+            $versionsUpdateResponse = $this->updateVersions($existing_book, $formData['versions']);
             if (isset($versionsUpdateResponse['error'])) {
                 throw new \Exception($versionsUpdateResponse['error']);
             }
@@ -395,7 +367,7 @@ class BookController extends Controller
 
 */
             // Update read instances
-            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data["readInstances"]);
+            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data['readInstances']);
             if (isset($readInstancesUpdateResponse['error'])) {
                 throw new \Exception($readInstancesUpdateResponse['error']);
             }
@@ -414,7 +386,7 @@ class BookController extends Controller
             );
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Error updating book: " . $e->getMessage());
+            Log::error('Error updating book: ' . $e->getMessage());
 
             // Return a dynamic error response based on the exception thrown
             return response()->json(['error' => $e->getMessage()], 500);
@@ -600,7 +572,7 @@ class BookController extends Controller
     {
         $search = $request->search;
 
-        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances")
+        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances')
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')

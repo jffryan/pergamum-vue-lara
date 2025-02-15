@@ -209,7 +209,7 @@ export default {
         async requestDeleteBook() {
             const { book_id } = this.currentBook.book;
             await deleteBook(book_id);
-            this.router.push({ name: "books.index" });
+            this.$router.push({ name: "library.index" });
         },
         addBlankGenre() {
             // If last genre name isn't blank, add a new genre entry with a blank name

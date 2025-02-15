@@ -1,17 +1,25 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
+    addBookToBacklogService,
     addVersionToBookService,
     calculateRuntime,
     fetchBookData,
     formatDateRead,
+    removeBookFromBacklogService,
     splitAndNormalizeGenres,
 } from "@/services/BookServices";
-import { getOneBookFromSlug } from "@/api/BookController";
+import {
+    addBookToBacklog,
+    getOneBookFromSlug,
+    removeBookFromBacklog,
+} from "@/api/BookController";
 import { createVersion } from "@/api/VersionController";
 
 // Mock API calls
 vi.mock("@/api/BookController", () => ({
+    addBookToBacklog: vi.fn(),
     getOneBookFromSlug: vi.fn(),
+    removeBookFromBacklog: vi.fn(),
 }));
 
 vi.mock("@/api/VersionController", () => ({
@@ -19,6 +27,34 @@ vi.mock("@/api/VersionController", () => ({
 }));
 
 describe("BookServices", () => {
+    // ----------------------------
+    //  addVersionToBookService
+    // ----------------------------
+    describe("addBookToBacklogService", () => {
+        it("should throw an error if bookId is invalid", async () => {
+            await expect(addBookToBacklogService(null)).rejects.toThrow(
+                "Invalid book ID",
+            );
+        });
+
+        it("should call addBookToBacklog with the correct book ID", async () => {
+            addBookToBacklog.mockResolvedValue({ success: true });
+
+            const response = await addBookToBacklogService(1);
+
+            expect(addBookToBacklog).toHaveBeenCalledWith(1);
+            expect(response).toEqual({ success: true });
+        });
+
+        it("should throw an error if the API call fails", async () => {
+            addBookToBacklog.mockRejectedValue(new Error("API Error"));
+
+            await expect(addBookToBacklogService(1)).rejects.toThrow(
+                "Failed to add book to backlog: API Error",
+            );
+        });
+    });
+
     // ----------------------------
     //  addVersionToBookService
     // ----------------------------
@@ -123,6 +159,34 @@ describe("BookServices", () => {
             expect(formatDateRead(null)).toBe("Invalid Date");
             expect(formatDateRead("07/15/2023")).toBe("Invalid Date");
             expect(formatDateRead("random string")).toBe("Invalid Date");
+        });
+    });
+
+    // ----------------------------
+    //  addVersionToBookService
+    // ----------------------------
+    describe("removeBookFromBacklogService", () => {
+        it("should throw an error if bookId is invalid", async () => {
+            await expect(removeBookFromBacklogService(null)).rejects.toThrow(
+                "Invalid book ID",
+            );
+        });
+
+        it("should call removeBookFromBacklog with the correct book ID", async () => {
+            removeBookFromBacklog.mockResolvedValue({ success: true });
+
+            const response = await removeBookFromBacklogService(1);
+
+            expect(removeBookFromBacklog).toHaveBeenCalledWith(1);
+            expect(response).toEqual({ success: true });
+        });
+
+        it("should throw an error if the API call fails", async () => {
+            removeBookFromBacklog.mockRejectedValue(new Error("API Error"));
+
+            await expect(removeBookFromBacklogService(1)).rejects.toThrow(
+                "Failed to remove book from backlog: API Error",
+            );
         });
     });
 

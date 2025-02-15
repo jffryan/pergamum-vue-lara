@@ -51,33 +51,54 @@ class NewBookController extends Controller
         );
     }
 
-    private function createOrGetBook($bookData)
+    private function createBook($bookData)
     {
-        $slug = Str::of($bookData['slug'])
-            ->lower();
-
-        // Look for an existing book by the slug
-        $existingBook = Book::where('slug', $slug)->first();
-
-        if ($existingBook) {
-            return $existingBook;
-        }
-
-        // We want to avoid duplicating slugs so we need to increment if we reach this logic
-
-        $slug = Str::of($bookData['title'])
+        $title = $bookData['title'];
+        $request_slug = Str::of($bookData['slug'])->lower();
+    
+        $generated_slug = Str::of($title)
             ->lower()
             ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-');  // Replace spaces with hyphens
-
-        $slug = $slug . '-2';
-
+            ->replace(' ', '-')  // Replace spaces with hyphens
+            ->limit(50);  // Limit to 50 characters
+    
+        if ($request_slug != $generated_slug) {
+            $slug = $this->generateUniqueSlug($generated_slug);
+        } else {
+            $slug = $request_slug;
+        }
+    
         $data = [
             'title' => $bookData['title'],
             'slug' => $slug,
         ];
-
+    
         return Book::create($data);
+    }
+    
+    /**
+     * Generate a unique slug by checking existing slugs and incrementing the highest suffix.
+     */
+    private function generateUniqueSlug($baseSlug)
+    {
+        // Get all slugs that match the base slug pattern (including numbered variations)
+        $existingSlugs = Book::where('slug', 'LIKE', "{$baseSlug}%")
+            ->pluck('slug')
+            ->toArray();
+    
+        if (empty($existingSlugs)) {
+            return $baseSlug;
+        }
+    
+        $highestNumber = 0;
+    
+        foreach ($existingSlugs as $slug) {
+            if (preg_match('/^' . preg_quote($baseSlug, '/') . '-(\d+)$/', $slug, $matches)) {
+                $highestNumber = max($highestNumber, intval($matches[1]));
+            }
+        }
+    
+        return $baseSlug . '-' . ($highestNumber + 1);
     }
 
     private function handleAuthors($authorsData)
@@ -171,7 +192,7 @@ class NewBookController extends Controller
 
         try {
             // Create the main book record
-            $book = $this->createOrGetBook($bookData["book"]);
+            $book = $this->createBook($bookData["book"]);
             $authors = $this->handleAuthors($bookData["authors"]);
             $genres = $this->handleGenres($bookData["genres"]);
             $versions = $this->handleVersions($bookData["versions"], $book);

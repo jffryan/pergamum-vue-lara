@@ -1,5 +1,20 @@
-import { getOneBookFromSlug } from "@/api/BookController";
+import {
+    addBookToBacklog,
+    getOneBookFromSlug,
+    removeBookFromBacklog,
+} from "@/api/BookController";
 import { createVersion } from "@/api/VersionController";
+
+const addBookToBacklogService = async (bookId) => {
+    if (!bookId) throw new Error("Invalid book ID");
+
+    try {
+        return await addBookToBacklog(bookId);
+    } catch (error) {
+        console.error("Failed to add book to backlog:", error.message);
+        throw new Error(`Failed to add book to backlog: ${error.message}`);
+    }
+};
 
 const addVersionToBookService = async (bookId, version) => {
     if (!bookId) throw new Error("Invalid book ID");
@@ -48,6 +63,17 @@ function formatDateRead(date) {
     return `${month}/${day}/${lastTwoDigitsOfYear}`;
 }
 
+const removeBookFromBacklogService = async (bookId) => {
+    if (!bookId) throw new Error("Invalid book ID");
+
+    try {
+        return await removeBookFromBacklog(bookId);
+    } catch (error) {
+        console.error("Failed to remove book from backlog:", error.message);
+        throw new Error(`Failed to remove book from backlog: ${error.message}`);
+    }
+};
+
 const splitAndNormalizeGenres = (genres) => {
     if (!genres || typeof genres !== "string") return [];
 
@@ -58,9 +84,11 @@ const splitAndNormalizeGenres = (genres) => {
 };
 
 export {
+    addBookToBacklogService,
     addVersionToBookService,
     calculateRuntime,
     fetchBookData,
     formatDateRead,
+    removeBookFromBacklogService,
     splitAndNormalizeGenres,
 };

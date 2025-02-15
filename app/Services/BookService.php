@@ -10,12 +10,12 @@ class BookService
 {
     public function getBookWithRelations($identifier, $type = 'id')
     {
-        $query = Book::with("authors", "versions", "versions.format", "genres", "readInstances");
+        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances', 'backlogItem');
 
         if ($type === 'slug') {
-            $book = $query->where("slug", $identifier)->firstOrFail();
+            $book = $query->where('slug', $identifier)->firstOrFail();
         } else {
-            $book = $query->where("book_id", $identifier)->firstOrFail();
+            $book = $query->where('book_id', $identifier)->firstOrFail();
         }
 
         $bookAttributes = $book->only(['book_id', 'title', 'slug']);
@@ -26,6 +26,7 @@ class BookService
             'versions' => $book->versions,
             'genres' => $book->genres,
             'readInstances' => $book->readInstances,
+            'backlogItem' => $book->backlogItem
         ];
     }
 
@@ -39,6 +40,7 @@ class BookService
                 'versions' => $book->versions,
                 'genres' => $book->genres,
                 'readInstances' => $book->readInstances,
+                'backlogItem' => $book->backlogItem
             ];
         });
     }
