@@ -11,9 +11,22 @@ const useBacklogStore = defineStore("BacklogStore", {
             this.backlog = backlog;
         },
         async updateBacklogOrdinals() {
-            await axios.post("/api/backlog/update-ordinals", {
-                items: this.backlog.incompleteItems,
-            });
+            try {
+                const updatedItems = this.backlog.incompleteItems.map(
+                    (book, index) => ({
+                        backlog_item_id: book.backlog_item_id,
+                        ordinal: index + 1, // Assigning new ordinals
+                    }),
+                );
+
+                await axios.post("/api/backlog/update-ordinals", {
+                    items: updatedItems,
+                });
+
+                console.log("Backlog order updated successfully.");
+            } catch (error) {
+                console.error("Failed to update backlog order:", error);
+            }
         },
     },
 });

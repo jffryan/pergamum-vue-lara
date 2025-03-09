@@ -63,7 +63,6 @@ class BookService
     public function getIncompleteItems($limit = 100)
     {
         return BacklogItem::with('book.authors', 'book.versions.format', 'book.genres', 'book.readInstances')
-            ->whereDoesntHave('book.readInstances')
             ->orderBy('backlog_ordinal', 'asc')
             ->limit($limit)
             ->get()
@@ -94,7 +93,8 @@ class BookService
                 ];
             }),
             'genres' => $book->genres,
-            'readInstances' => [] // No readInstances for incomplete items
+            'readInstances' => [], // No readInstances for incomplete items
+            'backlog_item_id' => $item->backlog_item_id,
         ];
     }
 

@@ -31,7 +31,7 @@
                 v-if="isSortable"
                 :list="books"
                 item-key="book_id"
-                @end="moveItemInArray(books, $event.oldIndex, $event.newIndex)"
+                @end="onSortEnd"
             >
                 <template #item="{ element, index }">
                     <BookTableRow
@@ -62,7 +62,7 @@
 <script>
 import { Sortable } from "sortablejs-vue3";
 
-import { useBooksStore } from "@/stores";
+import { useBacklogStore, useBooksStore } from "@/stores";
 
 import BookTableRow from "@/components/books/table/BookTableRow.vue";
 import UpArrow from "@/components/globals/svgs/UpArrow.vue";
@@ -91,12 +91,15 @@ export default {
         },
     },
     setup() {
+        const BacklogStore = useBacklogStore();
         const BooksStore = useBooksStore();
 
         return {
+            BacklogStore,
             BooksStore,
         };
     },
+    emits: ["update:books"],
     data() {
         return {
             columns: [
@@ -143,6 +146,7 @@ export default {
                     descending: "sortByRatingDesc",
                 },
             ],
+            sortedBooks: [...this.books],
         };
     },
     computed: {
@@ -161,10 +165,15 @@ export default {
             };
         },
     },
+    watch: {
+        books(newBooks) {
+            this.sortedBooks = [...newBooks];
+        },
+    },
     methods: {
-        // This works but makes the component messy for now.
-        moveItemInArray(array, oldIndex, newIndex) {
-            array.splice(newIndex, 0, array.splice(oldIndex, 1)[0]);
+        onSortEnd() {
+            console.log("EMIT", this.sortedBooks);
+            this.$emit("update:books", this.sortedBooks);
         },
     },
 };

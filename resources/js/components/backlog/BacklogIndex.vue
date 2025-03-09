@@ -10,13 +10,14 @@
                 :books="BacklogStore.backlog.incompleteItems"
                 :bookshelfTitle="null"
                 :isSortable="true"
+                @update:books="updateBacklogOrder"
                 class="mb-12"
             />
             <BookshelfTable
                 v-if="!BacklogStore.isnot_complete"
                 :books="completedBacklog"
                 bookshelfTitle="Completed"
-                class="mb-4"
+                class="mb-12"
             />
         </div>
     </div>
@@ -47,6 +48,15 @@ export default {
         },
         completedBacklog() {
             return this.BacklogStore.backlog.completedItems;
+        },
+    },
+    methods: {
+        updateBacklogOrder(newOrder) {
+            console.log("UPDATE BOOKS");
+            console.log(newOrder[0]);
+            this.BacklogStore.backlog.incompleteItems = newOrder;
+            console.log("BACKLOG STORE");
+            console.log(this.BacklogStore.backlog.incompleteItems[0]);
         },
     },
 };
