@@ -13,15 +13,15 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('backlog_items', function (Blueprint $table) {
-            $table->id("backlog_item_id");
-            $table->foreignId("book_id")
-                ->references("book_id")
-                ->on("books")
-                ->constrained()
-                ->onDelete("cascade");
-            $table->integer("backlog_ordinal")->default(0);
+        Schema::create('lists', function (Blueprint $table) {
+            $table->id("list_id");
+            $table->string("name");
+            $table->string("slug");
+            $table->foreignId('user_id')
+                ->constrained('users', 'user_id')
+                ->cascadeOnDelete();
             $table->timestamps();
+            $table->unique(['user_id', 'slug']);
         });
     }
 
@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('backlog_item');
+        Schema::dropIfExists('lists');
     }
 };

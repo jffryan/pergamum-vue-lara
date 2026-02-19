@@ -3,9 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use App\Models\Book;
-use App\Models\ReadInstance;
-use Carbon\Carbon;
 
 return new class extends Migration
 {
@@ -17,24 +14,25 @@ return new class extends Migration
     public function up()
     {
         Schema::create('read_instances', function (Blueprint $table) {
-            $table->id("read_instances_id");
-            $table->foreignId("book_id")->constrained("books", "book_id")->onDelete('cascade');;
-            $table->foreignId("version_id")->nullable()->constrained("versions", "version_id");
+            $table->id("read_instance_id");
+            $table->foreignId('user_id')
+                ->constrained('users', 'user_id')
+                ->cascadeOnDelete();
+            $table->foreignId("book_id")
+                ->constrained("books", "book_id")
+                ->cascadeOnDelete();
+            $table->foreignId('version_id')
+                ->nullable()
+                ->constrained('versions', 'version_id')
+                ->nullOnDelete();
             $table->date("date_read");
+            $table->unsignedTinyInteger('rating')->nullable();
             $table->timestamps();
-        });
 
-        // Migrate existing data
-        $books = Book::where('is_completed', true)->get();
-        foreach ($books as $book) {
-            if ($book->date_completed) {
-                $formattedDate = Carbon::createFromFormat('m/d/Y', $book->date_completed)->format('Y-m-d');
-                ReadInstance::create([
-                    'book_id' => $book->book_id,
-                    'date_read' => $formattedDate
-                ]);
-            }
-        }
+            $table->index(['user_id', 'date_read']);
+            $table->index(['book_id', 'date_read']);
+            $table->index(['user_id', 'book_id']);
+        });
     }
 
     /**

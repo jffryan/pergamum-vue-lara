@@ -1,1 +1,4 @@
 *.sqlite*
+.env
+.env.docker
+**/.env.docker
