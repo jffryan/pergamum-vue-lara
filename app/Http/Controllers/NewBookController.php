@@ -163,6 +163,7 @@ class NewBookController extends Controller
 
             $readInstance['book_id'] = $book_id;
             $readInstance['version_id'] = $version_id;
+            $readInstance['user_id'] = auth()->id();
 
             return ReadInstance::create($readInstance);
         })->all();

@@ -1,17 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import useBooksStore from "@/stores/BooksStore";
-import {
-    addBookToBacklogService,
-    addVersionToBookService,
-    removeBookFromBacklogService,
-} from "@/services/BookServices";
+import { addVersionToBookService } from "@/services/BookServices";
 
 // Mock the API call
 vi.mock("@/services/BookServices", () => ({
-    addBookToBacklogService: vi.fn(),
     addVersionToBookService: vi.fn(),
-    removeBookFromBacklogService: vi.fn(),
 }));
 
 describe("BooksStore", () => {
@@ -145,75 +139,6 @@ describe("BooksStore", () => {
         store.addBook(book);
         store.deleteBook({ book: { book_id: 2 } }); // Book ID 2 doesn't exist
         expect(store.allBooks).toEqual([book]);
-    });
-
-    // ------------------------
-    // addBookToBacklog
-    // ------------------------
-    it("should add a book to backlog and update state", async () => {
-        const book = { book: { book_id: 1 }, versions: [] };
-        store.addBook(book);
-
-        addBookToBacklogService.mockResolvedValue({
-            data: { backlog_item_id: 10 },
-        });
-
-        await store.addBookToBacklog(1);
-
-        expect(store.allBooks[0].backlogItem).toEqual({ backlog_item_id: 10 });
-        expect(addBookToBacklogService).toHaveBeenCalledWith(1);
-    });
-
-    it("should handle error when trying to add a non-existent book to backlog", async () => {
-        console.error = vi.fn();
-        await store.addBookToBacklog(99); // Book ID 99 does not exist
-
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to add book to backlog",
-            new Error("Book not found"),
-        );
-    });
-
-    // ------------------------
-    // removeBookFromBacklog
-    // ------------------------
-    it("should remove a book from backlog and update state", async () => {
-        const book = {
-            book: { book_id: 1 },
-            versions: [],
-            backlogItem: { backlog_item_id: 10 },
-        };
-        store.addBook(book);
-
-        removeBookFromBacklogService.mockResolvedValue({ success: true });
-
-        await store.removeBookFromBacklog(1);
-
-        expect(store.allBooks[0].backlogItem).toBeNull();
-        expect(removeBookFromBacklogService).toHaveBeenCalledWith(10);
-    });
-
-    it("should handle error when trying to remove a non-existent book from backlog", async () => {
-        console.error = vi.fn();
-        await store.removeBookFromBacklog(99); // Book ID 99 does not exist
-
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to remove book from backlog",
-            new Error("Book not found"),
-        );
-    });
-
-    it("should handle error when book is not in backlog", async () => {
-        console.error = vi.fn();
-        const book = { book: { book_id: 1 }, versions: [] };
-        store.addBook(book);
-
-        await store.removeBookFromBacklog(1);
-
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to remove book from backlog",
-            new Error("Book not in backlog"),
-        );
     });
 
     // ------------------------

@@ -58,18 +58,6 @@ const router = createRouter({
             component: () => import("@/views/GenreView.vue"),
         },
         {
-            path: "/backlog",
-            name: "backlog.home",
-            component: () => import("@/views/BacklogHome.vue"),
-            props: { innerComponent: "BacklogDashboard" },
-        },
-        {
-            path: "/backlog/index",
-            name: "backlog.index",
-            component: () => import("@/views/BacklogHome.vue"),
-            props: { innerComponent: "BacklogIndex" },
-        },
-        {
             path: "/completed",
             name: "completed.home",
             component: () => import("@/views/CompletedView.vue"),

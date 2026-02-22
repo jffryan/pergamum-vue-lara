@@ -15,7 +15,7 @@ class ReadInstance extends Model
 
     protected $dates = ['date_read'];
     
-    protected $fillable = ['book_id', 'version_id', 'date_read', 'rating'];
+    protected $fillable = ['user_id', 'book_id', 'version_id', 'date_read', 'rating'];
 
     public function book()
     {

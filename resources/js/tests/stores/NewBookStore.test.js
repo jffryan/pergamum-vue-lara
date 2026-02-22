@@ -27,7 +27,6 @@ describe("NewBookStore", () => {
             genres: [],
             read_instances: [],
             versions: [],
-            addToBacklog: false,
         });
 
         expect(store.currentStep).toEqual({
@@ -168,7 +167,7 @@ describe("NewBookStore", () => {
 
         expect(store.currentBookData.versions).toHaveLength(1);
         expect(store.currentStep.component).toEqual([
-            "NewBacklogItemInput",
+            "NewBookSubmitControls",
             "NewBookProgressForm",
         ]);
     });
@@ -210,19 +209,6 @@ describe("NewBookStore", () => {
             version_id: 1,
             book_id: 2,
         });
-    });
-
-    // ----------------------------
-    // BACKLOG MANAGEMENT
-    // ----------------------------
-    it("should correctly set a book as a backlog item", () => {
-        store.setBacklogItemToNewBook({});
-
-        expect(store.currentBookData.addToBacklog).toBe(true);
-        expect(store.currentStep.component).toEqual([
-            "NewBookSubmitControls",
-            "NewBookProgressForm",
-        ]);
     });
 
     // ----------------------------

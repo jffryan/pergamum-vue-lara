@@ -1,9 +1,5 @@
 import { defineStore } from "pinia";
-import {
-    addBookToBacklogService,
-    addVersionToBookService,
-    removeBookFromBacklogService,
-} from "@/services/BookServices";
+import { addVersionToBookService } from "@/services/BookServices";
 
 const useBooksStore = defineStore("BooksStore", {
     state: () => ({
@@ -61,34 +57,6 @@ const useBooksStore = defineStore("BooksStore", {
             this.allBooks = this.allBooks.filter(
                 (b) => b.book.book_id !== book.book.book_id,
             );
-        },
-        async removeBookFromBacklog(bookId) {
-            try {
-                const index = this.allBooks.findIndex(
-                    (b) => b.book.book_id === bookId,
-                );
-                if (index === -1) throw new Error("Book not found");
-
-                const backlogItemId =
-                    this.allBooks[index].backlogItem?.backlog_item_id;
-                if (!backlogItemId) throw new Error("Book not in backlog");
-                await removeBookFromBacklogService(backlogItemId);
-                this.allBooks[index].backlogItem = null;
-            } catch (error) {
-                console.error("Failed to remove book from backlog", error);
-            }
-        },
-        async addBookToBacklog(bookId) {
-            try {
-                const index = this.allBooks.findIndex(
-                    (b) => b.book.book_id === bookId,
-                );
-                if (index === -1) throw new Error("Book not found");
-                const response = await addBookToBacklogService(bookId);
-                this.allBooks[index].backlogItem = response.data;
-            } catch (error) {
-                console.error("Failed to add book to backlog", error);
-            }
         },
     },
 });

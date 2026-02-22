@@ -3,7 +3,6 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthorController;
-use App\Http\Controllers\BacklogController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\GenreController;
@@ -34,10 +33,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get("/completed/{year}", [BookController::class, "getBooksByYear"]);
     Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
     Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
-    Route::get("/backlog", [BacklogController::class, "index"]);
-    Route::post("/backlog", [BacklogController::class, "store"]);
-    Route::delete("/backlog/{id}", [BacklogController::class, "destroy"]);
-    Route::post("/backlog/update-ordinals", [BacklogController::class, "updateOrdinals"]);
     Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByTitle"]);
     Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);
     Route::post("/create-authors", [AuthorController::class, "getOrSetToBeCreatedAuthorsByName"]);

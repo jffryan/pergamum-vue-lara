@@ -62,7 +62,7 @@
 <script>
 import { Sortable } from "sortablejs-vue3";
 
-import { useBacklogStore, useBooksStore } from "@/stores";
+import { useBooksStore } from "@/stores";
 
 import BookTableRow from "@/components/books/table/BookTableRow.vue";
 import UpArrow from "@/components/globals/svgs/UpArrow.vue";
@@ -91,11 +91,9 @@ export default {
         },
     },
     setup() {
-        const BacklogStore = useBacklogStore();
         const BooksStore = useBooksStore();
 
         return {
-            BacklogStore,
             BooksStore,
         };
     },

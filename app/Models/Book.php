@@ -43,15 +43,4 @@ class Book extends Model
         return $this->hasMany(ReadInstance::class, "book_id");
     }
 
-    public function backlogItem()
-    {
-        return $this->hasOne(BacklogItem::class, "book_id");
-    }
-
-    // Method to add to backlog
-    public function addToBacklog($order, $additionalProperties = [])
-    {
-        $backlogData = array_merge(['backlog_ordinal' => $order], $additionalProperties);
-        $this->backlogItem()->create($backlogData);
-    }
 }

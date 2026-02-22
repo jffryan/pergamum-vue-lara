@@ -64,14 +64,6 @@
                         {{ formatDate(version.read_instances[0].date_read) }}
                     </div>
                 </div>
-                <div
-                    v-if="backlogItem"
-                    class="p-4 bg-zinc-100 border rounded-md border-zinc-400 mb-8 shadow-md"
-                >
-                    <p class="mb-0">
-                        This book will be added to your current backlog.
-                    </p>
-                </div>
             </div>
         </div>
     </div>
@@ -101,9 +93,6 @@ export default {
         },
         versions() {
             return this.NewBookStore.currentBookData.versions;
-        },
-        backlogItem() {
-            return this.NewBookStore.currentBookData.addToBacklog;
         },
     },
     methods: {

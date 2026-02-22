@@ -297,6 +297,7 @@ class BookController extends Controller
                 } else {
                     // Create new read instance
                     $new_read_instance = new ReadInstance([
+                        'user_id' => auth()->id(),
                         'book_id' => $existing_book->book_id,
                         'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
                         'rating' => $instanceData['rating'],
@@ -440,6 +441,7 @@ class BookController extends Controller
         }
 
         $read_instance = new ReadInstance($read_instance_data);
+        $read_instance->user_id = auth()->id();
 
         // Attach the read instance to the book and version
         $book->readInstances()->save($read_instance);

@@ -18,9 +18,6 @@
             </div>
             <div class="mb-2">
                 <li>
-                    <router-link :to="{ name: 'backlog.home' }">Backlog</router-link>
-                </li>
-                <li>
                     <router-link :to="{ name: 'completed.home' }">Completed</router-link>
                 </li>
                 <li class="mb-2 ml-4">

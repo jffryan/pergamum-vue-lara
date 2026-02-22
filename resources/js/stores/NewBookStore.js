@@ -12,7 +12,6 @@ function initializeBookData() {
         genres: [],
         read_instances: [],
         versions: [],
-        addToBacklog: false,
     };
 }
 
@@ -91,7 +90,6 @@ const useNewBookStore = defineStore("NewBookStore", {
                 genres: book.genres,
                 read_instances: book.read_instances ?? [], // Preserve existing read instances
                 versions: book.versions,
-                addToBacklog: false,
             };
             this.setStep(
                 ["NewBookProgressForm", "NewBookSubmitControls"],
@@ -132,7 +130,7 @@ const useNewBookStore = defineStore("NewBookStore", {
             this.setStep(
                 version.is_read
                     ? ["NewReadInstanceInput", "NewBookProgressForm"]
-                    : ["NewBacklogItemInput", "NewBookProgressForm"],
+                    : ["NewBookSubmitControls", "NewBookProgressForm"],
             );
         },
         // Read Instance Management
@@ -168,24 +166,6 @@ const useNewBookStore = defineStore("NewBookStore", {
             };
 
             this.currentBookData.read_instances.push(formattedReadInstance);
-        },
-        setBacklogItemToNewBook(backlogItem) {
-            if (!backlogItem) {
-                this.setStep(
-                    ["NewBookSubmitControls", "NewBookProgressForm"],
-                    "Review book details",
-                );
-                return;
-            }
-
-            if (!this.currentBookData.addToBacklog) {
-                this.currentBookData.addToBacklog = true;
-            }
-
-            this.setStep(
-                ["NewBookSubmitControls", "NewBookProgressForm"],
-                "Review book details",
-            );
         },
         // Submitting the new book
         async submitNewBook() {
