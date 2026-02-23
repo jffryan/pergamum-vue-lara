@@ -27,12 +27,15 @@ class StatisticsService
 
     private function calculateTotalBooksRead(): int
     {
-        return Book::whereHas('readInstances')->count();
+        return Book::whereHas('readInstances', function ($query) {
+            $query->where('user_id', auth()->id());
+        })->count();
     }
 
     private function calculateBooksReadByYear()
     {
         return ReadInstance::selectRaw('YEAR(date_read) as year, COUNT(*) as total')
+            ->where('user_id', auth()->id())
             ->groupBy('year')
             ->orderBy('year', 'desc')
             ->get();
@@ -41,6 +44,7 @@ class StatisticsService
     private function calculateTotalPagesReadByYear()
     {
         return ReadInstance::with('version')
+            ->where('user_id', auth()->id())
             ->get()
             ->groupBy(fn ($date) => Carbon::parse($date->date_read)->format('Y'))
             ->mapWithKeys(fn ($year, $key) => [

@@ -26,7 +26,10 @@ class NewBookController extends Controller
             ->limit(50);  // Limit to 50 characters
 
         // Look for an existing book by the slug
-        $existingBook = Book::with("authors", "genres", "versions", "versions.format", "versions.readInstances")->where('slug', $slug)->first();
+        $userId = auth()->id();
+        $existingBook = Book::with(['authors', 'genres', 'versions', 'versions.format', 'versions.readInstances' => function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        }])->where('slug', $slug)->first();
 
         if ($existingBook) {
             return response()->json(

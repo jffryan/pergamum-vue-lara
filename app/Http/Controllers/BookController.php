@@ -38,7 +38,10 @@ class BookController extends Controller
             return $this->searchBooks($request);
         }
 
-        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances')
+        $userId = auth()->id();
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        }])
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
@@ -287,8 +290,9 @@ class BookController extends Controller
         try {
             foreach ($readInstancesData as $instanceData) {
                 if (isset($instanceData['read_instances_id']) && $instanceData['read_instances_id'] != null) {
-                    // Update existing read instance
-                    $existing_read_instance = ReadInstance::findOrFail($instanceData['read_instances_id']);
+                    // Update existing read instance (scoped to current user)
+                    $existing_read_instance = ReadInstance::where('user_id', auth()->id())
+                        ->findOrFail($instanceData['read_instances_id']);
                     $existing_read_instance->update([
                         'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
                         'rating' => $instanceData['rating'],
@@ -534,7 +538,10 @@ class BookController extends Controller
     {
         $search = $request->search;
 
-        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances')
+        $userId = auth()->id();
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        }])
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')

@@ -9,7 +9,10 @@ class BookService
 {
     public function getBookWithRelations($identifier, $type = 'id')
     {
-        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances');
+        $userId = auth()->id();
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
+            $q->where('user_id', $userId);
+        }]);
 
         if ($type === 'slug') {
             $book = $query->where('slug', $identifier)->firstOrFail();
@@ -44,11 +47,18 @@ class BookService
     
     public function getCompletedItemsForYear($year)
     {
-        return Book::with(['authors', 'versions.format', 'genres', 'versions.readInstances' => function ($query) use ($year) {
-            $query->whereYear('date_read', $year)
-                  ->orderBy('date_read', 'asc');
-        }])->whereHas('versions.readInstances', function ($query) use ($year) {
-            $query->whereYear('date_read', $year);
+        $userId = auth()->id();
+        return Book::with(['authors', 'versions.format', 'genres',
+            'versions.readInstances' => function ($query) use ($year, $userId) {
+                $query->where('user_id', $userId)
+                      ->whereYear('date_read', $year)
+                      ->orderBy('date_read', 'asc');
+            },
+            'readInstances' => function ($query) use ($year, $userId) {
+                $query->where('user_id', $userId)->whereYear('date_read', $year);
+            },
+        ])->whereHas('versions.readInstances', function ($query) use ($year, $userId) {
+            $query->where('user_id', $userId)->whereYear('date_read', $year);
         })->get()
         ->map(function ($book) use ($year) {
             return $this->transformCompletedBook($book, $year);
