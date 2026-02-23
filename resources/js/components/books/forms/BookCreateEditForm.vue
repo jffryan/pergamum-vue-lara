@@ -298,7 +298,7 @@
                         >Rating</label
                     >
                     <select
-                        v-model="bookForm.book.rating"
+                        v-model="bookForm.readInstances[0].rating"
                         class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
                     >
                         <option value="" class="text-zinc-400" disabled>
@@ -397,8 +397,6 @@ export default {
                         parsed: [""],
                     },
                     is_completed: false,
-                    is_backlog: false,
-                    rating: "",
                 },
                 authors: [
                     {
@@ -417,6 +415,7 @@ export default {
                 readInstances: [
                     {
                         date_read: "",
+                        rating: "",
                     },
                 ],
             };
@@ -534,10 +533,8 @@ export default {
             }
             formattedBook.versions = versions;
 
-            // Audio runtime
             if (book.is_completed) {
                 formattedBook.readInstances = this.currentBook.read_instances;
-                formattedBook.book.rating = book.rating;
             }
 
             return formattedBook;

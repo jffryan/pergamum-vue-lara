@@ -343,44 +343,13 @@ class BookController extends Controller
                 throw new \Exception($genresUpdateResponse['error']);
             }
 
-            /*
-            // Update authors
-            $authorsUpdateResponse = $this->updateAuthors($existing_book, $formData['authors']);
-            if (isset($authorsUpdateResponse['error'])) {
-                throw new \Exception($authorsUpdateResponse['error']);
-            }
-
-            // Update versions
-            $versionsUpdateResponse = $this->updateVersions($existing_book, $formData['versions']);
-            if (isset($versionsUpdateResponse['error'])) {
-                throw new \Exception($versionsUpdateResponse['error']);
-            }
-
-
-*/
-            // Update read instances
-            $readInstancesUpdateResponse = $this->updateReadInstances($existing_book, $data['readInstances']);
-            if (isset($readInstancesUpdateResponse['error'])) {
-                throw new \Exception($readInstancesUpdateResponse['error']);
-            }
-
             DB::commit();
 
-            return $this->buildResponse(
-                $bookUpdateResponse['book'],
-                $data['authors'],
-                $data['versions'],
-                $genresUpdateResponse,
-                // $authorsUpdateResponse,
-                // $versionsUpdateResponse,
-                // $genresUpdateResponse,
-                $readInstancesUpdateResponse['readInstances']
-            );
+            return response()->json($this->bookService->getBookWithRelations($existing_book->book_id));
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error updating book: ' . $e->getMessage());
 
-            // Return a dynamic error response based on the exception thrown
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -513,7 +482,7 @@ class BookController extends Controller
             $new_version['format_id'] = $version_data['format'];
             $new_version['nickname'] = $version_data['nickname'];
 
-            if ($format->name == 'Audio') {
+            if ($format->name == 'Audiobook') {
                 $new_version['audio_runtime'] = $version_data['audio_runtime'];
             } elseif ($format->name == 'Paper') {
                 $new_version['audio_runtime'] = null;

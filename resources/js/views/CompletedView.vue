@@ -36,8 +36,8 @@ export default {
     },
     data() {
         return {
-            loggedYears: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
-            activeYear: 2025,
+            loggedYears: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+            activeYear: 2026,
             activeBooks: [],
         };
     },

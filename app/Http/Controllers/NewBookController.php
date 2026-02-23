@@ -10,7 +10,6 @@ use App\Models\Genre;
 use App\Models\Author;
 use App\Models\Format;
 use App\Models\Version;
-use App\Models\BacklogItem;
 use App\Models\ReadInstance;
 
 class NewBookController extends Controller
@@ -199,13 +198,6 @@ class NewBookController extends Controller
             $read_instances = $this->handleReadInstances($bookData["read_instances"], $book, $versions);
 
             $this->attachModels($book, $authors, $genres, $versions);
-
-            // Check if the book should be added to the backlog
-            if ($bookData["addToBacklog"]) {
-                // Add the book to the backlog. Determine the order as needed.
-                $order = BacklogItem::max('backlog_ordinal') + 1;
-                $book->addToBacklog($order);
-            }
 
             // If all operations are successful, commit the transaction
             DB::commit();

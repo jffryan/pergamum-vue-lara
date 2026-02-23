@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Book;
 use App\Models\ReadInstance;
-use App\Models\BacklogItem;
 use Carbon\Carbon;
 
 class StatisticsService
@@ -17,7 +16,6 @@ class StatisticsService
             'booksReadByYear' => $this->calculateBooksReadByYear(),
             'totalPagesByYear' => $this->calculateTotalPagesReadByYear(),
             'percentageOfBooksRead' => $this->calculatePercentageOfBooksRead(),
-            'topBacklogItems' => $this->retrieveTopBacklogItems(),
             'newestBooks' => $this->retrieveFiveMostRecentlyCreatedBooks(),
         ];
     }
@@ -63,16 +61,7 @@ class StatisticsService
 
         return $totalBooks > 0 ? round(($completedBooks / $totalBooks) * 100, 2) : 0;
     }
-
-    private function retrieveTopBacklogItems()
-    {
-        return BacklogItem::with('book')
-            ->whereNotNull('backlog_ordinal')
-            ->orderBy('backlog_ordinal')
-            ->limit(5)
-            ->get();
-    }
-
+    
     private function retrieveFiveMostRecentlyCreatedBooks()
     {
         return Book::latest()->limit(5)->get();

@@ -27,6 +27,11 @@ class ReadInstance extends Model
         return $this->belongsTo(Version::class, 'version_id');
     }
 
+    public function setRatingAttribute($value)
+    {
+        $this->attributes['rating'] = $value !== null ? $value * 2 : null;
+    }
+
     protected function serializeDate(\DateTimeInterface $date)
     {
         return $date->format('Y-m-d');

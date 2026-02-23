@@ -23,14 +23,15 @@ async function submit() {
 
 <template>
     <form @submit.prevent="submit" class="flex gap-2 mt-4">
+        <label for="name" class="sr-only">Format Name</label>
         <input
             v-model="name"
             type="text"
             placeholder="Format name (e.g. Paperback)"
             required
-            class="border px-2 py-1 rounded"
+            class="border px-2 py-1 bg-transparent"
         />
-        <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">
+        <button type="submit" class="btn btn-primary shrink-0">
             Add Format
         </button>
     </form>

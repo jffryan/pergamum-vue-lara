@@ -80,24 +80,6 @@
                     >
                 </div>
                 <div class="mb-8">
-                    <label
-                        class="relative inline-flex items-center cursor-pointer"
-                    >
-                        <input
-                            type="checkbox"
-                            :checked="isBacklog"
-                            class="sr-only peer"
-                            @click="toggleAddToBacklog"
-                        />
-                        <div
-                            class="w-11 h-6 bg-slate-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-gray-700"
-                        ></div>
-                        <span class="ml-3 font-medium">{{
-                            isBacklog ? "On Backlog" : "Add to backlog"
-                        }}</span>
-                    </label>
-                </div>
-                <div class="mb-8">
                     <h3>Versions</h3>
                     <VersionTable :versions="currentBook.versions" />
                 </div>
@@ -194,12 +176,6 @@ export default {
             }
             return [];
         },
-        isBacklog() {
-            if (!this.currentBook || !this.currentBook.backlogItem) {
-                return false;
-            }
-            return this.currentBook.backlogItem.backlog_id !== null;
-        },
         readHistory() {
             if (!this.bookHasBeenCompleted) return "";
 
@@ -219,7 +195,9 @@ export default {
                     readInstance.version_id,
                 );
                 // Grab the version's format name
-                const versionFormatName = readInstanceVersion.format.name;
+                const versionFormatName = readInstanceVersion
+                    ? readInstanceVersion.format.name
+                    : null;
                 // Set rating to 5-point scale
                 let rating = readInstance.rating / 2;
                 if (rating === 0) {
@@ -243,15 +221,6 @@ export default {
             return this.currentBook.versions.find(
                 (version) => version.version_id === version_id,
             );
-        },
-        toggleAddToBacklog() {
-            if (this.isBacklog) {
-                this.BooksStore.removeBookFromBacklog(
-                    this.currentBook.book.book_id,
-                );
-            } else {
-                this.BooksStore.addBookToBacklog(this.currentBook.book.book_id);
-            }
         },
         async setBookData() {
             // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard

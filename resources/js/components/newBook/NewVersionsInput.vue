@@ -55,7 +55,7 @@
                     </p>
                 </div>
                 <!-- Audio runtime field -->
-                <div v-if="version.format?.name === 'audio'" class="mb-4 w-full">
+                <div v-if="version.format?.name === 'Audiobook'" class="mb-4 w-full">
                     <label
                         for="audio_runtime"
                         class="block mb-2 font-bold text-zinc-600 mr-6"

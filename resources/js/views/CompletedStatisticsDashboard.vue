@@ -48,27 +48,6 @@
                     </span>
                 </div>
                 <div class="p-4 bg-zinc-700 col-span-4">
-                    <h3>
-                        <router-link
-                            :to="{ name: 'backlog.index' }"
-                            class="hover:underline"
-                            >Current Backlog</router-link
-                        >
-                    </h3>
-                    <ul class="list-disc ml-4">
-                        <li v-for="item in topBacklogItems" :key="item.id">
-                            <router-link
-                                :to="{
-                                    name: 'books.show',
-                                    params: { slug: item.book.slug },
-                                }"
-                                class="hover:underline"
-                                >{{ item.book.title }}</router-link
-                            >
-                        </li>
-                    </ul>
-                </div>
-                <div class="p-4 bg-zinc-700 col-span-4">
                     <h3>Newest Books</h3>
                     <ul class="list-disc ml-4">
                         <li v-for="book in newestBooks" :key="book.book_id">
@@ -119,9 +98,6 @@ export default {
         },
         pagesReadByYear() {
             return this.statistics.totalPagesByYear;
-        },
-        topBacklogItems() {
-            return this.statistics.topBacklogItems;
         },
         newestBooks() {
             return this.statistics.newestBooks;

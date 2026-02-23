@@ -145,6 +145,7 @@ const useNewBookStore = defineStore("NewBookStore", {
             const formattedReadInstance = {
                 read_instances_id: null,
                 date_read: readInstance.date_read,
+                rating: readInstance.rating,
             };
 
             const lastVersion = this.currentBookData.versions.at(-1);
