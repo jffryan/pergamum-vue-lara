@@ -25,7 +25,7 @@
 </template>
 
 <script>
-import { getBooksByYear } from "@/api/BookController";
+import { getCompletedYears, getBooksByYear } from "@/api/BookController";
 
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 
@@ -36,8 +36,8 @@ export default {
     },
     data() {
         return {
-            loggedYears: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
-            activeYear: 2026,
+            loggedYears: [],
+            activeYear: null,
             activeBooks: [],
         };
     },
@@ -45,18 +45,24 @@ export default {
         setActiveYear(year) {
             this.activeYear = year;
         },
-        async fetchandSetBooksByYear(year) {
+        async fetchAndSetBooksByYear(year) {
             const books = await getBooksByYear(year.toString());
             this.activeBooks = books.data;
         },
     },
     watch: {
-        activeYear: {
-            immediate: true,
-            handler(newYear) {
-                this.fetchandSetBooksByYear(newYear);
-            },
+        activeYear(newYear) {
+            if (newYear !== null) {
+                this.fetchAndSetBooksByYear(newYear);
+            }
         },
+    },
+    async mounted() {
+        const res = await getCompletedYears();
+        this.loggedYears = res.data;
+        if (this.loggedYears.length > 0) {
+            this.activeYear = this.loggedYears[0];
+        }
     },
 };
 </script>

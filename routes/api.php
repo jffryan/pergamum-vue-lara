@@ -9,7 +9,10 @@ use App\Http\Controllers\GenreController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\NewBookController;
 use App\Http\Controllers\FormatController;
+use App\Http\Controllers\ListController;
+use App\Http\Controllers\ListItemController;
 use App\Http\Controllers\VersionController;
+use App\Http\Controllers\BulkUploadController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::resource("/books", BookController::class);
     Route::resource("/genres", GenreController::class);
 
+    Route::get("/completed/years", [BookController::class, "getCompletedYears"]);
     Route::get("/completed/{year}", [BookController::class, "getBooksByYear"]);
     Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
     Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
@@ -44,4 +48,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get("/config/formats", [ConfigController::class, "getFormats"]);
     Route::post("/formats", [FormatController::class, "store"]);
+
+    Route::post('/bulk-upload', [BulkUploadController::class, 'upload']);
+
+    Route::resource('/lists', ListController::class);
+    Route::patch('/lists/{list}/reorder', [ListController::class, 'reorder']);
+    Route::post('/lists/{list}/items', [ListItemController::class, 'store']);
+    Route::delete('/lists/{list}/items/{item}', [ListItemController::class, 'destroy']);
 });

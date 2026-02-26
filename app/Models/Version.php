@@ -27,4 +27,9 @@ class Version extends Model
     {
         return $this->hasMany(ReadInstance::class, "version_id");
     }
+
+    public function listItems(): HasMany
+    {
+        return $this->hasMany(ListItem::class, 'version_id');
+    }
 }

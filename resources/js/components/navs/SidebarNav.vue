@@ -15,6 +15,9 @@
                 <li>
                     <router-link :to="{ name: 'books.new' }">New book</router-link>
                 </li>
+                <li>
+                    <router-link :to="{ name: 'books.bulk-upload' }">Bulk upload</router-link>
+                </li>
             </div>
             <div class="mb-2">
                 <li>

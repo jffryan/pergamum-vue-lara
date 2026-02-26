@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Book;
 use App\Models\ReadInstance;
-use Carbon\Carbon;
 
 class StatisticsService
 {
@@ -43,18 +42,14 @@ class StatisticsService
 
     private function calculateTotalPagesReadByYear()
     {
-        return ReadInstance::with('version')
-            ->where('user_id', auth()->id())
+        return ReadInstance::join('versions', 'read_instances.version_id', '=', 'versions.version_id')
+            ->selectRaw('YEAR(read_instances.date_read) as year, SUM(versions.page_count) as total')
+            ->where('read_instances.user_id', auth()->id())
+            ->whereNotNull('versions.page_count')
+            ->groupBy('year')
+            ->orderBy('year', 'desc')
             ->get()
-            ->groupBy(fn ($date) => Carbon::parse($date->date_read)->format('Y'))
-            ->mapWithKeys(fn ($year, $key) => [
-                $key => [
-                    'year' => $key,
-                    'total' => $year->sum(fn ($readInstance) => $readInstance->version->page_count ?? 0)
-                ]
-            ])
-            ->sortByDesc('year')
-            ->values()
+            ->map(fn ($row) => ['year' => (int) $row->year, 'total' => (int) $row->total])
             ->toArray();
     }
 

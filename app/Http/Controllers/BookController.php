@@ -395,6 +395,11 @@ class BookController extends Controller
             ]);
         });
     }
+    public function getCompletedYears()
+    {
+        return response()->json($this->bookService->getAvailableYears());
+    }
+
     public function getBooksByYear($year)
     {
         $books = $this->bookService->getCompletedItemsForYear($year);

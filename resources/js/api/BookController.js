@@ -20,6 +20,11 @@ const getBooksByFormat = async (options) => {
     return makeRequest("get", buildUrl("books"), null, options);
 };
 
+// GET YEARS WITH READ INSTANCES
+const getCompletedYears = async () => {
+    return makeRequest("get", buildUrl("completed/years"));
+};
+
 // GET BY YEAR
 const getBooksByYear = async (year) => {
     return makeRequest("get", buildUrl(`completed/${year}`));
@@ -79,6 +84,7 @@ export {
     getOneBookFromSlug,
     getOneBook,
     getBooksByFormat,
+    getCompletedYears,
     getBooksByYear,
     createBook,
     updateBook,

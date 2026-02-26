@@ -3,24 +3,30 @@
         <h1>Statistics Dashboard</h1>
         <div v-if="statistics" class="bg-zinc-800 text-white">
             <div class="grid grid-cols-12 gap-4 p-4">
-                <div class="p-4 bg-slate-600 col-span-4">
+                <div class="p-4 bg-slate-600 col-span-3">
                     <span class="block text-7xl font-bold mb-4">{{
-                        totalBooksCompleted
+                        totalUniqueCompleted
                     }}</span>
-                    <p class="ml-8 text-lg">Total Books Completed</p>
+                    <p class="ml-8 text-lg">Unique Books Read</p>
                 </div>
-                <div class="p-4 bg-slate-600 col-span-4">
+                <div class="p-4 bg-slate-600 col-span-3">
+                    <span class="block text-7xl font-bold mb-4">{{
+                        totalReads
+                    }}</span>
+                    <p class="ml-8 text-lg">Total Reads (incl. re-reads)</p>
+                </div>
+                <div class="p-4 bg-slate-600 col-span-3">
                     <span class="block text-7xl font-bold mb-4">{{
                         totalBooks
                     }}</span>
-                    <p class="ml-8 text-lg">Total Books</p>
+                    <p class="ml-8 text-lg">Total Books in Catalog</p>
                 </div>
-                <div class="p-4 bg-zinc-700 col-span-4">
+                <div class="p-4 bg-zinc-700 col-span-3">
                     <span class="block text-7xl font-bold mb-4"
                         >{{ percentageOfCollectionCompleted }}%</span
                     >
                     <p class="ml-8 text-lg">
-                        Percentage of Collection Completed
+                        Percentage of Catalog Read
                     </p>
                 </div>
                 <div class="p-4 bg-zinc-700 col-span-4 row-span-2">
@@ -81,14 +87,13 @@ export default {
         totalUniqueCompleted() {
             return this.statistics.total_books_read;
         },
-        totalBooks() {
-            return this.statistics.total_books;
-        },
-        totalBooksCompleted() {
-            // use reduce to sum up the total books read from each year
+        totalReads() {
             return this.statistics.booksReadByYear.reduce((acc, year) => {
                 return acc + year.total;
             }, 0);
+        },
+        totalBooks() {
+            return this.statistics.total_books;
         },
         percentageOfCollectionCompleted() {
             return this.statistics.percentageOfBooksRead;

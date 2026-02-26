@@ -34,6 +34,11 @@ const bookRoutes = [
         name: "books.add-version",
         component: () => import("@/views/AddVersionView.vue"),
     },
+    {
+        path: "/bulk-upload",
+        name: "books.bulk-upload",
+        component: () => import("@/views/BulkUploadView.vue"),
+    },
 ];
 
 export default bookRoutes;

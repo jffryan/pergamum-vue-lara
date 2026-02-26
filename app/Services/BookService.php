@@ -45,6 +45,17 @@ class BookService
         });
     }
     
+    public function getAvailableYears(): array
+    {
+        return ReadInstance::selectRaw('YEAR(date_read) as year')
+            ->where('user_id', auth()->id())
+            ->distinct()
+            ->orderBy('year', 'desc')
+            ->pluck('year')
+            ->map(fn ($year) => (int) $year)
+            ->toArray();
+    }
+
     public function getCompletedItemsForYear($year)
     {
         $userId = auth()->id();
@@ -60,21 +71,19 @@ class BookService
         ])->whereHas('versions.readInstances', function ($query) use ($year, $userId) {
             $query->where('user_id', $userId)->whereYear('date_read', $year);
         })->get()
-        ->map(function ($book) use ($year) {
-            return $this->transformCompletedBook($book, $year);
-        })->sortBy(function ($item) {
-            return $item['readInstances']->first()->date_read ?? null;
-        })->values();
+        ->map(fn ($book) => $this->transformCompletedBook($book))
+        ->sortBy(fn ($item) => $item['readInstances']->first()->date_read ?? null)
+        ->values();
     }
 
-    protected function transformCompletedBook($book, $year)
+    protected function transformCompletedBook($book)
     {
         $bookAttributes = $book->only(['book_id', 'title', 'slug']);
 
         return [
             'book' => $bookAttributes,
             'authors' => $book->authors,
-            'versions' => $book->versions->map(function ($version) use ($year) {
+            'versions' => $book->versions->map(function ($version) {
                 return [
                     'version_id' => $version->version_id,
                     'page_count' => $version->page_count,
@@ -84,15 +93,11 @@ class BookService
                         'name' => $version->format->name,
                         'slug' => $version->format->slug,
                     ],
-                    'readInstances' => $version->readInstances->filter(function ($instance) use ($year) {
-                        return $instance->date_read->year == $year;
-                    })->sortBy('date_read')->values()
+                    'readInstances' => $version->readInstances->sortBy('date_read')->values(),
                 ];
             }),
             'genres' => $book->genres,
-            'readInstances' => $book->readInstances->filter(function ($instance) use ($year) {
-                return $instance->date_read->year == $year;
-            })->sortBy('date_read')->values()
+            'readInstances' => $book->readInstances->sortBy('date_read')->values(),
         ];
     }
 }
