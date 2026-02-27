@@ -10,11 +10,6 @@
                     discover new books to read.
                 </p>
             </div>
-            <div class="w-1/2 pl-4">
-                <figure class="droplet">
-                    <img src="/images/pergamum-about.jpg" alt="Pergamum" />
-                </figure>
-            </div>
         </div>
     </div>
 </template>

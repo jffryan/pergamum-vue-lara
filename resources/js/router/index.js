@@ -4,10 +4,11 @@ import { useAuthStore } from "@/stores";
 import adminRoutes from "./admin-routes";
 import authorRoutes from "./author-routes";
 import bookRoutes from "./book-routes";
+import listRoutes from "./list-routes";
 
 
 const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory('/'),
     routes: [
         {
             path: "/",
@@ -41,6 +42,7 @@ const router = createRouter({
         },
         ...bookRoutes,
         ...authorRoutes,
+        ...listRoutes,
         // Before I reorganize this, I actually ought to just fix bookshelves to use query parameters and a single template
         {
             path: "/formats/:format",

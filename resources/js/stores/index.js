@@ -4,6 +4,7 @@ import useAuthorsStore from "./AuthorsStore";
 import useBooksStore from "./BooksStore";
 import useConfigStore from "./ConfigStore";
 import useGenreStore from "./GenreStore";
+import useListsStore from "./ListsStore";
 import useNewBookStore from "./NewBookStore";
 
 export {
@@ -12,5 +13,6 @@ export {
     useBooksStore,
     useConfigStore,
     useGenreStore,
+    useListsStore,
     useNewBookStore,
 };

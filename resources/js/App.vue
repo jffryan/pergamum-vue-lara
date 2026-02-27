@@ -1,13 +1,44 @@
 <template>
-    <div class="relative max-w-8xl mx-auto px-4 sm:px-6 md:px-8">
-        <HeaderNav />
-        <div class="flex">
-            <SidebarNav v-if="authStore.isLoggedIn"
-                class="z-20 inset-0 top-16 left-[max(0px,calc(50%-45rem))] right-auto w-[10rem] py-6 pr-8 overflow-y-auto" />
-            <RouterView :class="['pt-6 pb-16 w-full', authStore.isLoggedIn ? 'pl-40' : '']" />
+    <div>
+        <HeaderNav @hamburger-click="drawerOpen = true" />
 
+        <div class="relative max-w-8xl mx-auto px-4 sm:px-6 md:px-8">
+
+        <!-- Mobile drawer backdrop -->
+        <Transition
+            enter-from-class="opacity-0"
+            enter-active-class="transition-opacity duration-200"
+            leave-to-class="opacity-0"
+            leave-active-class="transition-opacity duration-200"
+        >
+            <div
+                v-if="drawerOpen"
+                class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                @click="drawerOpen = false"
+            />
+        </Transition>
+
+        <!-- Mobile drawer -->
+        <div
+            v-if="authStore.isLoggedIn"
+            class="fixed inset-y-0 left-0 z-50 w-56 bg-white shadow-xl transform transition-transform duration-200 ease-in-out lg:hidden"
+            :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'"
+        >
+            <div class="pt-16 px-4 py-6">
+                <SidebarNav />
+            </div>
         </div>
 
+        <div class="flex">
+            <!-- Desktop static sidebar -->
+            <SidebarNav
+                v-if="authStore.isLoggedIn"
+                class="hidden lg:block z-20 w-[10rem] py-6 pr-8 overflow-y-auto shrink-0"
+            />
+            <RouterView :class="['pt-6 pb-16 w-full', authStore.isLoggedIn ? 'lg:pl-40' : '']" />
+        </div>
+
+        </div><!-- end constrained wrapper -->
     </div>
 </template>
 
@@ -25,6 +56,16 @@ export default {
     components: {
         HeaderNav,
         SidebarNav,
+    },
+    data() {
+        return {
+            drawerOpen: false,
+        };
+    },
+    watch: {
+        $route() {
+            this.drawerOpen = false;
+        },
     },
 };
 </script>

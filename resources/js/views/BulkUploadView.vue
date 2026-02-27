@@ -1,5 +1,5 @@
 <template>
-    <div class="w-2/3 px-6 py-8">
+    <div class="lg:w-2/3 px-6 py-8">
         <h1>Bulk Upload</h1>
 
         <div class="mb-4">

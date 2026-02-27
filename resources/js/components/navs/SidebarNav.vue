@@ -27,6 +27,11 @@
                     <router-link :to="{ name: 'completed.statistics' }">Statistics</router-link>
                 </li>
             </div>
+            <div class="mb-2">
+                <li>
+                    <router-link :to="{ name: 'lists.index' }">Lists</router-link>
+                </li>
+            </div>
 
         </ul>
     </nav>

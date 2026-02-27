@@ -1,7 +1,7 @@
 <template>
     <div>
         <div
-            class="w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
+            class="lg:w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
         >
             <div>
                 <span
