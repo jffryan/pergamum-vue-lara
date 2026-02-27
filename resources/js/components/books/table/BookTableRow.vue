@@ -1,50 +1,91 @@
 <template>
-    <div class="grid grid-cols-12">
-        <div class="col-span-3 p-2">
-            <router-link
-                :to="{ name: 'books.show', params: { slug: bookData.slug } }"
-                class="block h-full w-full"
-            >
-                {{ bookData.title }}
-            </router-link>
-        </div>
-        <div class="col-span-2 p-2">
-            <router-link
-                :to="{
-                    name: 'authors.show',
-                    params: { slug: authorInfo.slug },
-                }"
-                class="block h-full w-full"
-                >{{ authorInfo.name }}</router-link
-            >
-        </div>
-        <div class="col-span-1 p-2">
-            <router-link
-                :to="{
-                    name: 'formats.show',
-                    params: { format: bookFormat.slug },
-                }"
-                class="block h-full w-full"
-                >{{ bookFormat.name }}</router-link
-            >
-        </div>
-        <div class="col-span-1 p-2">{{ pageCount }}</div>
-        <div class="col-span-3 p-2">
-            <span
-                v-for="(genre, idx) in primaryGenres"
-                :key="genre.id"
-                class="capitalize"
-            >
+    <div>
+        <!-- Mobile card layout -->
+        <div class="sm:hidden p-3">
+            <div class="font-medium">
                 <router-link
-                    :to="{ name: 'genres.show', params: { id: genre.id } }"
-                    >{{ genre.name }}</router-link
-                ><span v-if="idx < primaryGenres.length - 1">, </span>
-            </span>
+                    :to="{ name: 'books.show', params: { slug: bookData.slug } }"
+                >
+                    {{ bookData.title }}
+                </router-link>
+            </div>
+            <div class="text-sm text-slate-500 mt-0.5">
+                <router-link
+                    :to="{
+                        name: 'authors.show',
+                        params: { slug: authorInfo.slug },
+                    }"
+                    >{{ authorInfo.name }}</router-link
+                ><span v-if="bookFormat.name"> · {{ bookFormat.name }}</span>
+            </div>
+            <div class="text-sm flex justify-between mt-0.5">
+                <span class="capitalize text-slate-500">
+                    <span
+                        v-for="(genre, idx) in primaryGenres"
+                        :key="genre.id"
+                    >
+                        {{ genre.name
+                        }}<span v-if="idx < primaryGenres.length - 1"
+                            >,
+                        </span>
+                    </span>
+                </span>
+                <span class="text-slate-500 shrink-0 ml-2">
+                    <span v-if="calculatedRating">★{{ calculatedRating }}</span
+                    ><span v-if="formattedMostRecentDateRead">
+                        · {{ formattedMostRecentDateRead }}</span
+                    >
+                </span>
+            </div>
         </div>
 
-        <div class="col-span-1 p-2">{{ formattedMostRecentDateRead }}</div>
-        <div v-if="calculatedRating" class="col-span-1 p-2">
-            {{ calculatedRating }}
+        <!-- Desktop table row layout -->
+        <div class="hidden sm:grid grid-cols-12">
+            <div class="col-span-3 p-2">
+                <router-link
+                    :to="{ name: 'books.show', params: { slug: bookData.slug } }"
+                    class="block h-full w-full"
+                >
+                    {{ bookData.title }}
+                </router-link>
+            </div>
+            <div class="col-span-2 p-2">
+                <router-link
+                    :to="{
+                        name: 'authors.show',
+                        params: { slug: authorInfo.slug },
+                    }"
+                    class="block h-full w-full"
+                    >{{ authorInfo.name }}</router-link
+                >
+            </div>
+            <div class="col-span-1 p-2">
+                <router-link
+                    :to="{
+                        name: 'formats.show',
+                        params: { format: bookFormat.slug },
+                    }"
+                    class="block h-full w-full"
+                    >{{ bookFormat.name }}</router-link
+                >
+            </div>
+            <div class="col-span-1 p-2">{{ pageCount }}</div>
+            <div class="col-span-3 p-2">
+                <span
+                    v-for="(genre, idx) in primaryGenres"
+                    :key="genre.id"
+                    class="capitalize"
+                >
+                    <router-link
+                        :to="{ name: 'genres.show', params: { id: genre.id } }"
+                        >{{ genre.name }}</router-link
+                    ><span v-if="idx < primaryGenres.length - 1">, </span>
+                </span>
+            </div>
+            <div class="col-span-1 p-2">{{ formattedMostRecentDateRead }}</div>
+            <div v-if="calculatedRating" class="col-span-1 p-2">
+                {{ calculatedRating }}
+            </div>
         </div>
     </div>
 </template>

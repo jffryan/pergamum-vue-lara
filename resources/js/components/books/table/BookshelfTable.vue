@@ -3,7 +3,7 @@
         <h3 class="capitalize">{{ bookshelfTitle }}</h3>
         <div>
             <div
-                class="grid grid-cols-12 bg-slate-900 text-slate-200 rounded-t-md"
+                class="hidden sm:grid grid-cols-12 bg-slate-900 text-slate-200 rounded-t-md"
             >
                 <div
                     v-for="column in columns"

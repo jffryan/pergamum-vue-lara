@@ -65,9 +65,9 @@ const router = createRouter({
             component: () => import("@/views/CompletedView.vue"),
         },
         {
-            path: "/completed/statistics",
-            name: "completed.statistics",
-            component: () => import("@/views/CompletedStatisticsDashboard.vue"),
+            path: "/statistics",
+            name: "statistics",
+            component: () => import("@/views/StatisticsDashboard.vue"),
         },
         ...adminRoutes,
     ],
