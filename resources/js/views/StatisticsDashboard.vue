@@ -4,27 +4,27 @@
         <div v-if="statistics" class="bg-zinc-800 text-white">
             <div class="grid grid-cols-12 gap-2 sm:gap-4 p-4">
                 <div class="p-3 sm:p-4 bg-slate-600 col-span-6 sm:col-span-3">
-                    <span class="block text-5xl sm:text-7xl font-bold mb-2 sm:mb-4">{{
+                    <span class="block text-3xl sm:text-5xl font-bold mb-2 sm:mb-4">{{
                         totalUniqueCompleted
                     }}</span>
-                    <p class="text-sm sm:text-lg sm:ml-8">Unique Books Read</p>
+                    <p class="text-sm sm:text-lg">Unique Books Read</p>
                 </div>
                 <div class="p-3 sm:p-4 bg-slate-600 col-span-6 sm:col-span-3">
-                    <span class="block text-5xl sm:text-7xl font-bold mb-2 sm:mb-4">{{
+                    <span class="block text-3xl sm:text-5xl font-bold mb-2 sm:mb-4">{{
                         totalReads
                     }}</span>
-                    <p class="text-sm sm:text-lg sm:ml-8">Total Reads (incl. re-reads)</p>
+                    <p class="text-sm sm:text-lg">Total Reads (incl. re-reads)</p>
                 </div>
                 <div class="p-3 sm:p-4 bg-slate-600 col-span-6 sm:col-span-3">
-                    <span class="block text-5xl sm:text-7xl font-bold mb-2 sm:mb-4">{{
+                    <span class="block text-3xl sm:text-5xl font-bold mb-2 sm:mb-4">{{
                         totalBooks
                     }}</span>
-                    <p class="text-sm sm:text-lg sm:ml-8">Total Books in Catalog</p>
+                    <p class="text-sm sm:text-lg">Total Books in Catalog</p>
                 </div>
                 <div class="p-3 sm:p-4 bg-zinc-700 col-span-6 sm:col-span-3">
-                    <span class="block text-5xl sm:text-7xl font-bold mb-2 sm:mb-4">{{ percentageOfCollectionCompleted
+                    <span class="block text-3xl sm:text-5xl font-bold mb-2 sm:mb-4">{{ percentageOfCollectionCompleted
                     }}%</span>
-                    <p class="text-sm sm:text-lg sm:ml-8">
+                    <p class="text-sm sm:text-lg">
                         Percentage of Catalog Read
                     </p>
                 </div>

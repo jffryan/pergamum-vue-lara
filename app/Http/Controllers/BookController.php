@@ -341,10 +341,32 @@ class BookController extends Controller
                 throw new \Exception($bookUpdateResponse['error']);
             }
 
+            // Update authors
+            if (!empty($data['authors'])) {
+                $this->updateAuthors($existing_book, $data['authors']);
+            }
+
             // Update genres
             $genresUpdateResponse = $this->updateGenres($existing_book, $data['genres']);
             if (isset($genresUpdateResponse['error'])) {
                 throw new \Exception($genresUpdateResponse['error']);
+            }
+
+            // Update read instances (existing ones only — no UI to add new instances from edit view)
+            $existingInstances = array_values(array_filter(
+                $data['readInstances'] ?? [],
+                fn ($ri) => !empty($ri['read_instances_id'])
+            ));
+            if (!empty($existingInstances)) {
+                $readInstancesResponse = $this->updateReadInstances($existing_book, $existingInstances);
+                if (isset($readInstancesResponse['error'])) {
+                    throw new \Exception($readInstancesResponse['error']);
+                }
+            }
+
+            // Update versions
+            if (!empty($data['versions'])) {
+                $this->updateVersions($existing_book, $data['versions']);
             }
 
             DB::commit();

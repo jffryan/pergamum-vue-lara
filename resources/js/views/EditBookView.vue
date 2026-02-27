@@ -68,14 +68,37 @@
                         :key="version.version_id"
                         class="p-4 mb-4 bg-zinc-100 border rounded-md border-zinc-400 shadow-md"
                     >
-                        <p v-if="version.nickname">{{ version.nickname }}</p>
-                        <p>
-                            <strong>{{ version.format.name }}</strong>
-                        </p>
-                        <p>{{ version.page_count }}</p>
-                        <p v-if="version.format_id === 2">
-                            {{ calculateRuntime(version.audio_runtime) }}
-                        </p>
+                        <div class="mb-4">
+                            <label class="block mb-2 font-bold text-zinc-600">Format</label>
+                            <select v-model="version.format_id" class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none">
+                                <option value="" disabled>Select a format</option>
+                                <option
+                                    v-for="format in formats"
+                                    :key="format.format_id"
+                                    :value="format.format_id"
+                                >{{ format.name }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-2 font-bold text-zinc-600">Page Count</label>
+                            <input
+                                type="text"
+                                v-model="version.page_count"
+                                @input="version.page_count = $event.target.value.replace(/[^0-9]/g, '')"
+                            />
+                        </div>
+                        <div v-if="isAudiobook(version)" class="mb-4">
+                            <label class="block mb-2 font-bold text-zinc-600">Audio Runtime (minutes)</label>
+                            <input
+                                type="text"
+                                v-model="version.audio_runtime"
+                                @input="version.audio_runtime = $event.target.value.replace(/[^0-9]/g, '')"
+                            />
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-2 font-bold text-zinc-600">Nickname</label>
+                            <input type="text" v-model="version.nickname" placeholder="e.g. Hardcover" />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -134,7 +157,7 @@
                     Delete Book
                 </button>
                 <router-link
-                    :to="{ name: 'books.show', slug: currentSlug }"
+                    :to="{ name: 'books.show', params: { slug: currentSlug } }"
                     class="btn btn-secondary"
                     >Cancel</router-link
                 >
@@ -158,7 +181,7 @@
 </template>
 
 <script>
-import { useBooksStore } from "@/stores";
+import { useBooksStore, useConfigStore } from "@/stores";
 import {
     calculateRuntime,
     fetchBookData,
@@ -173,8 +196,10 @@ export default {
     name: "EditBookView",
     setup() {
         const BooksStore = useBooksStore();
+        const ConfigStore = useConfigStore();
         return {
             BooksStore,
+            ConfigStore,
             calculateRuntime,
             formatDateRead,
         };
@@ -192,6 +217,9 @@ export default {
             deleteConfirmation: false,
         };
     },
+    async created() {
+        await this.ConfigStore.checkForFormats();
+    },
     computed: {
         currentBook() {
             return this.BooksStore.allBooks.find(
@@ -201,30 +229,48 @@ export default {
         currentSlug() {
             return this.$route.params.slug;
         },
+        formats() {
+            return this.ConfigStore.books.formats;
+        },
     },
     methods: {
         setBookData(bookData) {
             this.bookData = JSON.parse(JSON.stringify(bookData));
         },
         async requestDeleteBook() {
-            const { book_id } = this.currentBook.book;
+            const { book_id } = this.bookData.book;
             await deleteBook(book_id);
             this.$router.push({ name: "library.index" });
         },
         addBlankGenre() {
-            // If last genre name isn't blank, add a new genre entry with a blank name
+            // If last genre name isn't blank (or list is empty), add a new genre entry with a blank name
             const lastGenre =
                 this.bookData.genres[this.bookData.genres.length - 1];
-            if (lastGenre.name) {
+            if (!lastGenre || lastGenre.name) {
                 this.bookData.genres.push({ name: "" });
             }
         },
+        isAudiobook(version) {
+            return this.formats.find((f) => f.format_id === version.format_id)?.name === "Audiobook";
+        },
         // Come back to this
         async initBookEdits() {
-            const { book_id } = this.currentBook.book;
+            const book_id = this.bookData.book.book_id;
+
+            const transformedVersions = this.bookData.versions.map((version) => ({
+                version_id: version.version_id,
+                format: version.format_id,
+                page_count: version.page_count,
+                audio_runtime: this.isAudiobook(version) ? version.audio_runtime : null,
+                nickname: version.nickname,
+            }));
+
             const bookEdits = {
                 book_id,
-                formData: this.bookData,
+                formData: {
+                    ...this.bookData,
+                    versions: transformedVersions,
+                },
             };
 
             const res = await this.submitBookEdits(bookEdits);
@@ -247,7 +293,7 @@ export default {
                 return res;
             } catch (error) {
                 this.showErrorMessage = true;
-                this.error = error;
+                this.error = error.message;
                 return error;
             }
         },

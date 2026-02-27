@@ -58,7 +58,7 @@
                         class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.edit',
-                            params: { slug: currentBook.slug },
+                            params: { slug: currentBook.book.slug },
                         }"
                         >Edit book</router-link
                     >
@@ -66,7 +66,7 @@
                         class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.add-read-history',
-                            params: { slug: currentBook.slug },
+                            params: { slug: currentBook.book.slug },
                         }"
                         >Add read history</router-link
                     >
@@ -74,7 +74,7 @@
                         class="btn btn-secondary text-center mr-4"
                         :to="{
                             name: 'books.add-version',
-                            params: { slug: currentBook.slug },
+                            params: { slug: currentBook.book.slug },
                         }"
                         >Add version</router-link
                     >

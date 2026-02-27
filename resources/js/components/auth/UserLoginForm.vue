@@ -52,7 +52,7 @@ const login = async () => {
             class="input"
         />
 
-        <button type="submit" class="btn">Login</button>
+        <button type="submit" class="btn btn-primary">Login</button>
 
         <p v-if="error" class="text-red-500 mt-2">{{ error }}</p>
     </base-form>

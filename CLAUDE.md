@@ -15,11 +15,13 @@ docker compose up -d          # Start all services (PHP, Nginx, Vite dev server,
 docker compose down           # Stop services
 ```
 
+The compose file is named `compose.yml` (not `docker-compose.yml`).
+
 Services:
 - **PHP** (Laravel) — app server
-- **Nginx** — web server / reverse proxy
-- **Vite** — frontend dev server (port 5173, configurable via `VITE_PORT`)
-- **MySQL 8.0** — database
+- **Nginx 1.27-alpine** — web server / reverse proxy (port 8080, configurable via `APP_HTTP_PORT`)
+- **Node 20-alpine** — Vite dev server (port 5173, configurable via `VITE_PORT`; dev profile only)
+- **MySQL 8.0** — database (port 3307 forward, configurable via `DB_PORT_FORWARD`)
 
 ## Commands
 
@@ -65,50 +67,93 @@ npx eslint resources/js --fix # Auto-fix
 
 ### Frontend (`resources/js/`)
 
-| Directory | Purpose |
-|-----------|---------|
+| Directory/File | Purpose |
+|----------------|---------|
 | `app.js` | Entry point — creates Vue app, registers plugins (Router, Pinia) |
+| `bootstrap.js` | Axios and Lodash setup; attaches Sanctum token to headers |
 | `App.vue` | Root layout (HeaderNav + SidebarNav wrapper) |
-| `router/` | Vue Router config; routes split into `book-routes.js` and `author-routes.js` |
-| `stores/` | Pinia stores: Auth, Books, Authors, Config, Genre, NewBook |
-| `api/` | Axios call modules (one per resource: BookController.js, AuthorController.js, etc.) |
+| `router/` | Vue Router config; routes split into `book-routes.js`, `author-routes.js`, `list-routes.js`, `admin-routes.js` |
+| `stores/` | Pinia stores: Auth, Books, Authors, Config, Genre, NewBook, Lists |
+| `api/` | Axios call modules: BookController.js, AuthorController.js, GenresController.js, VersionController.js, ListController.js, BulkUploadApi.js, apiHelpers.js |
 | `views/` | Full-page components mounted by the router |
 | `components/` | Reusable UI components, organized by feature subdirectory |
 | `services/` | Business logic (BookServices.js — validation, error handling) |
+| `utils/` | Shared utilities: validators.js, checkForChanges.js |
 
 `@` alias maps to `resources/js/`.
 
 Authentication is Sanctum token-based. The token is stored in AuthStore and attached to Axios headers via `resources/js/bootstrap.js`. CSRF is handled automatically through cookies.
 
+**Views:**
+- `HomeView.vue`, `LoginView.vue`, `AboutView.vue`, `UserDashboard.vue`
+- `LibraryView.vue`, `AddBooksView.vue`, `NewBookView.vue`, `BookView.vue`, `EditBookView.vue`
+- `AddReadHistoryView.vue`, `AddVersionView.vue`, `BulkUploadView.vue`
+- `AuthorView.vue`, `FormatView.vue`, `GenresView.vue`, `GenreView.vue`
+- `CompletedView.vue`, `StatisticsDashboard.vue`
+- `ListsView.vue`, `ListView.vue`
+- `ErrorNotFoundView.vue`
+- `admin/AdminHome.vue`, `admin/AdminActionView.vue`
+
+**Components (organized by subdirectory):**
+- `admin/` — Format management (CreateFormat.vue, FormatsIndex.vue, FormatsList.vue)
+- `auth/` — UserLoginForm.vue
+- `books/forms/` — BookCreateEditForm.vue
+- `books/table/` — BookshelfTable.vue, BookTableRow.vue, VersionTable.vue, VersionTableRow.vue
+- `lists/` — ListItemsTable.vue
+- `navs/` — HeaderNav.vue, SidebarNav.vue
+- `newBook/` — multi-step form components (NewBookTitleInput.vue, NewAuthorsInput.vue, NewGenresInput.vue, NewVersionsInput.vue, NewReadInstanceInput.vue, NewBookVersionConfirmation.vue, NewBookProgressForm.vue, NewBookSubmitControls.vue)
+- `updateBook/` — UpdateBookReadInstance.vue
+- `ui/forms/` — BaseForm.vue
+- `globals/alerts/` — AlertBox.vue
+- `globals/loading/` — PageLoadingIndicator.vue
+- `globals/svgs/` — CloseIcon.vue, UpArrow.vue
+
+**Frontend tests** live in `resources/js/tests/` (Vitest): `api/apiHelpers.test.js`, `services/BookServices.test.js`, `stores/BooksStore.test.js`, `stores/NewBookStore.test.js`.
+
 ### Backend (`app/`)
 
 | Directory | Purpose |
 |-----------|---------|
-| `Http/Controllers/` | Resource-style controllers (Books, Authors, Genres, Versions, Statistics, Users, etc.) |
-| `Models/` | Eloquent models: User, Book, Author, Genre, Format, Version, ReadInstance |
+| `Http/Controllers/` | Controllers: Books, Authors, Genres, Formats, Versions, Lists, ListItems, NewBook, Statistics, Config, BulkUpload, Users |
+| `Models/` | Eloquent models: User, Book, Author, Genre, Format, Version, ReadInstance, BookList, ListItem |
+| `Services/` | Backend business logic: BookService.php, AuthorService.php, StatisticsService.php |
+| `Policies/` | Authorization: BookListPolicy.php |
 
 **Model conventions:**
-- Custom primary keys: `book_id`, `author_id` (not the default `id`)
-- Slug-based URLs for book/author detail pages
+- Custom primary keys: `book_id`, `author_id`, `genre_id`, `format_id`, `version_id`, `list_id`, `list_item_id`, `read_instance_id`, `user_id` (not the default `id`)
+- Slug-based URLs for book, author, and format detail pages
 - Domain logic lives on models (e.g., date formatting methods)
 - Relationships: many-to-many for book↔author and book↔genre via pivot tables
 
-**Key API routes:**
+**Key API routes** (all protected by `auth:sanctum`):
 - `GET/POST /api/books` — book listing and creation
 - `GET /api/book/{slug}`, `GET /api/author/{slug}` — detail pages
-- `POST /api/create-book/*` — multi-step new book workflow
-- `POST /api/add-read-instance` — record a reading with date/format
-- `GET /api/completed/{year}` — yearly reading statistics
+- `POST /api/create-book/title`, `POST /api/create-book` — multi-step new book workflow
+- `POST /api/add-read-instance` — record a reading with date/format/rating
+- `GET /api/completed/years`, `GET /api/completed/{year}` — yearly reading statistics
 - `GET /api/statistics` — aggregate stats
-- `GET /api/config/formats` — format reference data
+- `GET /api/config/formats`, `POST /api/formats` — format reference data and creation
+- `POST /api/bulk-upload` — CSV bulk import of books
+- `GET/POST /api/lists`, `GET /api/lists/{id}` — reading lists CRUD
+- `PATCH /api/lists/{list}/reorder` — reorder list items (drag-and-drop)
+- `POST /api/lists/{list}/items`, `DELETE /api/lists/{list}/items/{item}` — list item management
+- `POST /api/create-authors`, `GET/POST /api/genres`, `POST /api/versions` — related resource creation
+- `GET /api/user` — current user info
 
 ### Database
 
 MySQL 8.0. Migrations are in `database/migrations/`. Notable schema:
 - `books` → `book_author` (pivot) → `authors`
 - `books` → `book_genre` (pivot) → `genres`
-- `books` → `versions` (format editions) → `read_instances` (per-read history)
-- `lists` → `list_items` (ordered book groupings; "backlog" is one type of list)
+- `books` → `versions` (format editions with `page_count`, `audio_runtime`, `nickname`) → `read_instances` (per-read history with `user_id`, `rating`, `date_read`)
+- `lists` → `list_items` (ordered book groupings; items reference `version_id`, not `book_id`)
+- `read_instances` is scoped to individual users via `user_id`
+
+### Key Dependencies
+
+**Frontend:** Vue 3.2, Vue Router 4, Pinia 2, Axios 1.5, Tailwind CSS 3, Vite 4, Vitest 3, Papaparse 5 (CSV parsing), SortableJS 1.15 + sortablejs-vue3 (drag-and-drop list reordering)
+
+**Backend:** Laravel 9, Laravel Sanctum 3, Laravel Pint 1, PHPUnit 9
 
 ## Code Style
 
