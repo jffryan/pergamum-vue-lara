@@ -197,7 +197,17 @@ class BookController extends Controller
                 $existing_author = Author::findOrFail($author['author_id']);
                 $existing_author->update($author);
             } else {
-                $existing_author = Author::create($author);
+                $firstName = $author['first_name'] ?? '';
+                $lastName = $author['last_name'] ?? '';
+                $slugParts = array_filter([$firstName, $lastName]);
+                $slug = strtolower(implode(' ', $slugParts));
+                $slug = preg_replace('/\s+/', ' ', $slug);
+                $slug = preg_replace('/[^a-z0-9\s]/', '', $slug);
+                $slug = str_replace(' ', '-', $slug);
+
+                $existing_author = Author::firstOrCreate(
+                    ['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]
+                );
                 $existing_book->authors()->attach($existing_author);
             }
             $updated_authors[] = $existing_author;

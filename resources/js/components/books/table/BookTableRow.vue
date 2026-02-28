@@ -146,6 +146,7 @@ export default {
             const readInstance = this.book.readInstances[0];
             // MM/DD/YY
             const unformattedDate = readInstance.date_read;
+            if (!unformattedDate) return "";
             const [year, month, day] = unformattedDate.split("-");
             const lastTwoDigitsOfYear = year.slice(-2);
             const formattedDateRead = `${month}/${day}/${lastTwoDigitsOfYear}`;

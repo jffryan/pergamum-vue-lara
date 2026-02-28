@@ -105,7 +105,7 @@
                     name="genres"
                     type="text"
                     placeholder="Genres"
-                    class="block bg-dark-mode-100 w-full border-b border-zinc-400 p-2 mb-4"
+                    class="block bg-dark-mode-100 w-full border-b border-zinc-400 capitalize p-2 mb-4"
                     v-model="bookForm.book.genres.raw"
                 />
                 <p v-if="!isValid.book.genres" class="p-2 text-red-300">

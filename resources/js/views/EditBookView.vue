@@ -20,42 +20,43 @@
                         Author<span v-if="bookData.authors.length > 1">s</span>:
                     </h2>
                     <div
-                        v-for="author in bookData.authors"
-                        :key="author.author_id"
-                        class="flex gap-x-4 mb-2"
+                        v-for="(author, idx) in bookData.authors"
+                        :key="author.author_id ? author.author_id : idx"
+                        class="mb-2"
                     >
-                        <input type="text" v-model="author.first_name" />
-                        <input type="text" v-model="author.last_name" />
+                        <div class="flex gap-x-4 items-center">
+                            <input type="text" v-model="author.first_name" placeholder="First" />
+                            <input
+                                type="text"
+                                v-model="author.last_name"
+                                placeholder="Last"
+                                @input="clearAuthorValidation(idx)"
+                            />
+                            <span
+                                v-if="bookData.authors.length > 1"
+                                @click="removeAuthor(idx)"
+                                class="text-sm hover:underline cursor-pointer"
+                                >Remove</span
+                            >
+                        </div>
+                        <p v-if="!isValidAuthors[idx]" class="text-sm text-red-500">
+                            Last name is required.
+                        </p>
                     </div>
+                    <span
+                        @click="addBlankAuthor"
+                        :class="[
+                            'text-sm cursor-pointer',
+                            canAddMoreAuthors
+                                ? 'hover:underline'
+                                : 'text-zinc-400 cursor-not-allowed',
+                        ]"
+                        >Add new author +</span
+                    >
                 </div>
                 <div class="mb-4">
                     <h2>Genres:</h2>
-                    <div
-                        v-for="genre in bookData.genres"
-                        :key="genre.genre_id"
-                        class="flex gap-x-4"
-                    >
-                        <input
-                            type="text"
-                            v-model="genre.name"
-                            class="capitalize mb-2"
-                        />
-                        <span
-                            @click="
-                                bookData.genres.splice(
-                                    bookData.genres.indexOf(genre),
-                                    1,
-                                )
-                            "
-                            class="text-sm hover:underline cursor-pointer"
-                            >Remove</span
-                        >
-                    </div>
-                    <span
-                        @click="addBlankGenre"
-                        class="text-sm hover:underline cursor-pointer"
-                        >Add new genre +</span
-                    >
+                    <GenreTagInput v-model="bookData.genres" />
                 </div>
             </div>
             <div
@@ -188,9 +189,11 @@ import {
     formatDateRead,
 } from "@/services/BookServices";
 import { updateBook, deleteBook } from "@/api/BookController";
+import { validateString } from "@/utils/validators";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
+import GenreTagInput from "@/components/newBook/GenreTagInput.vue";
 
 export default {
     name: "EditBookView",
@@ -207,6 +210,7 @@ export default {
     components: {
         AlertBox,
         PageLoadingIndicator,
+        GenreTagInput,
     },
     data() {
         return {
@@ -215,6 +219,7 @@ export default {
             error: "",
             bookData: null,
             deleteConfirmation: false,
+            isValidAuthors: [],
         };
     },
     async created() {
@@ -229,6 +234,11 @@ export default {
         currentSlug() {
             return this.$route.params.slug;
         },
+        canAddMoreAuthors() {
+            if (!this.bookData) return false;
+            const lastAuthor = this.bookData.authors[this.bookData.authors.length - 1];
+            return lastAuthor.first_name !== "" || lastAuthor.last_name !== "";
+        },
         formats() {
             return this.ConfigStore.books.formats;
         },
@@ -236,25 +246,42 @@ export default {
     methods: {
         setBookData(bookData) {
             this.bookData = JSON.parse(JSON.stringify(bookData));
+            this.isValidAuthors = this.bookData.authors.map(() => true);
         },
         async requestDeleteBook() {
             const { book_id } = this.bookData.book;
             await deleteBook(book_id);
             this.$router.push({ name: "library.index" });
         },
-        addBlankGenre() {
-            // If last genre name isn't blank (or list is empty), add a new genre entry with a blank name
-            const lastGenre =
-                this.bookData.genres[this.bookData.genres.length - 1];
-            if (!lastGenre || lastGenre.name) {
-                this.bookData.genres.push({ name: "" });
-            }
-        },
         isAudiobook(version) {
             return this.formats.find((f) => f.format_id === version.format_id)?.name === "Audiobook";
         },
+        addBlankAuthor() {
+            if (this.canAddMoreAuthors) {
+                this.bookData.authors.push({ first_name: "", last_name: "" });
+                this.isValidAuthors.push(true);
+            }
+        },
+        removeAuthor(idx) {
+            if (this.bookData.authors.length > 1) {
+                this.bookData.authors.splice(idx, 1);
+                this.isValidAuthors.splice(idx, 1);
+            }
+        },
+        clearAuthorValidation(idx) {
+            this.isValidAuthors[idx] = true;
+        },
+        validateAuthors() {
+            this.isValidAuthors = this.bookData.authors.map((author) =>
+                validateString(author.last_name),
+            );
+            return this.isValidAuthors.every((v) => v);
+        },
         // Come back to this
         async initBookEdits() {
+            if (!this.validateAuthors()) {
+                return;
+            }
             const book_id = this.bookData.book.book_id;
 
             const transformedVersions = this.bookData.versions.map((version) => ({

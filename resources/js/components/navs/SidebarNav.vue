@@ -6,7 +6,7 @@
                 <li>
                     <router-link :to="{ name: 'library.index' }">Library</router-link>
                 </li>
-                <li class="ml-4">
+                <li>
                     <router-link :to="{ name: 'genres.index' }">Genres</router-link>
                 </li>
             </div>
@@ -23,7 +23,7 @@
                 <li>
                     <router-link :to="{ name: 'completed.home' }">Completed</router-link>
                 </li>
-                <li class="mb-2 ml-4">
+                <li>
                     <router-link :to="{ name: 'statistics' }">Statistics</router-link>
                 </li>
             </div>

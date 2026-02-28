@@ -19,7 +19,8 @@
             <div v-if="totalItems === 0" class="text-gray-500">
                 This list has no items yet.
             </div>
-            <div v-else class="bg-zinc-800 text-white rounded">
+            <template v-else>
+            <div class="bg-zinc-800 text-white rounded">
                 <div class="grid grid-cols-12 gap-2 sm:gap-4 p-4">
                     <!-- Total items -->
                     <div class="p-3 sm:p-4 bg-slate-600 col-span-6 sm:col-span-3">
@@ -61,14 +62,16 @@
                     >
                         <h3 class="font-semibold mb-3">Genres</h3>
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                            <span
+                            <button
                                 v-for="genre in genreCounts"
                                 :key="genre.name"
-                                class="text-sm capitalize"
+                                class="text-sm capitalize text-left hover:underline"
+                                :class="selectedGenre === genre.name ? 'font-semibold' : ''"
+                                @click="toggleGenre(genre.name)"
                             >
                                 {{ genre.name }}
                                 <span class="text-zinc-400">({{ genre.count }})</span>
-                            </span>
+                            </button>
                         </div>
                     </div>
 
@@ -84,6 +87,23 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Genre-filtered bookshelf table -->
+            <div v-if="selectedGenre" class="mt-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-lg font-semibold capitalize">
+                        {{ selectedGenre }} books in this list
+                    </h2>
+                    <button
+                        @click="selectedGenre = null"
+                        class="text-sm text-gray-500 hover:underline"
+                    >
+                        ✕ Close
+                    </button>
+                </div>
+                <BookshelfTable :books="booksForGenre" :bookshelf-title="''" />
+            </div>
+            </template>
         </div>
     </div>
 </template>
@@ -91,12 +111,14 @@
 <script>
 import { getOneList } from "@/api/ListController";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
+import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 
 export default {
     name: "ListStatisticsView",
     components: {
         AlertBox,
+        BookshelfTable,
         PageLoadingIndicator,
     },
     data() {
@@ -105,23 +127,25 @@ export default {
             showErrorMessage: false,
             error: "",
             list: null,
+            selectedGenre: null,
         };
     },
     computed: {
         items() {
             return this.list?.items ?? [];
         },
-        // Deduplicated by book — used for per-book stats
-        uniqueBooks() {
+        // Deduplicated by book — preserves the full item (including version) for each unique book
+        uniqueItems() {
             const seen = new Set();
-            return this.items
-                .filter((item) => {
-                    const bookId = item.version.book.book_id;
-                    if (seen.has(bookId)) return false;
-                    seen.add(bookId);
-                    return true;
-                })
-                .map((item) => item.version.book);
+            return this.items.filter((item) => {
+                const bookId = item.version.book.book_id;
+                if (seen.has(bookId)) return false;
+                seen.add(bookId);
+                return true;
+            });
+        },
+        uniqueBooks() {
+            return this.uniqueItems.map((item) => item.version.book);
         },
         totalItems() {
             return this.uniqueBooks.length;
@@ -159,6 +183,26 @@ export default {
             if (!ratings.length) return null;
             const avg = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
             return (avg / 2).toFixed(1);
+        },
+        // List items filtered to selectedGenre, shaped for BookshelfTable/BookTableRow
+        booksForGenre() {
+            if (!this.selectedGenre) return [];
+            return this.uniqueItems
+                .filter((item) =>
+                    item.version.book.genres.some((g) => g.name === this.selectedGenre),
+                )
+                .map((item) => ({
+                    book: item.version.book,
+                    authors: item.version.book.authors,
+                    versions: [item.version],
+                    genres: item.version.book.genres,
+                    readInstances: item.version.book.read_instances,
+                }));
+        },
+    },
+    methods: {
+        toggleGenre(genreName) {
+            this.selectedGenre = this.selectedGenre === genreName ? null : genreName;
         },
     },
     async mounted() {
