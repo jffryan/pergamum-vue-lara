@@ -6,7 +6,7 @@
         <AlertBox :message="error" alert-type="danger" />
     </div>
     <div v-else>
-        <div class="grid grid-cols-2">
+        <div class="grid grid-cols-1 lg:grid-cols-2">
             <div class="mb-12">
                 <div class="mb-4">
                     <router-link :to="{ name: 'library.index' }" class="block"
@@ -52,7 +52,7 @@
                     </router-link>
                 </p>
             </div>
-            <div class="pl-12">
+            <div class="lg:pl-12">
                 <div class="mb-8 flex items-center flex-wrap gap-2">
                     <router-link
                         class="btn btn-secondary text-center mr-4"
@@ -108,15 +108,38 @@
                         </div>
                     </div>
                 </div>
+                <div v-if="listsContainingBook.length > 0" class="mt-8">
+                    <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
+                        <h3 class="mb-0">In Your Lists</h3>
+                    </div>
+                    <div class="p-4 rounded-b-md bg-slate-200">
+                        <ul>
+                            <li
+                                v-for="list in listsContainingBook"
+                                :key="list.list_id"
+                            >
+                                <router-link
+                                    :to="{
+                                        name: 'lists.show',
+                                        params: { id: list.list_id },
+                                    }"
+                                    class="hover:underline"
+                                    >{{ list.name }}</router-link
+                                >
+                            </li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <script>
-import { useBooksStore } from "@/stores";
+import { useBooksStore, useListsStore } from "@/stores";
 
 import { fetchBookData } from "@/services/BookServices";
+import { getAllLists } from "@/api/ListController";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -126,9 +149,11 @@ export default {
     name: "BookView",
     setup() {
         const BooksStore = useBooksStore();
+        const ListsStore = useListsStore();
 
         return {
             BooksStore,
+            ListsStore,
         };
     },
     components: {
@@ -215,12 +240,32 @@ export default {
 
             return formattedReadInstances;
         },
+        listsContainingBook() {
+            if (!this.currentBook) return [];
+            const versionIds = new Set(
+                this.currentBook.versions.map((v) => v.version_id),
+            );
+            return this.ListsStore.allLists.filter(
+                (list) =>
+                    list.items &&
+                    list.items.some((item) => versionIds.has(item.version_id)),
+            );
+        },
     },
     methods: {
         findReadInstanceVersion(version_id) {
             return this.currentBook.versions.find(
                 (version) => version.version_id === version_id,
             );
+        },
+        async fetchListsIfNeeded() {
+            if (this.ListsStore.allLists.length > 0) return;
+            try {
+                const res = await getAllLists();
+                this.ListsStore.setAllLists(res.data);
+            } catch (error) {
+                console.error("Error fetching lists:", error);
+            }
         },
         async setBookData() {
             // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard
@@ -238,6 +283,9 @@ export default {
             this.BooksStore.addBook(bookData);
             this.isLoading = false;
         },
+    },
+    async mounted() {
+        await this.fetchListsIfNeeded();
     },
     watch: {
         currentSlug: {

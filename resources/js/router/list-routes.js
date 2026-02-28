@@ -9,6 +9,11 @@ const listRoutes = [
         name: "lists.show",
         component: () => import("@/views/ListView.vue"),
     },
+    {
+        path: "/lists/:id/statistics",
+        name: "lists.statistics",
+        component: () => import("@/views/ListStatisticsView.vue"),
+    },
 ];
 
 export default listRoutes;

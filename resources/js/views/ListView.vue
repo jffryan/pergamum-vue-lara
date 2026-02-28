@@ -51,9 +51,14 @@
                 </div>
             </div>
 
-            <router-link :to="{ name: 'lists.index' }" class="block mb-4 text-sm text-gray-500 hover:underline">
-                ← Back to Lists
-            </router-link>
+            <div class="flex gap-4 mb-4">
+                <router-link :to="{ name: 'lists.index' }" class="text-sm text-gray-500 hover:underline">
+                    ← Back to Lists
+                </router-link>
+                <router-link :to="{ name: 'lists.statistics', params: { id: list.list_id } }" class="text-sm text-gray-500 hover:underline">
+                    Statistics →
+                </router-link>
+            </div>
 
             <ListItemsTable
                 :items="list.items"

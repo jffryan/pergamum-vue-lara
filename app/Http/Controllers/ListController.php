@@ -16,12 +16,21 @@ class ListController extends Controller
 
     public function index()
     {
-        return auth()->user()->lists;
+        return auth()->user()->lists()->with('items:list_item_id,list_id,version_id')->get();
     }
 
     public function show(BookList $list)
     {
-        $list->load('items.version.book.authors', 'items.version.format');
+        $userId = auth()->id();
+        $list->load([
+            'items.version.book.authors',
+            'items.version.book.genres:genre_id,name',
+            'items.version.book.readInstances' => function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->select(['read_instance_id', 'book_id', 'rating']);
+            },
+            'items.version.format',
+        ]);
         return $list;
     }
 
