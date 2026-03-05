@@ -91,11 +91,11 @@
                     <div class="p-4 rounded-b-md bg-slate-200">
                         <div
                             v-for="readInstance in readHistory"
-                            :key="readInstance.date_read"
+                            :key="readInstance.id"
                         >
                             <p>
                                 <span class="text-zinc-600">Date read: </span
-                                >{{ readInstance.date_read }}
+                                >{{ readInstance.date_read ?? 'Date unknown' }}
                             </p>
                             <p>
                                 <span class="text-zinc-600">Version: </span
@@ -132,6 +132,16 @@
                 </div>
             </div>
         </div>
+        <div v-if="authorRelatedBooks.length > 0" class="mt-12">
+            <h3 class="mb-4">Other books by this author</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <BookCard
+                    v-for="authorRelatedBook in authorRelatedBooks"
+                    :key="authorRelatedBook.book.book_id"
+                    :book="authorRelatedBook"
+                />
+            </div>
+        </div>
     </div>
 </template>
 
@@ -144,6 +154,7 @@ import { getAllLists } from "@/api/ListController";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 import VersionTable from "@/components/books/table/VersionTable.vue";
+import BookCard from "@/components/books/BookCard.vue";
 
 export default {
     name: "BookView",
@@ -160,6 +171,7 @@ export default {
         AlertBox,
         PageLoadingIndicator,
         VersionTable,
+        BookCard,
     },
     data() {
         return {
@@ -213,8 +225,13 @@ export default {
                 const readInstance = readInstances[i];
                 // Format date
                 const unformattedDate = readInstance.date_read;
-                const [year, month, day] = unformattedDate.split("-");
-                const formattedDateRead = `${month}/${day}/${year}`;
+                let formattedDateRead;
+                if (unformattedDate) {
+                    const [year, month, day] = unformattedDate.split("-");
+                    formattedDateRead = `${month}/${day}/${year}`;
+                } else {
+                    formattedDateRead = null;
+                }
                 // Find the version
                 const readInstanceVersion = this.findReadInstanceVersion(
                     readInstance.version_id,
@@ -230,6 +247,7 @@ export default {
                 }
                 // Format the read instance
                 const formattedReadInstance = {
+                    id: readInstance.read_instance_id,
                     date_read: formattedDateRead,
                     version: versionFormatName,
                     rating,
@@ -239,6 +257,10 @@ export default {
             // MM/DD/YYYY
 
             return formattedReadInstances;
+        },
+        authorRelatedBooks() {
+            if (!this.currentBook || !this.currentBook.authorRelatedBooks) return [];
+            return this.currentBook.authorRelatedBooks;
         },
         listsContainingBook() {
             if (!this.currentBook) return [];
@@ -269,7 +291,7 @@ export default {
         },
         async setBookData() {
             // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard
-            if (this.currentBook) {
+            if (this.currentBook && "authorRelatedBooks" in this.currentBook) {
                 this.isLoading = false;
                 return;
             }
@@ -280,7 +302,11 @@ export default {
                 this.isLoading = false;
                 return;
             }
-            this.BooksStore.addBook(bookData);
+            if (this.currentBook) {
+                this.BooksStore.updateBook(bookData);
+            } else {
+                this.BooksStore.addBook(bookData);
+            }
             this.isLoading = false;
         },
     },

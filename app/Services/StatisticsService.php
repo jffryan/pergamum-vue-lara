@@ -35,6 +35,7 @@ class StatisticsService
     {
         return ReadInstance::selectRaw('YEAR(date_read) as year, COUNT(*) as total')
             ->where('user_id', auth()->id())
+            ->whereNotNull('date_read')
             ->groupBy('year')
             ->orderBy('year', 'desc')
             ->get();
@@ -45,6 +46,7 @@ class StatisticsService
         return ReadInstance::join('versions', 'read_instances.version_id', '=', 'versions.version_id')
             ->selectRaw('YEAR(read_instances.date_read) as year, SUM(versions.page_count) as total')
             ->where('read_instances.user_id', auth()->id())
+            ->whereNotNull('read_instances.date_read')
             ->whereNotNull('versions.page_count')
             ->groupBy('year')
             ->orderBy('year', 'desc')

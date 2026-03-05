@@ -8,7 +8,8 @@
                 <label
                     for="date_read"
                     class="block mb-2 font-bold text-zinc-600 mr-6"
-                    >Date Completed</label
+                    >Date Completed
+                    <span class="font-normal text-zinc-400 text-sm">(optional)</span></label
                 >
                 <input
                     type="text"
@@ -19,6 +20,7 @@
                     placeholder="MM/DD/YYYY"
                     class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
                 />
+                <p class="text-xs text-zinc-400">Leave blank if you don't remember when you read this.</p>
             </div>
             <!-- END DATE COMPLETED -->
             <div class="mb-4">
@@ -40,7 +42,7 @@
                             (_, i) => 1 + i * 0.5,
                         )"
                         :key="idx"
-                        :value="rating * 2"
+                        :value="rating"
                         class="text-zinc-700"
                     >
                         {{ rating }}
@@ -107,14 +109,15 @@ export default {
             return value;
         },
         validateReadInstance() {
-            return this.readInstance.date_read && this.readInstance.rating;
+            return true;
         },
         async addReadInstanceToBookData() {
-            if (!this.validateReadInstance()) {
-                return;
-            }
+            const readInstancePayload = {
+                ...this.readInstance,
+                date_read: this.readInstance.date_read || null,
+            };
             this.NewBookStore.addReadInstanceToExistingBookVersion(
-                this.readInstance,
+                readInstancePayload,
                 this.selectedVersion,
             );
 

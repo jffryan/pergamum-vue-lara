@@ -22,12 +22,27 @@ class BookService
 
         $bookAttributes = $book->only(['book_id', 'title', 'slug']);
 
+        $authorIds = $book->authors->pluck('author_id');
+        $authorRelatedBooks = Book::with(['authors', 'genres'])
+            ->whereHas('authors', function ($q) use ($authorIds) {
+                $q->whereIn('authors.author_id', $authorIds);
+            })
+            ->where('book_id', '!=', $book->book_id)
+            ->limit(3)
+            ->get()
+            ->map(fn ($b) => [
+                'book' => $b->only(['book_id', 'title', 'slug']),
+                'authors' => $b->authors,
+                'genres' => $b->genres,
+            ]);
+
         return [
             'book' => $bookAttributes,
             'authors' => $book->authors,
             'versions' => $book->versions,
             'genres' => $book->genres,
             'readInstances' => $book->readInstances,
+            'authorRelatedBooks' => $authorRelatedBooks,
         ];
     }
 
@@ -49,6 +64,7 @@ class BookService
     {
         return ReadInstance::selectRaw('YEAR(date_read) as year')
             ->where('user_id', auth()->id())
+            ->whereNotNull('date_read')
             ->distinct()
             ->orderBy('year', 'desc')
             ->pluck('year')
