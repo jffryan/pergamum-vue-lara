@@ -73,7 +73,9 @@ export default {
     },
     computed: {
         allLists() {
-            return this.ListsStore.allLists;
+            return [...this.ListsStore.allLists].sort((a, b) =>
+                a.name.localeCompare(b.name)
+            );
         },
     },
     methods: {
