@@ -47,6 +47,8 @@ services:
       - appnet
     depends_on:
       - php
+    profiles:
+      - dev
 
   db:
     image: mysql:8.0
