@@ -14,17 +14,17 @@ return new class extends Migration
     public function up()
     {
         Schema::create('book_genre', function (Blueprint $table) {
-            $table->id("book_genre_id");
+            $table->id('book_genre_id');
 
-            $table->unsignedBigInteger("book_id")->index();
-            $table->foreign("book_id")->references("book_id")
-                ->on("books")
-                ->onDelete("cascade");
+            $table->unsignedBigInteger('book_id')->index();
+            $table->foreign('book_id')->references('book_id')
+                ->on('books')
+                ->onDelete('cascade');
 
-            $table->unsignedBigInteger("genre_id")->index();
-            $table->foreign("genre_id")->references("genre_id")
-                ->on("genres")
-                ->onDelete("cascade");
+            $table->unsignedBigInteger('genre_id')->index();
+            $table->foreign('genre_id')->references('genre_id')
+                ->on('genres')
+                ->onDelete('cascade');
             $table->timestamps();
         });
     }

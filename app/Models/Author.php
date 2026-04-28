@@ -10,13 +10,12 @@ class Author extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = "author_id";
+    protected $primaryKey = 'author_id';
 
     protected $fillable = ['first_name', 'last_name', 'slug'];
 
-    public function books(): BelongsToMany 
+    public function books(): BelongsToMany
     {
-        return $this->belongsToMany(Book::class, "book_author", "author_id", "book_id")->withTimestamps();
+        return $this->belongsToMany(Book::class, 'book_author', 'author_id', 'book_id')->withTimestamps();
     }
-
 }

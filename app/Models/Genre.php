@@ -10,12 +10,12 @@ class Genre extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = "genre_id";
+    protected $primaryKey = 'genre_id';
 
     protected $fillable = ['name'];
 
-    public function books(): BelongsToMany 
+    public function books(): BelongsToMany
     {
-        return $this->belongsToMany(Book::class, "book_genre", "genre_id", "book_id")->withTimestamps();
+        return $this->belongsToMany(Book::class, 'book_genre', 'genre_id', 'book_id')->withTimestamps();
     }
 }

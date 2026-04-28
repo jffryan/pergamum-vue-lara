@@ -14,9 +14,9 @@ return new class extends Migration
     public function up()
     {
         Schema::create('authors', function (Blueprint $table) {
-            $table->id("author_id");
-            $table->string("first_name")->nullable();
-            $table->string("last_name");
+            $table->id('author_id');
+            $table->string('first_name')->nullable();
+            $table->string('last_name');
             $table->string('slug')->nullable();
             $table->timestamps();
         });

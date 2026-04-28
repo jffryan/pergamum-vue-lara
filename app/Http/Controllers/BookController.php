@@ -6,19 +6,18 @@ use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
 use App\Models\Genre;
-use App\Models\Version;
 use App\Models\ReadInstance;
+use App\Models\Version;
 use App\Services\BookService;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class BookController extends Controller
 {
-
     protected $bookService;
 
     public function __construct(BookService $bookService)
@@ -29,9 +28,8 @@ class BookController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
-
     public function index(Request $request)
     {
         if ($request->has('search')) {
@@ -67,15 +65,15 @@ class BookController extends Controller
 
         // Return paginated results
         return response()->json([
-            'books' =>  $formattedBooks,
+            'books' => $formattedBooks,
             'pagination' => [
                 'total' => $books->total(),
                 'perPage' => $books->perPage(),
                 'currentPage' => $books->currentPage(),
                 'lastPage' => $books->lastPage(),
                 'from' => $books->firstItem(),
-                'to' => $books->lastItem()
-            ]
+                'to' => $books->lastItem(),
+            ],
         ]);
     }
 
@@ -87,14 +85,13 @@ class BookController extends Controller
         // Fetch the ID of the specified format
         $format = Format::where('slug', $formatName)->first();
 
-        if (!$format) {
+        if (! $format) {
             return response()->json(['message' => 'Format not found'], 404);
         }
 
         Log::info(Book::whereHas('versions', function ($query) use ($format) {
             $query->where('format_id', $format->id);
         })->toSql());
-
 
         // Fetch paginated books that have a version matching the given format ID
         $books = Book::whereHas('versions', function ($query) use ($format) {
@@ -107,8 +104,7 @@ class BookController extends Controller
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function store(Request $request)
     {
@@ -116,7 +112,7 @@ class BookController extends Controller
 
         $book = $this->createOrGetBook($bookForm['book']);
 
-        if (!$book->wasRecentlyCreated) {
+        if (! $book->wasRecentlyCreated) {
             // If the book was not recently created (i.e., it existed), we'll just add a new version
             $new_versions = $this->prepareVersions($bookForm['versions']);
             $book->versions()->saveMany($new_versions);
@@ -134,7 +130,7 @@ class BookController extends Controller
 
         if (isset($bookForm['readInstances'])) {
             $readInstancesData = array_filter($bookForm['readInstances'], function ($instance) {
-                return !empty($instance['date_read']);
+                return ! empty($instance['date_read']);
             });
 
             $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
@@ -146,24 +142,25 @@ class BookController extends Controller
     /**
      * Display the specified resource.
      *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\Response
+     * @param  Book  $book
+     * @return Response
      */
     public function show($book_id)
     {
         $response = $this->bookService->getBookWithRelations($book_id, 'id');
+
         return response()->json($response);
     }
 
     public function getOneBookFromSlug($slug)
     {
         $response = $this->bookService->getBookWithRelations($slug, 'slug');
+
         return response()->json($response);
     }
 
     /**
      * Helper functions for update
-     * 
      */
     private function updateBook($existing_book, $patch_book)
     {
@@ -184,7 +181,7 @@ class BookController extends Controller
             return ['book' => $existing_book];
         } catch (\Exception $e) {
             // Return an error response if something goes wrong
-            return ['error' => 'An error occurred while updating the book details. ' . $e->getMessage()];
+            return ['error' => 'An error occurred while updating the book details. '.$e->getMessage()];
         }
     }
 
@@ -242,6 +239,7 @@ class BookController extends Controller
                     $existing_book->versions()->save($prepared_version);
                     $updated_versions[] = $prepared_version;
                 }
+
                 continue;
             }
 
@@ -259,36 +257,36 @@ class BookController extends Controller
     {
         // We'll collect all genre IDs for syncing here.
         $genreIds = [];
-    
+
         foreach ($genresInput as $input) {
             // Check if an ID is present and valid
-            if (!empty($input['genre_id'])) {
+            if (! empty($input['genre_id'])) {
                 // Make sure this ID actually exists in the DB
                 $existingGenre = Genre::find($input['genre_id']);
-    
+
                 if ($existingGenre) {
                     // Use the existing ID; ignore any name changes
                     $genreIds[] = $existingGenre->genre_id;
                 } else {
                     // If somehow the ID isn't valid, but we do have a name, treat it like a new record
-                    if (!empty($input['name'])) {
+                    if (! empty($input['name'])) {
                         $genre = Genre::firstOrCreate(['name' => $input['name']]);
                         $genreIds[] = $genre->genre_id;
                     }
                 }
             } else {
                 // No genre_id, must rely on name
-                if (!empty($input['name'])) {
+                if (! empty($input['name'])) {
                     // Look up existing genre by name, or create
                     $genre = Genre::firstOrCreate(['name' => $input['name']]);
                     $genreIds[] = $genre->genre_id;
                 }
             }
         }
-    
+
         // Sync the collected IDs
         $existingBook->genres()->sync($genreIds);
-    
+
         // Return the Genre instances for convenience
         return Genre::findMany($genreIds);
     }
@@ -324,18 +322,15 @@ class BookController extends Controller
             return ['success' => true, 'readInstances' => $updated_read_instances]; // Return a success response with data
         } catch (\Exception $e) {
             // Return an error response if something goes wrong
-            return ['error' => 'An error occurred while updating read instances. ' . $e->getMessage()];
+            return ['error' => 'An error occurred while updating read instances. '.$e->getMessage()];
         }
     }
-
-
 
     /**
      * Update the specified resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\Response
+     * @param  Book  $book
+     * @return Response
      */
     public function update(Request $request, $id)
     {
@@ -352,7 +347,7 @@ class BookController extends Controller
             }
 
             // Update authors
-            if (!empty($data['authors'])) {
+            if (! empty($data['authors'])) {
                 $this->updateAuthors($existing_book, $data['authors']);
             }
 
@@ -365,9 +360,9 @@ class BookController extends Controller
             // Update read instances (existing ones only — no UI to add new instances from edit view)
             $existingInstances = array_values(array_filter(
                 $data['readInstances'] ?? [],
-                fn ($ri) => !empty($ri['read_instances_id'])
+                fn ($ri) => ! empty($ri['read_instances_id'])
             ));
-            if (!empty($existingInstances)) {
+            if (! empty($existingInstances)) {
                 $readInstancesResponse = $this->updateReadInstances($existing_book, $existingInstances);
                 if (isset($readInstancesResponse['error'])) {
                     throw new \Exception($readInstancesResponse['error']);
@@ -375,7 +370,7 @@ class BookController extends Controller
             }
 
             // Update versions
-            if (!empty($data['versions'])) {
+            if (! empty($data['versions'])) {
                 $this->updateVersions($existing_book, $data['versions']);
             }
 
@@ -384,18 +379,17 @@ class BookController extends Controller
             return response()->json($this->bookService->getBookWithRelations($existing_book->book_id));
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error updating book: ' . $e->getMessage());
+            Log::error('Error updating book: '.$e->getMessage());
 
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-
     /**
      * Remove the specified resource from storage.
      *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\Response
+     * @param  Book  $book
+     * @return Response
      */
     public function destroy($book_id)
     {
@@ -415,7 +409,7 @@ class BookController extends Controller
             foreach ($authors as $author) {
                 $author->load('books');
                 if ($author->books->count() == 0) {
-                    $fullName = $author->first_name . ' ' . $author->last_name;
+                    $fullName = $author->first_name.' '.$author->last_name;
                     $authorsToBeDeleted[] = $fullName;
                     $author->delete();
                 }
@@ -423,10 +417,11 @@ class BookController extends Controller
 
             return response()->json([
                 'message' => 'Book deleted successfully',
-                'deleted_authors' => $authorsToBeDeleted
+                'deleted_authors' => $authorsToBeDeleted,
             ]);
         });
     }
+
     public function getCompletedYears()
     {
         return response()->json($this->bookService->getAvailableYears());
@@ -435,8 +430,10 @@ class BookController extends Controller
     public function getBooksByYear($year)
     {
         $books = $this->bookService->getCompletedItemsForYear($year);
+
         return response()->json($books);
     }
+
     public function addReadInstance(Request $request)
     {
         $read_instance_data = $request['readInstance'];
@@ -446,7 +443,7 @@ class BookController extends Controller
         $book = Book::findOrFail($book_id);
         $version = Version::findOrFail($version_id);
 
-        if (!$book || !$version) {
+        if (! $book || ! $version) {
             return response()->json(['message' => 'Book or version not found'], 404);
         }
 
@@ -464,10 +461,7 @@ class BookController extends Controller
 
     /**
      * Helper functions
-     * 
      */
-
-
     private function createOrGetBook($bookData)
     {
         $slug = Str::of($bookData['title'])
@@ -490,6 +484,7 @@ class BookController extends Controller
 
         return Book::create($data);
     }
+
     private function handleAuthors($authorsData)
     {
         return collect($authorsData)->map(function ($author) {
@@ -506,6 +501,7 @@ class BookController extends Controller
             return Author::firstOrCreate($author);
         })->all();
     }
+
     private function prepareVersions($versions_data)
     {
         $new_versions = [];
@@ -514,7 +510,7 @@ class BookController extends Controller
             $new_version = new Version;
             $format = Format::find($version_data['format']);
 
-            if (!$format) {
+            if (! $format) {
                 // Handle error here
                 continue;
             }
@@ -544,6 +540,7 @@ class BookController extends Controller
             return Genre::firstOrCreate(['name' => $genre]);
         })->all();
     }
+
     private function attachModels($book, $authors, $versions, $genres)
     {
         $authorIds = array_map(function ($author) {
@@ -558,6 +555,7 @@ class BookController extends Controller
         $book->versions()->saveMany($versions);
         $book->genres()->attach($genreIds);
     }
+
     private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
     {
         $nestedResponse = [
@@ -565,7 +563,7 @@ class BookController extends Controller
             'authors' => $authors,
             'versions' => $versions,
             'genres' => $genres,
-            'readInstances' => $readInstances
+            'readInstances' => $readInstances,
         ];
 
         return response()->json($nestedResponse);
@@ -600,15 +598,15 @@ class BookController extends Controller
 
         // Return paginated results
         return response()->json([
-            'books' =>  $formattedBooks,
+            'books' => $formattedBooks,
             'pagination' => [
                 'total' => $books->total(),
                 'perPage' => $books->perPage(),
                 'currentPage' => $books->currentPage(),
                 'lastPage' => $books->lastPage(),
                 'from' => $books->firstItem(),
-                'to' => $books->lastItem()
-            ]
+                'to' => $books->lastItem(),
+            ],
         ]);
     }
 }

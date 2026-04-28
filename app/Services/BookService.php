@@ -50,6 +50,7 @@ class BookService
     {
         return $books->map(function ($book) {
             $bookAttributes = $book->only(['book_id', 'title', 'slug']);
+
             return [
                 'book' => $bookAttributes,
                 'authors' => $book->authors,
@@ -59,7 +60,7 @@ class BookService
             ];
         });
     }
-    
+
     public function getAvailableYears(): array
     {
         return ReadInstance::selectRaw('YEAR(date_read) as year')
@@ -75,11 +76,12 @@ class BookService
     public function getCompletedItemsForYear($year)
     {
         $userId = auth()->id();
+
         return Book::with(['authors', 'versions.format', 'genres',
             'versions.readInstances' => function ($query) use ($year, $userId) {
                 $query->where('user_id', $userId)
-                      ->whereYear('date_read', $year)
-                      ->orderBy('date_read', 'asc');
+                    ->whereYear('date_read', $year)
+                    ->orderBy('date_read', 'asc');
             },
             'readInstances' => function ($query) use ($year, $userId) {
                 $query->where('user_id', $userId)->whereYear('date_read', $year);
@@ -87,9 +89,9 @@ class BookService
         ])->whereHas('versions.readInstances', function ($query) use ($year, $userId) {
             $query->where('user_id', $userId)->whereYear('date_read', $year);
         })->get()
-        ->map(fn ($book) => $this->transformCompletedBook($book))
-        ->sortBy(fn ($item) => $item['readInstances']->first()->date_read ?? null)
-        ->values();
+            ->map(fn ($book) => $this->transformCompletedBook($book))
+            ->sortBy(fn ($item) => $item['readInstances']->first()->date_read ?? null)
+            ->values();
     }
 
     protected function transformCompletedBook($book)

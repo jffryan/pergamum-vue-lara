@@ -2,6 +2,10 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.1] - 2026-04-28
+
+- Upgraded Laravel from 9 to 10. PHP minimum is now 8.1.
+
 ## [0.1.0] - 2026-04-26
 
 Baseline snapshot of the app prior to formal changelog tracking. Earlier history is captured in git only.
