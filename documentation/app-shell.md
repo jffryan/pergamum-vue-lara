@@ -37,7 +37,7 @@ A single `home.blade.php` mounts `<div id="app">`, Vite injects the JS bundle, a
   - `scrollBehavior()` returns `{ top: 0 }` on every navigation.
   - `beforeEach` is the auth gate (see `auth.md`).
 - **Static views**:
-  - `HomeView.vue` — title + tagline + hard-coded `v 0.1.0` version string. Public.
+  - `HomeView.vue` — title + tagline + hard-coded version string. Public.
   - `AboutView.vue` — one paragraph of copy. Public.
   - `ErrorNotFoundView.vue` — large "ERROR 404 / Page not found" panel. Public, mounted at `/404`.
   - `UserDashboard.vue` — placeholder, the default post-login redirect target. Owned by `auth.md`.
@@ -46,7 +46,7 @@ A single `home.blade.php` mounts `<div id="app">`, Vite injects the JS bundle, a
 
 - **There is exactly one layout.** `App.vue` is it; every view renders in the same shell. Adding a "no-chrome" surface (a print view, a fullscreen reader, a public landing page distinct from `/`) currently means `v-if`-ing the chrome out of `App.vue` based on `route.meta`, or refactoring to a layout-component pattern. The pattern doesn't exist yet.
 - **No catch-all wildcard route.** The router has a `/404` route but nothing matches arbitrary unknown paths to it. An unknown URL like `/asdf` is served by Laravel's SPA fallback (the Blade view), the SPA boots, vue-router finds no match, and `<RouterView>` renders nothing — the user sees the chrome with an empty body. Add `{ path: '/:pathMatch(.*)*', redirect: { name: 'NotFound' } }` (or render `ErrorNotFoundView` directly) to fix.
-- **`HomeView` hard-codes `v 0.1.0`.** The version string isn't pulled from `package.json` or anywhere else. Changing the version means editing this file. Either pull from `import.meta.env` (Vite injects `VITE_*` envs at build time) or accept that the home page is the version-of-record and keep them in sync manually.
+- **`HomeView` hard-codes `v 0.1.1`.** The version string isn't pulled from `package.json` or anywhere else. Changing the version means editing this file. Either pull from `import.meta.env` (Vite injects `VITE_*` envs at build time) or accept that the home page is the version-of-record and keep them in sync manually.
 - **Sidebar visibility is auth-gated, header is mostly auth-aware too.** `authStore.isLoggedIn` drives whether the sidebar renders at all and what the header right-side shows. Anonymous users see `Pergamum / About / Login` only. There's no anonymous landing page beyond `HomeView` itself; non-`/` public routes (`about`, `login`, `404`) all render *without* a sidebar even though the chrome behaves as though it's the same layout.
 - **The sidebar list is hand-edited, not derived from routes.** Adding a new top-level destination requires editing `SidebarNav.vue` directly; nothing in the router exposes "should this appear in the sidebar." Same failure mode as `AdminHome` (see `admin.md`): forget the link, the route is reachable but invisible.
 - **No active-link styling.** `<router-link>` provides `router-link-active` / `router-link-exact-active` classes by default, but no CSS targets them on the sidebar. The current page is indistinguishable from any other in the nav.

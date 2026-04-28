@@ -4,7 +4,7 @@
       <div class="w-1/2 flex justify-center flex-col">
         <h1 class="text-6xl font-bold">Pergamum</h1>
         <p class="text-3xl">Library management</p>
-        <p class="text-xl">v 0.1.0</p>
+        <p class="text-xl">v 0.1.1</p>
       </div>
     </div>
   </main>
