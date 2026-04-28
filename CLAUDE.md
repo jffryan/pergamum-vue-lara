@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Pergamum is a personal library / reading-tracker app for tracking books, reading history, lists, and statistics. Laravel 9 (PHP 8) JSON API backed by MySQL 8, with a Vue 3 + Pinia + Vue Router SPA served from a single Blade entrypoint. Styled with Tailwind, bundled with Vite. Auth is Sanctum token-based.
+Pergamum is a personal library / reading-tracker app for tracking books, reading history, lists, and statistics. Laravel 9 (PHP 8) JSON API backed by MySQL 8, with a Vue 3 + Pinia + Vue Router SPA served from a single Blade entrypoint. Styled with Tailwind, bundled with Vite. Auth is Sanctum SPA cookie/session (not token-based) — login posts to `/login` in `routes/web.php`, and the API group's `EnsureFrontendRequestsAreStateful` middleware reads the session for `auth:sanctum` routes. See `/documentation/auth.md`.
 
 ## Development environment
 
@@ -75,7 +75,7 @@ utils/        shared helpers (validators.js, checkForChanges.js)
 
 Data flow convention: **views → services/stores → api/<Domain>Controller → axios**. Don't call axios directly from components; route through the `api/` layer so the URL/method shape stays consistent (`buildUrl(entity, id)` builds `/api/<entity>/<id>`).
 
-Axios is configured globally in `bootstrap.js` (sets `X-Requested-With`, attaches the Sanctum token from AuthStore, attaches axios to `window`). Lodash is also globalized. CSRF is handled automatically through cookies.
+Axios is configured globally in `bootstrap.js` (sets `X-Requested-With: XMLHttpRequest` and attaches axios to `window`). Lodash is also globalized. There is no token attach step — auth rides on the session cookie set by `/login`, with CSRF handled automatically via the XSRF cookie that `GET /sanctum/csrf-cookie` seats before login/register.
 
 ### Code conventions
 
