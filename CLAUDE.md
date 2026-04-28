@@ -47,7 +47,7 @@ Three folders carry session-to-session context: `/feature-plans/`, `/documentati
 
 The lifecycle is: **draft plan → implement → write feature doc → update plan status → add changelog entry**. Before starting non-trivial work, skim `/feature-plans/` for plans that touch the area you're modifying, and design the current change so it doesn't block planned ones.
 
-`CHANGELOG.md` gets an entry for any user-visible or behavior-changing update (new endpoints, schema changes, route changes, breaking refactors). Skip for pure formatting, comment edits, and dependency bumps unless they change behavior.
+`CHANGELOG.md` gets an entry for any user-visible or behavior-changing update (new endpoints, schema changes, route changes, breaking refactors). Skip for pure formatting, comment edits, and dependency bumps unless they change behavior. Keep entries as summaries; git history carries the detail.
 
 ## Architecture
 
