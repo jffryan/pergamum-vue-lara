@@ -14,8 +14,8 @@ return new class extends Migration
     public function up()
     {
         Schema::create('formats', function (Blueprint $table) {
-            $table->id("format_id");
-            $table->string("name");
+            $table->id('format_id');
+            $table->string('name');
             $table->string('slug')->nullable();
             $table->timestamps();
         });

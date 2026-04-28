@@ -38,6 +38,7 @@ class ListItemController extends Controller
         }
 
         $item->delete();
+
         return response()->noContent();
     }
 }

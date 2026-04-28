@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,6 +23,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
 });
 
-Route::get('/{vue_capture?}', function() {
+Route::get('/{vue_capture?}', function () {
     return view('home');
 })->where('vue_capture', '[\/\w\.-]*');

@@ -62,7 +62,7 @@ class StatisticsService
 
         return $totalBooks > 0 ? round(($completedBooks / $totalBooks) * 100, 2) : 0;
     }
-    
+
     private function retrieveFiveMostRecentlyCreatedBooks()
     {
         return Book::latest()->limit(5)->get();

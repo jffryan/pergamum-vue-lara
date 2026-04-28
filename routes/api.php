@@ -1,18 +1,18 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\BookController;
+use App\Http\Controllers\BulkUploadController;
 use App\Http\Controllers\ConfigController;
-use App\Http\Controllers\GenreController;
-use App\Http\Controllers\StatisticsController;
-use App\Http\Controllers\NewBookController;
 use App\Http\Controllers\FormatController;
+use App\Http\Controllers\GenreController;
 use App\Http\Controllers\ListController;
 use App\Http\Controllers\ListItemController;
+use App\Http\Controllers\NewBookController;
+use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\VersionController;
-use App\Http\Controllers\BulkUploadController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,24 +30,24 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-    Route::resource("/books", BookController::class);
-    Route::resource("/genres", GenreController::class);
+    Route::resource('/books', BookController::class);
+    Route::resource('/genres', GenreController::class);
 
-    Route::get("/completed/years", [BookController::class, "getCompletedYears"]);
-    Route::get("/completed/{year}", [BookController::class, "getBooksByYear"]);
-    Route::get("/book/{slug}", [BookController::class, 'getOneBookFromSlug']);
-    Route::get("/author/{slug}", [AuthorController::class, 'getAuthorBySlug']);
-    Route::post("/create-book/title", [NewBookController::class, "createOrGetBookByTitle"]);
-    Route::post("/create-book", [NewBookController::class, "completeBookCreation"]);
-    Route::post("/create-authors", [AuthorController::class, "getOrSetToBeCreatedAuthorsByName"]);
-    Route::post("/add-read-instance", [BookController::class, "addReadInstance"]);
-    Route::post("/versions", [VersionController::class, "addNewVersion"]);
+    Route::get('/completed/years', [BookController::class, 'getCompletedYears']);
+    Route::get('/completed/{year}', [BookController::class, 'getBooksByYear']);
+    Route::get('/book/{slug}', [BookController::class, 'getOneBookFromSlug']);
+    Route::get('/author/{slug}', [AuthorController::class, 'getAuthorBySlug']);
+    Route::post('/create-book/title', [NewBookController::class, 'createOrGetBookByTitle']);
+    Route::post('/create-book', [NewBookController::class, 'completeBookCreation']);
+    Route::post('/create-authors', [AuthorController::class, 'getOrSetToBeCreatedAuthorsByName']);
+    Route::post('/add-read-instance', [BookController::class, 'addReadInstance']);
+    Route::post('/versions', [VersionController::class, 'addNewVersion']);
 
     // Statistics
-    Route::get("/statistics", [StatisticsController::class, "fetchUserStats"]);
+    Route::get('/statistics', [StatisticsController::class, 'fetchUserStats']);
 
-    Route::get("/config/formats", [ConfigController::class, "getFormats"]);
-    Route::post("/formats", [FormatController::class, "store"]);
+    Route::get('/config/formats', [ConfigController::class, 'getFormats']);
+    Route::post('/formats', [FormatController::class, 'store']);
 
     Route::post('/bulk-upload', [BulkUploadController::class, 'upload']);
 

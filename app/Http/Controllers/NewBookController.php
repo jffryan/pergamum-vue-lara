@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Author;
+use App\Models\Book;
+use App\Models\Format;
+use App\Models\Genre;
+use App\Models\ReadInstance;
+use App\Models\Version;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Models\Book;
-use App\Models\Genre;
-use App\Models\Author;
-use App\Models\Format;
-use App\Models\Version;
-use App\Models\ReadInstance;
 
 class NewBookController extends Controller
 {
@@ -35,7 +35,7 @@ class NewBookController extends Controller
             return response()->json(
                 [
                     'exists' => true,
-                    'book' => $existingBook
+                    'book' => $existingBook,
                 ],
             );
         }
@@ -48,7 +48,7 @@ class NewBookController extends Controller
         return response()->json(
             [
                 'exists' => false,
-                'book' => $data
+                'book' => $data,
             ],
         );
     }
@@ -57,27 +57,27 @@ class NewBookController extends Controller
     {
         $title = $bookData['title'];
         $request_slug = Str::of($bookData['slug'])->lower();
-    
+
         $generated_slug = Str::of($title)
             ->lower()
             ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
             ->replace(' ', '-')  // Replace spaces with hyphens
             ->limit(50);  // Limit to 50 characters
-    
+
         if ($request_slug != $generated_slug) {
             $slug = $this->generateUniqueSlug($generated_slug);
         } else {
             $slug = $request_slug;
         }
-    
+
         $data = [
             'title' => $bookData['title'],
             'slug' => $slug,
         ];
-    
+
         return Book::create($data);
     }
-    
+
     /**
      * Generate a unique slug by checking existing slugs and incrementing the highest suffix.
      */
@@ -87,20 +87,20 @@ class NewBookController extends Controller
         $existingSlugs = Book::where('slug', 'LIKE', "{$baseSlug}%")
             ->pluck('slug')
             ->toArray();
-    
+
         if (empty($existingSlugs)) {
             return $baseSlug;
         }
-    
+
         $highestNumber = 0;
-    
+
         foreach ($existingSlugs as $slug) {
-            if (preg_match('/^' . preg_quote($baseSlug, '/') . '-(\d+)$/', $slug, $matches)) {
+            if (preg_match('/^'.preg_quote($baseSlug, '/').'-(\d+)$/', $slug, $matches)) {
                 $highestNumber = max($highestNumber, intval($matches[1]));
             }
         }
-    
-        return $baseSlug . '-' . ($highestNumber + 1);
+
+        return $baseSlug.'-'.($highestNumber + 1);
     }
 
     private function handleAuthors($authorsData)
@@ -120,12 +120,14 @@ class NewBookController extends Controller
             return Author::firstOrCreate(['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]);
         })->all();
     }
+
     private function handleGenres($genresData)
     {
         return collect($genresData)->map(function ($genre) {
             return Genre::firstOrCreate(['name' => $genre['name']]);
         })->all();
     }
+
     private function handleVersions($versionsData, $bookData)
     {
         // For each version in versionsData, if it has a version_id that means it already exists and we can just add it to the array as-is
@@ -138,7 +140,7 @@ class NewBookController extends Controller
 
             $format = Format::find($version['format']['format_id']);
 
-            if (!$format) {
+            if (! $format) {
                 throw new \Exception("Format not found for version (format_id: {$version['format']['format_id']}).");
             }
 
@@ -161,7 +163,6 @@ class NewBookController extends Controller
                 // Return the first version (FOR NOW!!!)
                 $version_id = $versionsData[0]->version_id;
             }
-
 
             $readInstance['book_id'] = $book_id;
             $readInstance['version_id'] = $version_id;
@@ -194,11 +195,11 @@ class NewBookController extends Controller
 
         try {
             // Create the main book record
-            $book = $this->createBook($bookData["book"]);
-            $authors = $this->handleAuthors($bookData["authors"]);
-            $genres = $this->handleGenres($bookData["genres"]);
-            $versions = $this->handleVersions($bookData["versions"], $book);
-            $read_instances = $this->handleReadInstances($bookData["read_instances"], $book, $versions);
+            $book = $this->createBook($bookData['book']);
+            $authors = $this->handleAuthors($bookData['authors']);
+            $genres = $this->handleGenres($bookData['genres']);
+            $versions = $this->handleVersions($bookData['versions'], $book);
+            $read_instances = $this->handleReadInstances($bookData['read_instances'], $book, $versions);
 
             $this->attachModels($book, $authors, $genres, $versions);
 
@@ -219,9 +220,9 @@ class NewBookController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'success'   => false,
-                'message'   => 'Error occurred, creation aborted. ' . $e->getMessage(),
-                'trace'     => $e->getTrace(),
+                'success' => false,
+                'message' => 'Error occurred, creation aborted. '.$e->getMessage(),
+                'trace' => $e->getTrace(),
             ]);
         }
     }

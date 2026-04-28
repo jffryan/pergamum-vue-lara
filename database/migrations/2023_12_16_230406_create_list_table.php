@@ -14,9 +14,9 @@ return new class extends Migration
     public function up()
     {
         Schema::create('lists', function (Blueprint $table) {
-            $table->id("list_id");
-            $table->string("name");
-            $table->string("slug");
+            $table->id('list_id');
+            $table->string('name');
+            $table->string('slug');
             $table->foreignId('user_id')
                 ->constrained('users', 'user_id')
                 ->cascadeOnDelete();

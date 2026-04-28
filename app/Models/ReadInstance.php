@@ -4,17 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Carbon\Carbon;
 
 class ReadInstance extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = "read_instances_id";
+    protected $primaryKey = 'read_instances_id';
 
-    protected $dates = ['date_read'];
-    
+    protected $casts = ['date_read' => 'date'];
+
     protected $fillable = ['user_id', 'book_id', 'version_id', 'date_read', 'rating'];
 
     public function book()

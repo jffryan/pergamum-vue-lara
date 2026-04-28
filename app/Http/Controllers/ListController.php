@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BookList;
+use App\Models\ListItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -31,6 +32,7 @@ class ListController extends Controller
             },
             'items.version.format',
         ]);
+
         return $list;
     }
 
@@ -65,6 +67,7 @@ class ListController extends Controller
     public function destroy(BookList $list)
     {
         $list->delete();
+
         return response()->noContent();
     }
 
@@ -86,7 +89,7 @@ class ListController extends Controller
 
         DB::transaction(function () use ($itemIds) {
             foreach ($itemIds as $ordinal => $listItemId) {
-                \App\Models\ListItem::where('list_item_id', $listItemId)
+                ListItem::where('list_item_id', $listItemId)
                     ->update(['ordinal' => $ordinal]);
             }
         });

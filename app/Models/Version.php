@@ -11,21 +11,23 @@ class Version extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = "version_id";
+    protected $primaryKey = 'version_id';
 
     protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id', 'nickname'];
 
     public function format(): BelongsTo
     {
-        return $this->belongsTo(Format::class, "format_id");
+        return $this->belongsTo(Format::class, 'format_id');
     }
+
     public function book(): BelongsTo
     {
-        return $this->belongsTo(Book::class, "book_id");
+        return $this->belongsTo(Book::class, 'book_id');
     }
+
     public function readInstances()
     {
-        return $this->hasMany(ReadInstance::class, "version_id");
+        return $this->hasMany(ReadInstance::class, 'version_id');
     }
 
     public function listItems(): HasMany

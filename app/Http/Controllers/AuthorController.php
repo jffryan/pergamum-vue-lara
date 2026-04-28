@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Author;
-use Illuminate\Support\Str;
 use App\Services\AuthorService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Str;
 
 class AuthorController extends Controller
 {
@@ -19,7 +20,7 @@ class AuthorController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index()
     {
@@ -29,7 +30,7 @@ class AuthorController extends Controller
     /**
      * Show the form for creating a new resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function create()
     {
@@ -39,8 +40,7 @@ class AuthorController extends Controller
     /**
      * Store a newly created resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function store(Request $request)
     {
@@ -51,17 +51,19 @@ class AuthorController extends Controller
      * Display the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function show($slug)
     {
         $response = $this->authorService->getAuthorWithRelations($slug, 'slug');
+
         return response()->json($response);
     }
 
     public function getAuthorBySlug($slug)
     {
         $response = $this->authorService->getAuthorWithRelations($slug, 'slug');
+
         return response()->json($response);
     }
 
@@ -77,10 +79,10 @@ class AuthorController extends Controller
                 ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
                 ->replace(' ', '-')  // Replace spaces with hyphens
                 ->limit(30);  // Limit to 30 characters
-    
+
             // Look for an existing author by the slug
             $existingAuthor = Author::where('slug', $slug)->first();
-    
+
             if ($existingAuthor) {
                 $authors[] = $existingAuthor;
             } else {
@@ -90,20 +92,19 @@ class AuthorController extends Controller
                     'last_name' => $author['last_name'],  // Include last name
                     'slug' => $slug,
                 ];
-    
+
                 $authors[] = $data;
             }
         }
-    
+
         return response()->json(['authors' => $authors]);
     }
-    
 
     /**
      * Show the form for editing the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function edit($id)
     {
@@ -113,9 +114,8 @@ class AuthorController extends Controller
     /**
      * Update the specified resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function update(Request $request, $id)
     {
@@ -126,7 +126,7 @@ class AuthorController extends Controller
      * Remove the specified resource from storage.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function destroy($id)
     {

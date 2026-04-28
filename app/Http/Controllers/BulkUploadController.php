@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Author;
+use App\Models\Book;
+use App\Models\Format;
+use App\Models\Genre;
+use App\Models\ReadInstance;
+use App\Models\Version;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Models\Book;
-use App\Models\Genre;
-use App\Models\Author;
-use App\Models\Format;
-use App\Models\Version;
-use App\Models\ReadInstance;
-use Carbon\Carbon;
 
 class BulkUploadController extends Controller
 {
@@ -56,6 +56,7 @@ class BulkUploadController extends Controller
                     'reason' => 'Title, Version_Format, and Version_PageCount are required',
                 ];
                 $failed++;
+
                 continue;
             }
 
@@ -67,12 +68,13 @@ class BulkUploadController extends Controller
                     'reason' => 'At least one of Author_FNAME or Author_LNAME is required',
                 ];
                 $failed++;
+
                 continue;
             }
 
             // Format lookup
             $format = Format::whereRaw('LOWER(name) = ?', [strtolower($formatName)])->first();
-            if (!$format) {
+            if (! $format) {
                 $results[] = [
                     'row' => $rowNumber,
                     'title' => $title,
@@ -80,6 +82,7 @@ class BulkUploadController extends Controller
                     'reason' => "Format '{$formatName}' not found",
                 ];
                 $failed++;
+
                 continue;
             }
 
@@ -99,6 +102,7 @@ class BulkUploadController extends Controller
                     'reason' => 'Book already exists',
                 ];
                 $skipped++;
+
                 continue;
             }
 
@@ -129,7 +133,7 @@ class BulkUploadController extends Controller
 
                 // Attach author and genres
                 $book->authors()->attach($author->author_id);
-                if (!empty($genres)) {
+                if (! empty($genres)) {
                     $book->genres()->attach(array_map(fn ($g) => $g->genre_id, $genres));
                 }
 

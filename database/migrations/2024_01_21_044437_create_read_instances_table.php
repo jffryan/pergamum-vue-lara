@@ -14,18 +14,18 @@ return new class extends Migration
     public function up()
     {
         Schema::create('read_instances', function (Blueprint $table) {
-            $table->id("read_instance_id");
+            $table->id('read_instance_id');
             $table->foreignId('user_id')
                 ->constrained('users', 'user_id')
                 ->cascadeOnDelete();
-            $table->foreignId("book_id")
-                ->constrained("books", "book_id")
+            $table->foreignId('book_id')
+                ->constrained('books', 'book_id')
                 ->cascadeOnDelete();
             $table->foreignId('version_id')
                 ->nullable()
                 ->constrained('versions', 'version_id')
                 ->nullOnDelete();
-            $table->date("date_read");
+            $table->date('date_read');
             $table->unsignedTinyInteger('rating')->nullable();
             $table->timestamps();
 
