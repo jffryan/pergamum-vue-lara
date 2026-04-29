@@ -12,7 +12,7 @@ Tracks rough edges and follow-up work for the user-wide statistics dashboard (`G
 ### Authorization & scoping
 
 - **Catalog metrics are not user-scoped.** `total_books` and `newestBooks` ignore the requesting user — `Book::count()` and `Book::latest()->limit(5)`. The moment book ownership lands (see `/feature-plans/books.md`), both metrics become wrong, and `percentageOfBooksRead` (which divides a user-scoped numerator by a catalog-wide denominator) becomes nonsensical.
-- **No tests pin the catalog-vs-user split.** Nothing currently asserts which metrics filter by `auth()->id()` and which don't. A well-meaning refactor that adds user scoping to `calculateTotalBooks` to "fix" the percentage would silently change `total_books` for every existing caller.
+- **The catalog-vs-user split is now pinned by tests.** `tests/Feature/Statistics/StatisticsTest.php::test_percentage_of_books_read_uses_global_book_count` and `::test_newest_books_returns_five_most_recent_globally` lock the current (catalog-wide) behavior of `total_books`, `newestBooks`, and the percentage denominator. Any refactor that introduces user scoping must update those tests deliberately rather than silently flipping the contract.
 
 ### Validation & request shape
 

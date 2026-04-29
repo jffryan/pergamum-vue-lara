@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      args:
+        INSTALL_PCOV: ${INSTALL_PCOV:-0}
     container_name: ${COMPOSE_PROJECT_NAME:-app}_php
     volumes:
       - ./:/var/www/html:cached

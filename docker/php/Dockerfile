@@ -13,6 +13,12 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install -j$(nproc) \
     pdo_mysql mbstring zip exif pcntl intl gd opcache
 
+# PCOV for code coverage (dev only — opt in with INSTALL_PCOV=1)
+ARG INSTALL_PCOV=0
+RUN if [ "$INSTALL_PCOV" = "1" ]; then \
+      pecl install pcov && docker-php-ext-enable pcov; \
+    fi
+
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -24,6 +30,5 @@ COPY docker/php/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 WORKDIR /var/www/html
-
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["php-fpm", "-F"]

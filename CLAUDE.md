@@ -31,7 +31,7 @@ If running PHP locally instead: `php artisan serve`, `npm run dev`, `npm run bui
 
 ## Tests, lint, format
 
-- **PHP tests:** `php artisan test`, `vendor/bin/phpunit`, or for a single file/method: `vendor/bin/phpunit tests/Feature/SomeTest.php` / `vendor/bin/phpunit --filter testMethodName`. Tests live in `tests/Feature` and `tests/Unit`.
+- **PHP tests:** `php artisan test`, `vendor/bin/phpunit`, or for a single file/method: `vendor/bin/phpunit tests/Feature/SomeTest.php` / `vendor/bin/phpunit --filter testMethodName`. Tests live in `tests/Feature` and `tests/Unit`. Read `documentation/backend-tests.md` for more instructions on how to write PHP tests.
 - **JS tests:** `npm test` (Vitest). Specs live in `resources/js/tests/{api,services,stores}`. Single file: `npx vitest resources/js/tests/stores/BooksStore.test.js`.
 - **PHP format:** `vendor/bin/pint` (PSR-12, 4-space indent).
 - **JS lint:** `npx eslint resources/js` (`--fix` to auto-fix). ESLint extends `airbnb-base` + `vue3-essential` + `prettier`; double quotes enforced; `camelcase` and `no-console` are off.
