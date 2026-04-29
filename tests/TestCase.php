@@ -9,6 +9,16 @@ abstract class TestCase extends BaseTestCase
 {
     use CreatesApplication;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $db = config('database.connections.mysql.database');
+        if (! str_contains($db, 'test')) {
+            throw new \RuntimeException("Refusing to run tests against '{$db}' — name must contain 'test'.");
+        }
+    }
+
+
     protected function actingAsUser(?User $user = null): User
     {
         $user ??= User::factory()->create();

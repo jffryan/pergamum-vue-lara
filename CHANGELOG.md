@@ -2,6 +2,10 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.2] - 2026-04-29
+
+- Bulk upload rewritten with a header-named CSV contract (`title, authors, format, page_count, audio_runtime, version_nickname, genres, date_read, rating`). Logic moved into `BulkImportService`; per-row failures now carry a `reason_code`. Multi-author rows (`First|Last;First|Last`), multi-version and re-read rows, audiobook runtimes, multi-format date parsing, rating range validation, and a `dry_run=1` flag are all supported. Header validation rejects unknown or missing required columns with HTTP 422 (`reason_code: header_invalid`).
+
 ## [0.1.1] - 2026-04-28
 
 - Upgraded Laravel from 9 to 10. PHP minimum is now 8.1.

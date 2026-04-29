@@ -7,104 +7,142 @@ status: living
 
 ## Scope
 
-Covers the CSV-based bulk import (`/bulk-upload` → `BulkUploadView` → `POST /api/bulk-upload` → `BulkUploadController::upload`). Single-book creation through the SPA is in `new-book-creation.md`; this surface is positional-CSV-only and shares almost no code with the new-book flow.
+Covers the CSV-based bulk import (`/bulk-upload` → `BulkUploadView` → `POST /api/bulk-upload` → `BulkUploadController::upload` → `BulkImportService::importCsv`). Single-book creation through the SPA is in `new-book-creation.md`; this surface is CSV-only and shares almost no code with the new-book flow.
 
 ## Summary
 
-A single endpoint that accepts a CSV file and processes it row-by-row, each row in its own transaction. Each row creates one book, one author, one version, optionally one genre list and optionally one read instance. Rows that fail validation or violate a rule (missing required field, unknown format, slug collision, malformed date) are reported in the response but don't stop later rows. The frontend renders a per-row results table grouped by status (success / skipped / failed).
+A single endpoint that accepts a CSV file and processes it row-by-row. Each row creates or finds one book, attaches one or more authors, optionally attaches genres, creates or finds one version, and optionally creates one read instance. Rows that fail validation are reported in the response but don't stop later rows. The frontend renders a per-row results table.
+
+Whole-file errors (header validation) return HTTP 422 with a `reason_code`. Per-row failures still return HTTP 200 with the row marked failed in the results array.
 
 ## How it's wired
 
 ### Backend
 
-- **Route** (`routes/api.php`, `auth:sanctum`): `POST /bulk-upload` → `BulkUploadController::upload`. Accepts a multipart form with field `csv_file`.
-- **Controller**: `BulkUploadController` — single `upload` method. Not thin: holds the CSV parsing loop, slug normalization, format lookup, dedupe check, per-row transaction, and result aggregation directly.
-- **Services**: none. Does not call `BookService`, `AuthorService`, or `NewBookController`. Each row's writes are inline `Eloquent` calls.
-- **Models**: creates `Book`, `Version`, `ReadInstance`; `firstOrCreate`s `Author` and `Genre`. `Format` is read-only (existing rows only).
+- **Route** (`routes/api.php`, `auth:sanctum`): `POST /bulk-upload` → `BulkUploadController::upload`. Accepts a multipart form with field `csv_file` and an optional `dry_run` boolean.
+- **Controller**: `BulkUploadController` — thin handler. Validates the file, calls `BulkImportService`, catches `BulkImportHeaderException` for the 422 path.
+- **Service**: `app/Services/BulkImportService.php` — owns parsing, header validation, per-row processing, transactions, and result aggregation. Public surface is `importCsv(UploadedFile $file, int $userId, bool $dryRun = false): array`.
+- **Models**: creates `Book`, `Version`, `ReadInstance`; finds-or-creates `Author` and `Genre`. `Format` is read-only (existing rows only — no auto-create).
 - **Policies / authorization**: none beyond `auth:sanctum`.
 - **Migrations**: writes the same tables documented in `books.md`, `authors.md`, `genres.md`, `formats.md`. No bulk-upload-specific schema.
 
 ### Frontend
 
 - **API layer**: `resources/js/api/BulkUploadApi.js` — `bulkUpload(file)` builds a `FormData`, sets `Content-Type: multipart/form-data`, and calls `axios.post('/api/bulk-upload', …)` directly. Does **not** route through `apiHelpers.js` (`makeRequest` / `buildUrl`) — multipart bodies don't fit `makeRequest`'s JSON shape, so this is the one acceptable bypass.
-- **Stores**: none. State lives view-locally in `BulkUploadView.data()` (`selectedFile`, `loading`, `summary`, `results`, `error`).
-- **Service**: none.
+- **Stores**: none. State lives view-locally in `BulkUploadView.data()`.
 - **Routes**: `router/book-routes.js` defines `/bulk-upload` (named `books.bulk-upload`).
-- **Views**: `views/BulkUploadView.vue` — file input, submit button, a per-row results table colored by status.
-- **Components**: none — the view is self-contained.
+- **Views**: `views/BulkUploadView.vue` — file input, submit button, a per-row results table colored by status. Renders `reason` (human string) when a row fails.
 
-## Non-obvious decisions and gotchas
+## CSV contract
 
-- **Per-row transactions, not whole-file.** Each row runs `DB::beginTransaction` / `DB::commit`; a failing row rolls back its own writes only and the loop continues. There is no "all-or-nothing" mode — partial imports are the design. Callers must inspect `summary` and `results` to decide what to do; a 200 response can mask a file where every row failed.
-- **CSV is positional, not column-named.** Columns are read by index 0–7: `[Title, Author_FNAME, Author_LNAME, Version_Format, Version_PageCount, Date_Read, Rating, Genres]`. The header row is skipped (`fgetcsv($handle)` once before the loop) but its content is *not* validated — a CSV with the wrong column order is accepted, and rows are silently mapped to the wrong fields. The header is decorative; mismatching it doesn't cause an error.
-- **Required fields are Title, Version_Format, Version_PageCount, and at least one of Author_FNAME / Author_LNAME.** Everything else (Date_Read, Rating, Genres) is optional. A row with only the required four creates a book + author + version with no genres and no read history.
-- **Format lookup is case-insensitive via `whereRaw('LOWER(name) = ?', …)`.** Non-index-friendly at scale, but the `formats` table has fewer than a dozen rows in practice. If the format doesn't match a known row the row is *failed* — bulk upload does not create new formats (unlike authors and genres, which it firstOrCreates).
-- **Slug collision is the dedupe.** Each row computes `Str::lower → strip non-alphanumerics → spaces-to-hyphens → cap at 50` (matches the slug rule used by `BookController::store` and `NewBookController::createOrGetBookByTitle`). Rows whose slug already exists in `books.slug` are reported as `skipped` with reason `'Book already exists'`. The dedupe runs *before* the transaction, so a concurrent upload of the same title can race past the check; only `Book::create` would catch it, and there's no DB-level unique constraint on `slug` to backstop. In practice bulk uploads are user-serial.
-- **Yet another author slug normalizer.** `BulkUploadController` builds the author slug as `str_replace(' ', '-', preg_replace('/[^a-z0-9\s]/', '', strtolower(implode(' ', [fname, lname]))))` — strips non-alphanumerics, no length cap, **does not collapse internal whitespace**. This is the *fourth* distinct rule in the codebase (alongside `BookController::handleAuthors`, `NewBookController::handleAuthors`, and `AuthorController::getOrSetToBeCreatedAuthorsByName`; see `authors.md` for the full list). An author imported via bulk upload and later re-encountered via the new-book flow can fail to dedupe.
-- **`Author::firstOrCreate` matches on slug only.** Match attributes are `['slug' => $authorSlug]`; first/last names are passed only as create-time values. If an existing author shares the slug but has a different name (typo, missing accent, different first-name spelling), the import attaches to the existing row and the names in the CSV are silently ignored. Be cautious importing a corrected version of an author you already have.
-- **One author per row.** No multi-author support in the CSV format. A two-author book imported through this surface gets only the row's `(fname, lname)` attached; the second author has to be added via the book-edit flow afterward. There's no warning column for "this book has co-authors".
-- **One version per row.** Each row creates one `Version` with `(book_id, format_id, page_count)`. `audio_runtime` and `nickname` are not in the CSV format and are persisted as `null`. Importing the same book in two formats requires two rows — and the second row will be `skipped` because the slug collides with the first. Multi-version books cannot be created through bulk upload; add additional versions afterward via `AddVersionView`.
-- **Date format is hardcoded to `n/j/Y`.** Carbon's `n/j/Y` accepts `1/5/2024` *and* `01/05/2024` (single- or zero-padded month/day, four-digit year). Anything else (`2024-01-05`, `Jan 5, 2024`, `5/1/24`) throws a `Carbon\Exceptions\InvalidFormatException`, which the row's catch block reports as the failure reason. The error message is the raw Carbon string — not user-friendly.
-- **Rating is cast `(float)` with no validation.** `$rating !== '' ? (float) $rating : null`. A non-numeric rating coerces to `0` (PHP `(float) 'abc' === 0.0`); `7` is accepted as-is and stored as `14` after the doubling mutator. Out-of-range values are not flagged.
-- **The mutator doubles ratings on insert.** Same as everywhere else (see `books.md`). A CSV value of `4.5` is stored as `9`; the bulk import doesn't pre-divide.
-- **Read instance is created only when `Date_Read` is non-empty.** A row with `Rating` set but `Date_Read` blank does *not* create a `ReadInstance` — the rating is silently dropped. There's no warning. Conversely a row with `Date_Read` set and `Rating` blank creates an instance with `rating = null`.
-- **Genres split on `,` after the row split.** `fgetcsv` already split the CSV on `,`, so genres live in column index 7 in their *original* unsplit form — the genres column itself must be quoted in the CSV (`"sci-fi, dystopia"`) for `explode(',', $genresRaw)` to find more than one. Otherwise commas in the genre column become column separators and shift everything right. The current convention requires CSV producers to quote multi-genre cells.
-- **Empty genre names are filtered.** `trim($genreName) !== ''` guards `Genre::firstOrCreate`. Trailing commas in the genre column are fine.
-- **Empty rows are skipped silently.** A row where every column trims to empty does not increment any counter — it's just skipped. `$rowNumber` still advances, so the result table can show non-contiguous row numbers.
-- **`$rowNumber` is data-row-relative, not file-relative.** It starts at 0 and increments after the header row is consumed. A "row 5" in the response is the 5th data row, which is line 6 of the file. Cross-reference with the original CSV accordingly.
-- **Failures expose `$e->getMessage()` directly.** The catch block puts the raw exception message into the row's `reason` field. A SQL constraint violation surfaces with whatever the driver chose to say — useful for debugging, but not safe to rely on as a stable contract for callers.
-- **No file size or row count limit.** The route inherits PHP's `upload_max_filesize` and `post_max_size`. There's no in-app guard; a multi-megabyte CSV will run to completion (or until PHP's max execution time kicks in).
-- **No async / job queue.** The request runs synchronously and blocks until the whole file is processed. A user uploading thousands of rows pays the full latency in one HTTP call.
+### Columns
 
-## Usage notes
+Header is **required and validated by name**. Column order is irrelevant. Header comparison is case-insensitive and trims whitespace. Unknown column names are rejected (`reason_code: header_invalid`). Missing required columns are rejected the same way. The order in which the columns appear in your file does not matter; only the names do.
 
-### Required CSV format
+| Column            | Required | Notes |
+|-------------------|----------|-------|
+| `title`           | yes      | Used to derive `Book.slug` (`Str::slug`, no truncation). |
+| `authors`         | yes      | `;`-separated list of entries; each entry is `First\|Last`. Single-author rows use one entry. Empty `First` or empty `Last` are allowed (one of the two must be non-empty per entry). |
+| `format`          | yes      | Looked up case-insensitively in `formats.name`. Must already exist; bulk upload does not auto-create formats. |
+| `page_count`      | yes for non-audio | Integer. Blank is allowed for `Audiobook` rows; the version is stored with `page_count = 0` in that case. |
+| `audio_runtime`   | yes for `Audiobook` rows | Integer minutes. Required for Audiobook rows; blank otherwise. |
+| `version_nickname`| no       | Free text; disambiguates versions sharing `(book, format)` (e.g., two paperbacks). |
+| `genres`          | no       | `;`-separated list. Lookup is case-insensitive and trims whitespace; `Fantasy`, `fantasy`, ` Fantasy ` all dedupe to the existing genre. |
+| `date_read`       | no       | Accepts `Y-m-d`, `n/j/Y`, `m/d/Y`. Blank means "no read instance for this row." |
+| `rating`          | no       | Decimal 0.5–5 in 0.5 steps. The `ReadInstance` mutator doubles the value on insert (a CSV value of `4.5` is stored as `9`). |
 
-8 columns, in order, with a header row (header content is unchecked):
+### Encoding choices
 
-```
-Title,Author_FNAME,Author_LNAME,Version_Format,Version_PageCount,Date_Read,Rating,Genres
-Dune,Frank,Herbert,Hardcover,688,8/1/2023,4.5,"sci-fi, classic"
-The Hobbit,J.R.R.,Tolkien,Paperback,310,,,fantasy
-A Memory Called Empire,Arkady,Martine,Audiobook,464,3/15/2024,5,
-```
+- `;` between list entries, `|` between author name parts. Avoids CSV-comma-quoting traps.
+- One `authors` column rather than separate first/last columns — symmetric for single-author and multi-author rows.
 
-- `Title`, `Version_Format`, `Version_PageCount`, and at least one of `Author_FNAME` / `Author_LNAME` are required.
-- `Version_Format` must be the case-insensitive `name` of an existing row in `formats` (e.g. `Hardcover`, `Paperback`, `Audiobook`). Unknown formats fail the row.
-- `Date_Read` accepts `n/j/Y` (`1/5/2024` or `01/05/2024`). Blank → no read instance is created.
-- `Rating` is a float; the mutator doubles it on insert. Blank → `rating = null` on the read instance.
-- `Genres` is a comma-separated list; quote the cell if you have more than one (`"a, b, c"`).
+### Row semantics
 
-### Submitting
+Each row describes one (book, version, optional read instance). Rows are de-duped against existing rows at each layer:
 
-`POST /api/bulk-upload` multipart with `csv_file`. Response:
+1. **Book**: find-or-create by `slug = Str::slug(title)`. Title on existing books is left alone.
+2. **Authors**: each entry → find-or-create by `Str::slug(trim($first.' '.$last))`. Attached if not already attached. Co-author ordinal continues from the book's current max.
+3. **Genres**: each entry → find by `LOWER(TRIM(name))` first; if none, create with the trimmed (case-preserved) value. Attached if not already attached.
+4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime` and `page_count` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits).
+5. **Read instance**: if `date_read` is non-blank, always create a new `ReadInstance` against the resolved version with `user_id = auth()->id()`. Multiple rows with the same (title, format, nickname) but different dates produce multiple read instances — re-reads roundtrip cleanly.
+
+This single-row shape covers every restore scenario:
+
+- One-time read of a paperback: one row.
+- Re-read of the same paperback three times: three rows, identical except `date_read` / `rating`.
+- Same book in paperback and audiobook: two rows, different `format` (and `audio_runtime` on the audiobook row).
+- Owned but unread: one row with blank `date_read` and `rating`.
+- Two co-authors: one row, `authors = "Jane|Smith;John|Doe"`.
+
+## Submitting
+
+`POST /api/bulk-upload` multipart with `csv_file` and an optional `dry_run` boolean.
+
+Successful (or partially-successful) response, HTTP 200:
 
 ```json
 {
-  "summary": { "total": 12, "succeeded": 9, "skipped": 2, "failed": 1 },
+  "summary": { "total": 12, "succeeded": 10, "skipped": 0, "failed": 2 },
   "results": [
     { "row": 1, "title": "Dune", "status": "success" },
-    { "row": 2, "title": "The Hobbit", "status": "skipped", "reason": "Book already exists" },
-    { "row": 3, "title": "Spice", "status": "failed", "reason": "Format 'eBook' not found" }
-  ]
+    { "row": 2, "title": "Lost", "status": "failed", "reason_code": "format_not_found", "reason": "format 'eBook' not found" }
+  ],
+  "dry_run": false
 }
 ```
 
-Always HTTP 200, even when every row fails. The 200 body is what the SPA renders into its results table.
+Header-invalid response, HTTP 422:
 
-### Failure modes the user will see
+```json
+{ "reason_code": "header_invalid", "reason": "Missing required column(s): authors" }
+```
 
-- `'Title, Version_Format, and Version_PageCount are required'` — empty required fields.
-- `'At least one of Author_FNAME or Author_LNAME is required'` — both name fields blank.
-- `'Format '<X>' not found'` — format name doesn't match any existing row, case-insensitively.
-- `'Book already exists'` — slug collision with an existing book. Reported as `skipped`, not `failed`.
-- Carbon parse error string — `Date_Read` not in `n/j/Y`.
-- Raw SQL / Eloquent exception messages — anything else that throws inside the row's transaction.
+`summary.skipped` is always `0` in the new contract — finer-grained idempotency reporting (rows that produced zero new writes) is tracked as a future improvement on `/feature-plans/bulk-upload.md`. Re-uploading a CSV simply reports each row as `success` while reusing existing books / authors / versions.
+
+### Per-row `reason_code` values
+
+| Code                        | Meaning |
+|-----------------------------|---------|
+| `missing_required_field`    | `title`, `authors`, or `format` was blank. |
+| `format_not_found`          | `format` did not match any row in `formats` (case-insensitive). |
+| `audio_runtime_required`    | `format = Audiobook` row had a blank `audio_runtime`. |
+| `page_count_required`       | Non-audio row had a blank `page_count`. |
+| `date_parse_failed`         | `date_read` did not match `Y-m-d`, `n/j/Y`, or `m/d/Y`. |
+| `rating_out_of_range`       | `rating` was outside 0.5–5 or not a half-step. |
+| `rating_not_numeric`        | `rating` was non-numeric. |
+| `author_entry_malformed`    | An entry in `authors` lacked a `\|` or had both halves blank. |
+| `internal_error`            | An unexpected exception fired inside the row's transaction. The exception is logged via `Log::error`; the response carries a generic message. |
+
+The whole-file `header_invalid` code is returned at 422 and is not present in the per-row `results` array.
+
+## Dry run
+
+`POST /api/bulk-upload` with `dry_run=1` (or `true`) runs every row through the same code path, but rolls back each row's transaction instead of committing. The response shape is identical to a real run with `"dry_run": true` echoed back.
+
+One subtlety: find-or-create inside a dry-run row sees rows created by *earlier* dry-run rows only within that row's transaction (which is then rolled back). A dry-run of a CSV that would create the same author across two rows reports two creates on the second row's lookup-then-create path inside its own transaction. The summary counts in dry-run can therefore be slightly off for cross-row dedupe, but per-row failures (the thing dry-run exists to catch) are accurate.
+
+The header-invalid 422 path is unaffected by `dry_run`.
+
+## Non-obvious decisions and gotchas
+
+- **Per-row transactions, not whole-file.** Each row runs its own `DB::beginTransaction` / `DB::commit`; a failing row rolls back its own writes only and the loop continues. There is no all-or-nothing mode — partial imports are the design. Callers must inspect `summary` and `results` to decide what to do.
+- **`fclose($handle)` is in a `finally`.** A truly unexpected exception escaping the per-row catch will not leak the file handle.
+- **Format lookup is case-insensitive via `whereRaw('LOWER(name) = ?', …)`.** Non-index-friendly at scale, but the `formats` table has fewer than a dozen rows in practice. Bulk upload does not create new formats — unknown format names fail the row.
+- **`Audiobook` is matched case-insensitively (`strcasecmp`)** when deciding whether `audio_runtime` or `page_count` is required. The `formats.name` value still has to be exactly `Audiobook` for the rest of the app (the SPA's hardcoded `format_id === 2` checks and `BookController::index`'s name comparison both expect that exact string — see `/feature-plans/reset-database.md`).
+- **`page_count` defaults to `0` for audiobook rows with a blank `page_count`.** The `versions.page_count` column is `NOT NULL` in the schema. Storing `0` is unambiguous as "n/a for an audiobook"; if a stricter representation is wanted in future, that's a schema change.
+- **Author slug derivation is `Str::slug(trim($first.' '.$last))`.** Same rule as `AuthorFactory`. This is one rule rather than the four divergent normalizers documented before; the broader consolidation across the rest of the codebase is tracked in `/feature-plans/authors.md`.
+- **Genre case dedupe stores the trimmed input as-typed.** The lookup is case- and whitespace-insensitive, but if a genre is being created for the first time the value persisted is whatever the row supplied (after `trim`).
+- **Version dedupe key is `(book_id, format_id, version_nickname)`.** Two paperback rows with different `version_nickname` values produce two versions; two paperback rows with the same blank nickname produce one shared version.
+- **Read instances are *always* created when `date_read` is set.** There is no dedupe on `(version_id, user_id, date_read)` — a CSV with two identical rows including the same `date_read` will create two `ReadInstance`s. This is intentional: the importer cannot tell whether the duplicate is an actual re-read recorded twice or a CSV mistake. Audit your CSV before importing if duplicates would be a problem.
+- **`internal_error` does not leak exception messages.** The catch block logs the exception via `Log::error` with row context, then returns a generic message in the response. SQL driver text and Carbon parse errors do not appear in the JSON.
+- **No file size or row count limit at the app layer.** Inherits PHP's `upload_max_filesize` / `post_max_size`. Tracked as a future improvement.
+- **No async / job queue.** The request runs synchronously and blocks until the whole file is processed. Tracked as a future improvement.
 
 ## Related
 
-- Plan file: `/feature-plans/bulk-upload.md` — known limitations and future improvements.
+- Plan file: `/feature-plans/bulk-upload.md` — remaining limitations and future improvements (auth/role, rate limit, async, frontend template/preview/undo, performance batching).
+- `/feature-plans/bulk-upload-hardening.md` — the plan this rewrite executed.
+- `/feature-plans/reset-database.md` — uses this importer as the primary restore path.
 - `/documentation/books.md` — `Book` / `Version` / `ReadInstance` schema, custom PKs, rating mutator, slug rules.
-- `/documentation/new-book-creation.md` — the interactive creation flow this surface bypasses entirely. The two paths share no code; behavior may drift.
-- `/documentation/authors.md` — the four divergent author slug normalizers, of which this controller has the fourth.
-- `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached / matched per row.
+- `/documentation/new-book-creation.md` — the interactive creation flow this surface bypasses entirely.
+- `/documentation/authors.md`, `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached / matched per row.
