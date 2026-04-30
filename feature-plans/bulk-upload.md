@@ -9,7 +9,7 @@ Tracks rough edges and follow-up work for the CSV bulk-import surface. Descripti
 
 This is the lowest-traffic creation path in the app — fast to break, easy to ignore. Items below assume bulk upload remains a power-user / data-migration tool rather than a core daily flow.
 
-The data-fidelity, header-validation, error-legibility, and service-extraction items previously listed here were resolved by `/feature-plans/bulk-upload-hardening.md` (shipped 2026-04-29). What remains is the operational/UX surface around the importer.
+The data-fidelity, header-validation, error-legibility, and service-extraction items previously listed here were resolved by the bulk-upload hardening shipped 2026-04-29 (see `/documentation/bulk-upload.md` for the resulting contract and `CHANGELOG.md` for the entry). What remains is the operational/UX surface around the importer.
 
 ## Known limitations
 

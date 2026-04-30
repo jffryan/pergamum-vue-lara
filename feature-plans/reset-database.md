@@ -11,7 +11,7 @@ The dev database is in a broken state with no backup. Plan a clean `migrate:fres
 
 ## What survives a reset and what doesn't
 
-The bulk importer (`BulkUploadController::upload` → `BulkImportService::importCsv`) reads a header-named CSV (columns: `title, authors, format, page_count, audio_runtime, version_nickname, genres, date_read, rating`) and creates: `Book` (slug-deduped), `Author`s (slug-deduped, multi-author per row), `Genre`s (case-insensitive dedupe), one or more `Version`s per book (deduped on `(book_id, format_id, version_nickname)`), and one `ReadInstance` per row that has `date_read` set. The CSV contract and per-row failure shape are documented in `/documentation/bulk-upload.md`; the rewrite that produced it is `/feature-plans/bulk-upload-hardening.md`.
+The bulk importer (`BulkUploadController::upload` → `BulkImportService::importCsv`) reads a header-named CSV (columns: `title, authors, format, page_count, audio_runtime, version_nickname, genres, date_read, rating`) and creates: `Book` (slug-deduped), `Author`s (slug-deduped, multi-author per row), `Genre`s (case-insensitive dedupe), one or more `Version`s per book (deduped on `(book_id, format_id, version_nickname)`), and one `ReadInstance` per row that has `date_read` set. The CSV contract and per-row failure shape are documented in `/documentation/bulk-upload.md`.
 
 What does NOT roundtrip through the importer and must be recreated manually or via separate seed/import:
 
@@ -64,7 +64,7 @@ There is no `is_admin` column; "admin" pages are admin only by URL convention. A
 
 ### 5. (resolved) Bulk importer slug, multi-read, multi-version, multi-author, genre, audio-runtime issues
 
-All folded into the rewrite tracked by `/feature-plans/bulk-upload-hardening.md` (shipped 2026-04-29). The new `BulkImportService`:
+All folded into the bulk-upload hardening shipped 2026-04-29 (see `/documentation/bulk-upload.md` and the `CHANGELOG.md` entry). The new `BulkImportService`:
 
 - uses `Str::slug($title)` for book slugs (no truncation suffix);
 - creates a new `ReadInstance` per row when `date_read` is set, against the resolved version;

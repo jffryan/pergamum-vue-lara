@@ -141,7 +141,6 @@ The header-invalid 422 path is unaffected by `dry_run`.
 ## Related
 
 - Plan file: `/feature-plans/bulk-upload.md` — remaining limitations and future improvements (auth/role, rate limit, async, frontend template/preview/undo, performance batching).
-- `/feature-plans/bulk-upload-hardening.md` — the plan this rewrite executed.
 - `/feature-plans/reset-database.md` — uses this importer as the primary restore path.
 - `/documentation/books.md` — `Book` / `Version` / `ReadInstance` schema, custom PKs, rating mutator, slug rules.
 - `/documentation/new-book-creation.md` — the interactive creation flow this surface bypasses entirely.
