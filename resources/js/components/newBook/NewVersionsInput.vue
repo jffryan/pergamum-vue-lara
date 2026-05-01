@@ -172,7 +172,7 @@ export default {
         validateVersion() {
             this.isValid.format = !!this.version.format;
             this.isValid.page_count = !!this.version.page_count;
-            if (this.version.format?.name === "audio") {
+            if (this.version.format?.name === "Audiobook") {
                 this.isValid.audio_runtime = !!this.version.audio_runtime;
             }
             return Object.values(this.isValid).every((isValid) => isValid);

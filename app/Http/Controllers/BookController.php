@@ -9,12 +9,14 @@ use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\BookService;
+use App\Support\BookCreator;
+use App\Support\RatingValidator;
+use App\Support\Slugger;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class BookController extends Controller
 {
@@ -110,15 +112,7 @@ class BookController extends Controller
     {
         $bookForm = $request->book;
 
-        $book = $this->createOrGetBook($bookForm['book']);
-
-        if (! $book->wasRecentlyCreated) {
-            // If the book was not recently created (i.e., it existed), we'll just add a new version
-            $new_versions = $this->prepareVersions($bookForm['versions']);
-            $book->versions()->saveMany($new_versions);
-
-            return $this->buildResponse($book, [], $new_versions, []);
-        }
+        $book = BookCreator::create($bookForm['book']['title']);
 
         $new_authors = $this->handleAuthors($bookForm['authors']);
         $new_versions = $this->prepareVersions($bookForm['versions']);
@@ -165,11 +159,7 @@ class BookController extends Controller
     private function updateBook($existing_book, $patch_book)
     {
         try {
-            $slug = Str::of($patch_book['title'])
-                ->lower()
-                ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-                ->replace(' ', '-')  // Replace spaces with hyphens
-                ->limit(50);  // Limit to 50 characters
+            $slug = Slugger::for($patch_book['title']);
 
             // Update book properties
             $existing_book->fill([
@@ -196,11 +186,7 @@ class BookController extends Controller
             } else {
                 $firstName = $author['first_name'] ?? '';
                 $lastName = $author['last_name'] ?? '';
-                $slugParts = array_filter([$firstName, $lastName]);
-                $slug = strtolower(implode(' ', $slugParts));
-                $slug = preg_replace('/\s+/', ' ', $slug);
-                $slug = preg_replace('/[^a-z0-9\s]/', '', $slug);
-                $slug = str_replace(' ', '-', $slug);
+                $slug = Slugger::for(trim("$firstName $lastName"));
 
                 $existing_author = Author::firstOrCreate(
                     ['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]
@@ -443,8 +429,24 @@ class BookController extends Controller
         $book = Book::findOrFail($book_id);
         $version = Version::findOrFail($version_id);
 
+        if (array_key_exists('rating', $read_instance_data) && $read_instance_data['rating'] !== null && $read_instance_data['rating'] !== '') {
+            if (! RatingValidator::isValid($read_instance_data['rating'])) {
+                return response()->json([
+                    'message' => "rating '{$read_instance_data['rating']}' must be between 0.5 and 5 in 0.5 steps",
+                    'reason_code' => 'rating_out_of_range',
+                ], 422);
+            }
+        }
+
         if (! $book || ! $version) {
             return response()->json(['message' => 'Book or version not found'], 404);
+        }
+
+        if ((int) $version->book_id !== (int) $book->book_id) {
+            return response()->json([
+                'message' => "version_id {$version->version_id} does not belong to book_id {$book->book_id}",
+                'reason_code' => 'version_book_mismatch',
+            ], 422);
         }
 
         $read_instance = new ReadInstance($read_instance_data);
@@ -462,41 +464,12 @@ class BookController extends Controller
     /**
      * Helper functions
      */
-    private function createOrGetBook($bookData)
-    {
-        $slug = Str::of($bookData['title'])
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(50);  // Limit to 50 characters
-
-        // Look for an existing book by the slug
-        $existingBook = Book::where('slug', $slug)->first();
-
-        if ($existingBook) {
-            return $existingBook;
-        }
-
-        $data = [
-            'title' => $bookData['title'],
-            'slug' => $slug,
-        ];
-
-        return Book::create($data);
-    }
-
     private function handleAuthors($authorsData)
     {
         return collect($authorsData)->map(function ($author) {
-            $firstName = isset($author['first_name']) ? $author['first_name'] : '';
-            $lastName = isset($author['last_name']) ? $author['last_name'] : '';
-            $slugParts = array_filter([$firstName, $lastName]); // Remove null or empty parts
-            $slug = implode(' ', $slugParts); // Join with space
-            $slug = strtolower($slug); // Convert to lowercase
-            $slug = preg_replace('/\s+/', ' ', $slug); // Remove extra spaces
-            $slug = str_replace(' ', '-', $slug); // Replace spaces with hyphens
-
-            $author['slug'] = $slug;
+            $firstName = $author['first_name'] ?? '';
+            $lastName = $author['last_name'] ?? '';
+            $author['slug'] = Slugger::for(trim("$firstName $lastName"));
 
             return Author::firstOrCreate($author);
         })->all();

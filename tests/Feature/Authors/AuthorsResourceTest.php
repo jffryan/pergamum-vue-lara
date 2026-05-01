@@ -25,7 +25,7 @@ class AuthorsResourceTest extends TestCase
             'books' => [['book' => ['book_id', 'title', 'slug'], 'authors', 'genres', 'versions', 'read_instances']],
         ]);
         $this->assertSame($author->author_id, $response->json('author.author_id'));
-        $this->assertCount(1, $response->json('books'));
+        $this->assertSame($book->book_id, $response->json('books.0.book.book_id'));
     }
 
     public function test_unknown_slug_returns_404(): void

@@ -23,12 +23,8 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 
 ### Data integrity
 
-- **`authors.slug` is nullable and has no unique index.** `firstOrCreate` is the only dedupe, so a race or a divergent normalizer can produce duplicates. The migration also allows `slug = null`, which means "the authors with no slug" all collide on `firstOrCreate(['slug' => null, …])` lookups.
-- **Three divergent slug normalizers** (documented in `authors.md`):
-  - `AuthorController::getOrSetToBeCreatedAuthorsByName` — strips non-alphanumerics, **30-char cap**.
-  - `BookController::handleAuthors` — keeps non-alphanumerics, no cap.
-  - `NewBookController::handleAuthors` — strips non-alphanumerics, no cap.
-  Result: an author created via book-edit and later re-submitted via `/create-authors` can fail to match itself. Existing data may already have duplicates from this drift.
+- **`authors.slug` is unique and `NOT NULL` (since `2026_04_30_000000_make_authors_slug_unique_and_required.php`).** The migration backfilled legacy nulls and deduped colliding rows with numeric suffixes. `firstOrCreate` is no longer the only dedupe — the unique index is the actual guarantee. Races and divergent normalizers now surface as `QueryException` instead of silent duplicates; batch importers should catch the constraint violation and re-fetch.
+- **Input-shape divergence remains.** `AuthorController::getOrSetToBeCreatedAuthorsByName` slugifies the frontend-provided `name`; `BookController::handleAuthors`/`updateAuthors` and `NewBookController::handleAuthors` slugify `trim("$first_name $last_name")`. Identical for the common case where `name` equals first + last, but middle names or suffixes from the frontend can break parity.
 - **No author merge tool.** Once duplicates exist (from divergent slugs, typos, "Jr." vs "Jr", etc.), there's no API or UI to combine them — the only fix is manual SQL.
 - **Orphan-pruning is silent and irreversible.** When `BookController::destroy` deletes the last book by an author, the author row is hard-deleted with no audit trail. If the book deletion was a misclick, the author has to be re-typed by hand and gets a fresh `author_id`, breaking any external reference. Linked from `/feature-plans/books.md` item 10 (soft deletes).
 - **`bio` is returned by the API but has no column.** `AuthorService::getAuthorWithRelations` includes `bio` in the response payload; the migration doesn't define it and the model doesn't declare it. Reads as `null` today; if a frontend ever depends on it before the column exists, it'll break silently.
@@ -63,22 +59,20 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 In rough priority order — earlier items unblock later ones.
 
 1. **Add Feature tests** for `getAuthorBySlug`, the find-or-stub endpoint, the orphan-prune path on book delete, and each of the three slug normalizers. Necessary before any of the consolidation work below.
-2. **Extract a single slug helper** (`App\Support\Slugger::forAuthor($first, $last)`) and use it from `AuthorController::getOrSetToBeCreatedAuthorsByName`, `BookController::handleAuthors`, and `NewBookController::handleAuthors`. Pick one rule (recommend: strip non-alphanumerics, no length cap, or a much higher cap like 100) and migrate existing data so collapse-on-firstOrCreate can be trusted. Companion to the book-side slug helper in `/feature-plans/books.md` item 6.
-3. **Make `authors.slug` non-nullable and add a unique index.** Backfill nulls before adding the constraint; surface duplicates as part of the migration so they can be merged manually (or via the merge tool below) instead of failing the migration.
-4. **Build an author merge tool** — `POST /authors/{keep_id}/merge/{remove_id}` that re-points `book_author` rows from `remove_id` to `keep_id`, deletes the loser, and returns the merged record. Admin-only; needed once duplicates exist (and they probably already do).
-5. **Introduce `FormRequest` classes** for the find-or-stub endpoint and any future author-edit endpoint. Same pattern as the books flow.
-6. **Decide the fate of `/create-authors`.** Either:
+2. **Build an author merge tool** — `POST /authors/{keep_id}/merge/{remove_id}` that re-points `book_author` rows from `remove_id` to `keep_id`, deletes the loser, and returns the merged record. Admin-only; needed once duplicates exist (and they probably already do).
+3. **Introduce `FormRequest` classes** for the find-or-stub endpoint and any future author-edit endpoint. Same pattern as the books flow.
+4. **Decide the fate of `/create-authors`.** Either:
    - Wire the SPA's new-book flow to call it as the "confirm matches" step (the point of the find-or-stub pattern), or
    - Delete it and the duplicate slug-normalizer it carries.
    The current limbo is the worst option.
-7. **Add `bio` (and probably `photo_url`, `birth_year`, `death_year`) to the `authors` table.** `AuthorService` is already returning `bio`; make it real. Then build a minimal author edit form (also unblocks item 9).
-8. **Build an author edit endpoint and view.** `PATCH /authors/{id}` with a real `update` method on `AuthorController`, an `AuthorPolicy`, and a small edit form on the detail page. Removes the "edit every book to fix a typo" workaround.
-9. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10. The orphan prune should mark, not delete.
-10. **User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.** Mirror the `auth()->id()` filter that `BookController::index` and `BookService::getBookWithRelations` apply. Required before any multi-tenant work.
-11. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
-12. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. Reuses the same `ReadInstance` aggregation logic that `StatisticsService` will end up with — coordinate with `/feature-plans/documentation-backfill.md` tier 3 (statistics).
-13. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.
-14. **Introduce a "primary author" concept.** A flag on `book_author` (`is_primary`) or a dedicated column on `books` (`primary_author_id`). Removes the dependence on insert-order for the index sort and makes the "primary author" link in book rows meaningful.
-15. **Stabilize the `AuthorView` error message.** Currently says "Unable to load books at this time" on any failure (copy-pasted from a book view); should reference the author.
-16. **Delete `getOneAuthor` from `api/AuthorController.js`** and the unreachable `index` / `create` / `store` / `edit` / `update` / `destroy` stubs from `AuthorController.php`. Either implement them with policies or remove them — currently they're noise that suggests CRUD exists when it doesn't.
-17. **De-duplicate `AuthorController::show` vs `getAuthorBySlug`.** Pick one. If `Route::resource('authors', …)` is added later (item 11 likely needs it), `show` should be the canonical handler and `getAuthorBySlug` should be removed (or vice versa); don't keep both.
+5. **Add `bio` (and probably `photo_url`, `birth_year`, `death_year`) to the `authors` table.** `AuthorService` is already returning `bio`; make it real. Then build a minimal author edit form (also unblocks item 7).
+6. **Build an author edit endpoint and view.** `PATCH /authors/{id}` with a real `update` method on `AuthorController`, an `AuthorPolicy`, and a small edit form on the detail page. Removes the "edit every book to fix a typo" workaround.
+7. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10. The orphan prune should mark, not delete.
+8. **User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.** Mirror the `auth()->id()` filter that `BookController::index` and `BookService::getBookWithRelations` apply. Required before any multi-tenant work.
+9. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
+10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. Reuses the same `ReadInstance` aggregation logic that `StatisticsService` will end up with — coordinate with `/feature-plans/documentation-backfill.md` tier 3 (statistics).
+11. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.
+12. **Introduce a "primary author" concept.** A flag on `book_author` (`is_primary`) or a dedicated column on `books` (`primary_author_id`). Removes the dependence on insert-order for the index sort and makes the "primary author" link in book rows meaningful.
+13. **Stabilize the `AuthorView` error message.** Currently says "Unable to load books at this time" on any failure (copy-pasted from a book view); should reference the author.
+14. **Delete `getOneAuthor` from `api/AuthorController.js`** and the unreachable `index` / `create` / `store` / `edit` / `update` / `destroy` stubs from `AuthorController.php`. Either implement them with policies or remove them — currently they're noise that suggests CRUD exists when it doesn't.
+15. **De-duplicate `AuthorController::show` vs `getAuthorBySlug`.** Pick one. If `Route::resource('authors', …)` is added later (item 9 likely needs it), `show` should be the canonical handler and `getAuthorBySlug` should be removed (or vice versa); don't keep both.

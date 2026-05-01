@@ -15,6 +15,27 @@ class ReadInstance extends Model
 
     protected $fillable = ['user_id', 'book_id', 'version_id', 'date_read', 'rating'];
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $instance): void {
+            if ($instance->version_id === null || $instance->book_id === null) {
+                return;
+            }
+
+            $versionBookId = Version::whereKey($instance->version_id)->value('book_id');
+
+            if ($versionBookId === null) {
+                return;
+            }
+
+            if ((int) $versionBookId !== (int) $instance->book_id) {
+                throw new \DomainException(
+                    "read_instance.version_id {$instance->version_id} belongs to book {$versionBookId}, not book {$instance->book_id}"
+                );
+            }
+        });
+    }
+
     public function book()
     {
         return $this->belongsTo(Book::class, 'book_id');

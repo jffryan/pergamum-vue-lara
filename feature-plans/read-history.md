@@ -17,7 +17,6 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 ### Validation & request shape
 
 - **No `FormRequest`.** `addReadInstance` reaches into `$request['readInstance']`, then `$request['readInstance']['book_id']`, etc. Missing keys throw undefined-index 500s.
-- **`version_id` is not validated against `book_id`.** A `version_id` belonging to a different book is accepted and persisted. Add a `Rule::exists('versions', 'version_id')->where('book_id', $bookId)` check.
 - **Empty `rating` becomes `0`.** The frontend's `<select>` defaults to `""`; the mutator doubles `null !== '' === true` and `'' * 2` is `0` (PHP coerces). Explicit "no rating" should be `null`, not `0`. Either the form must send `null` for unselected, or the mutator must guard.
 - **Date format isn't normalized server-side.** The SPA sends `MM/DD/YYYY` strings; the `read_instances.date_read` column type accepts MySQL's permissive parsing today, but a non-MySQL backend or a stricter mode would reject this. Normalize to `Y-m-d` before insert.
 - **`getBooksByYear($year)` accepts any string.** Eloquent binds the parameter so it's safe, but `/api/completed/abc` returns `[]` instead of `422` / `404`. Add an `int` typehint or a `Rule::numeric` + reasonable range.
@@ -67,7 +66,7 @@ In rough priority order.
 
 1. **Add Feature tests** for `POST /add-read-instance` (success, mismatched book/version, missing keys, null `date_read`, empty rating), `GET /completed/years`, and `GET /completed/{year}` (year filter accuracy, sort order, multi-year books, undated reads). Necessary before any of the structural cleanup below.
 2. **Add `createReadInstance` to `api/BookController.js`** and route `UpdateBookReadInstance` through it. Removes the direct axios import and the layering violation.
-3. **Introduce a `StoreReadInstanceRequest` `FormRequest`** with rules for `book_id` (exists), `version_id` (exists, belongs to book_id), `date_read` (nullable date, accepts both `Y-m-d` and `m/d/Y`), `rating` (nullable, between 0.5 and 5 in 0.5 steps).
+3. **Introduce a `StoreReadInstanceRequest` `FormRequest`** with rules for `book_id` (exists), `version_id` (exists, belongs to book_id — surface as a 422 here rather than relying on the model-side `\DomainException` safety net), `date_read` (nullable date, accepts both `Y-m-d` and `m/d/Y`), `rating` (nullable, between 0.5 and 5 in 0.5 steps).
 4. **Wrap `addReadInstance` in a transaction** and collapse the dual save into one (`new ReadInstance($data + ['user_id' => …])->save()` after setting both FKs). Removes the half-row failure window.
 5. **Switch year filtering to range queries.** Replace `whereYear('date_read', $year)` with `whereBetween('date_read', ["$year-01-01", "$year-12-31"])` and add a `(user_id, date_read)` index migration. Same change in `getAvailableYears` (or rewrite it as `DISTINCT EXTRACT(YEAR FROM date_read)` portably).
 6. **Push `getCompletedItemsForYear` sorting into SQL.** Order by `MIN(read_instances.date_read)` per book at the query level instead of `->sortBy` in PHP. Drops the in-memory hydration cost.
@@ -80,5 +79,5 @@ In rough priority order.
 13. **Add an empty state to `/completed`** with a CTA to log a read or visit the library.
 14. **Surface undated reads.** Either an "Undated" tab in `CompletedView` or fold them under their `created_at` year — pick the user-facing semantics that's least confusing and document it.
 15. **Cache `loggedYears` and recently fetched year payloads** in a Pinia `ReadHistoryStore`. Cheap UX win once `CompletedView` has a back button or a dashboard surface that also reads it.
-16. **Backfill `read_instances.book_id` consistency check.** Today nothing prevents a `version_id` belonging to a different `book_id`; once the `FormRequest` blocks it going forward, run a one-shot audit query to flag pre-existing mismatches.
+16. **Backfill `read_instances.book_id` consistency check.** New writes are blocked by the model-side `saving` listener, but pre-existing mismatched rows (if any predate the validator) won't surface until something tries to re-save them. Run a one-shot audit query (`select read_instances.* from read_instances join versions using (version_id) where read_instances.book_id <> versions.book_id`) and reconcile.
 17. **Coordinate with `/feature-plans/statistics.md`.** Aggregations across `ReadInstance` (totals, average rating per year, fastest read, etc.) live in the stats doc but share the same MySQL-specific year functions and the same user-scoping convention. Whatever index strategy lands here should be reused there.

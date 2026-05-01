@@ -8,9 +8,11 @@ use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
+use App\Support\BookCreator;
+use App\Support\RatingValidator;
+use App\Support\Slugger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class NewBookController extends Controller
 {
@@ -19,11 +21,7 @@ class NewBookController extends Controller
     {
         $title = $request['title'];
 
-        $slug = Str::of($title)
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(50);  // Limit to 50 characters
+        $slug = Slugger::for($title);
 
         // Look for an existing book by the slug
         $userId = auth()->id();
@@ -53,69 +51,12 @@ class NewBookController extends Controller
         );
     }
 
-    private function createBook($bookData)
-    {
-        $title = $bookData['title'];
-        $request_slug = Str::of($bookData['slug'])->lower();
-
-        $generated_slug = Str::of($title)
-            ->lower()
-            ->replaceMatches('/[^a-z0-9\s]/', '')  // Remove non-alphanumeric characters
-            ->replace(' ', '-')  // Replace spaces with hyphens
-            ->limit(50);  // Limit to 50 characters
-
-        if ($request_slug != $generated_slug) {
-            $slug = $this->generateUniqueSlug($generated_slug);
-        } else {
-            $slug = $request_slug;
-        }
-
-        $data = [
-            'title' => $bookData['title'],
-            'slug' => $slug,
-        ];
-
-        return Book::create($data);
-    }
-
-    /**
-     * Generate a unique slug by checking existing slugs and incrementing the highest suffix.
-     */
-    private function generateUniqueSlug($baseSlug)
-    {
-        // Get all slugs that match the base slug pattern (including numbered variations)
-        $existingSlugs = Book::where('slug', 'LIKE', "{$baseSlug}%")
-            ->pluck('slug')
-            ->toArray();
-
-        if (empty($existingSlugs)) {
-            return $baseSlug;
-        }
-
-        $highestNumber = 0;
-
-        foreach ($existingSlugs as $slug) {
-            if (preg_match('/^'.preg_quote($baseSlug, '/').'-(\d+)$/', $slug, $matches)) {
-                $highestNumber = max($highestNumber, intval($matches[1]));
-            }
-        }
-
-        return $baseSlug.'-'.($highestNumber + 1);
-    }
-
     private function handleAuthors($authorsData)
     {
         return collect($authorsData)->map(function ($author) {
-            $firstName = isset($author['first_name']) ? $author['first_name'] : '';
-            $lastName = isset($author['last_name']) ? $author['last_name'] : '';
-            $slugParts = array_filter([$firstName, $lastName]); // Remove null or empty parts
-            $slug = implode(' ', $slugParts); // Join with space
-            $slug = strtolower($slug); // Convert to lowercase
-            $slug = preg_replace('/\s+/', ' ', $slug); // Remove extra spaces
-            $slug = preg_replace('/[^a-z0-9\s]/', '', $slug);  // Remove non-alphanumeric characters
-            $slug = str_replace(' ', '-', $slug); // Replace spaces with hyphens
-
-            $author['slug'] = $slug;
+            $firstName = $author['first_name'] ?? '';
+            $lastName = $author['last_name'] ?? '';
+            $slug = Slugger::for(trim("$firstName $lastName"));
 
             return Author::firstOrCreate(['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]);
         })->all();
@@ -154,6 +95,12 @@ class NewBookController extends Controller
     private function handleReadInstances($readInstancesData, $bookData, $versionsData)
     {
         return collect($readInstancesData)->map(function ($readInstance) use ($bookData, $versionsData) {
+            if (array_key_exists('rating', $readInstance) && $readInstance['rating'] !== null && $readInstance['rating'] !== '') {
+                if (! RatingValidator::isValid($readInstance['rating'])) {
+                    throw new \Exception("rating '{$readInstance['rating']}' must be between 0.5 and 5 in 0.5 steps");
+                }
+            }
+
             $book_id = $bookData['book_id'];
             $version_id = null;
 
@@ -195,7 +142,7 @@ class NewBookController extends Controller
 
         try {
             // Create the main book record
-            $book = $this->createBook($bookData['book']);
+            $book = BookCreator::create($bookData['book']['title']);
             $authors = $this->handleAuthors($bookData['authors']);
             $genres = $this->handleGenres($bookData['genres']);
             $versions = $this->handleVersions($bookData['versions'], $book);
@@ -222,7 +169,6 @@ class NewBookController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error occurred, creation aborted. '.$e->getMessage(),
-                'trace' => $e->getTrace(),
             ]);
         }
     }

@@ -41,7 +41,7 @@ A fresh DB with auto-increment IDs will assign whatever order the seeder inserts
 - `app/Http/Controllers/BookController.php:522` — `$format->name == 'Audiobook'` and `:524` `'Paper'` decide whether `audio_runtime` is kept.
 - `resources/js/views/EditBookView.vue:257` — `f.name === "Audiobook"`.
 - `resources/js/components/newBook/NewVersionsInput.vue:58` — `version.format?.name === 'Audiobook'` (template).
-- `resources/js/components/newBook/NewVersionsInput.vue:175` — `version.format?.name === "audio"` (validation; this one is already broken — never matches the seeded name — but the reset shouldn't hide it further).
+- `resources/js/components/newBook/NewVersionsInput.vue:175` — `version.format?.name === "Audiobook"` (validation).
 
 **Mitigation:** the seeder must use the exact strings `'Audiobook'` and `'Paper'`. Capitalization matters for the backend comparisons (`==` is case-sensitive in PHP for these strings). The CSV importer's lookup is case-insensitive, so the CSV side is fine.
 
@@ -148,7 +148,7 @@ Lists are gone. Recreate the canonical ones via the SPA. Document the list of li
 - `database/seeders/DatabaseSeeder.php` (currently empty).
 - New `database/seeders/FormatSeeder.php`.
 - The hardcoded `format_id === 2` checks in `BookCreateEditForm.vue`, `AddVersionView.vue`, `AddReadHistoryView.vue` — NOT modified here, but their assumption is being preserved by the seeder. Coordinate with `/feature-plans/formats.md` item 3 (capability flags) — that work would remove the assumption entirely; until it lands, the seeder pinning IDs is the load-bearing piece.
-- The `books.slug` unique index from `/feature-plans/books.md` should land before this reset runs, so that any pre-existing duplicates surface in a controlled migration rather than mid-restore.
+- `books.slug` and `authors.slug` are both uniquely indexed at the DB level (the latter via `2026_04_30_000000_make_authors_slug_unique_and_required.php`), so the bulk importer's find-or-create-by-slug logic is backstopped. Pre-existing duplicates have already been surfaced and resolved by that migration rather than mid-restore.
 
 ## Open questions
 

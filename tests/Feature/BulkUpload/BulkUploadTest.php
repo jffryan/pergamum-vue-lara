@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class BulkUploadTest extends TestCase
@@ -167,7 +168,7 @@ class BulkUploadTest extends TestCase
         );
     }
 
-    public function test_blank_rows_in_middle_are_skipped_silently(): void
+    public function test_blank_rows_inflate_total_but_are_not_counted_as_skipped(): void
     {
         $this->actingAsUser();
         $this->paper();
@@ -181,10 +182,13 @@ class BulkUploadTest extends TestCase
         $response = $this->postJson('/api/bulk-upload', ['csv_file' => $file]);
 
         $response->assertOk();
-        // total counts every data row (existing behavior), including the blank one we silently skip.
+        // Oddity (not a desired property): total=3 counts the blank row, but it lands in
+        // neither succeeded, failed, nor skipped — succeeded+failed+skipped != total.
+        // Future-improvement entry filed in feature-plans/bulk-upload.md.
         $this->assertSame(3, $response->json('summary.total'));
         $this->assertSame(2, $response->json('summary.succeeded'));
         $this->assertSame(0, $response->json('summary.failed'));
+        $this->assertSame(0, $response->json('summary.skipped'));
     }
 
     // ---------- Data fidelity ----------
@@ -287,8 +291,7 @@ class BulkUploadTest extends TestCase
 
         $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk();
         $book = Book::firstOrFail();
-        $this->assertStringNotContainsString('...', $book->slug);
-        $this->assertStringNotContainsString('.', $book->slug);
+        $this->assertSame(Str::slug($longTitle), $book->slug);
     }
 
     // ---------- Per-row failures ----------

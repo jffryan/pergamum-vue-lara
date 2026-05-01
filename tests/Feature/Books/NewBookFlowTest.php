@@ -66,7 +66,7 @@ class NewBookFlowTest extends TestCase
                     ],
                 ],
                 'read_instances' => [
-                    ['date_read' => '2026-01-15', 'rating' => 9],
+                    ['date_read' => '2026-01-15', 'rating' => 4],
                 ],
             ],
         ];
@@ -85,8 +85,45 @@ class NewBookFlowTest extends TestCase
             'book_id' => $book->book_id,
             'user_id' => $user->user_id,
             'date_read' => '2026-01-15',
-            'rating' => 18, // ReadInstance::setRatingAttribute doubles input (out-of-5 → out-of-10)
+            'rating' => 8, // ReadInstance::setRatingAttribute doubles input (out-of-5 → out-of-10)
         ]);
+    }
+
+    public function test_complete_book_creation_rejects_rating_out_of_range(): void
+    {
+        $this->actingAsUser();
+        $format = Format::factory()->create(['name' => 'Hardcover']);
+
+        $payload = [
+            'bookData' => [
+                'book' => ['title' => 'Out Of Range', 'slug' => 'out-of-range'],
+                'authors' => [['first_name' => 'Some', 'last_name' => 'Author']],
+                'genres' => [],
+                'versions' => [[
+                    'format' => ['format_id' => $format->format_id],
+                    'page_count' => 100,
+                    'audio_runtime' => null,
+                    'nickname' => null,
+                ]],
+                'read_instances' => [
+                    ['date_read' => '2026-01-15', 'rating' => 9],
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/create-book', $payload);
+
+        // Either a 422 with validation errors or a 200 with success:false + a rating-related reason.
+        // Bulk-upload rejects rating>5 with reason_code rating_out_of_range; this endpoint should too.
+        $status = $response->status();
+        if ($status === 422) {
+            $this->assertTrue(true);
+        } else {
+            $response->assertStatus(200)->assertJsonPath('success', false);
+            $body = json_encode($response->json());
+            $this->assertMatchesRegularExpression('/rating/i', $body, 'response should mention rating as the failure reason');
+        }
+        $this->assertDatabaseMissing('books', ['slug' => 'out-of-range']);
     }
 
     public function test_complete_book_creation_generates_unique_slug_when_title_collides(): void
@@ -165,7 +202,11 @@ class NewBookFlowTest extends TestCase
 
         $response = $this->postJson('/api/create-book', $payload);
 
-        $response->assertOk()->assertJsonPath('success', false);
+        $response->assertStatus(200)->assertJsonPath('success', false);
+        // Don't assert a 4xx — the controller emits 200-on-failure today; we're not dictating
+        // the new contract here, just blocking the trace leak from being silently accepted.
+        $response->assertJsonMissing(['trace']);
+        $this->assertArrayNotHasKey('trace', $response->json());
         $this->assertDatabaseMissing('books', ['slug' => 'will-not-persist']);
         $this->assertDatabaseMissing('authors', ['first_name' => 'Some', 'last_name' => 'One']);
     }

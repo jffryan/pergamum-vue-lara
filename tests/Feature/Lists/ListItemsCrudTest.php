@@ -78,6 +78,8 @@ class ListItemsCrudTest extends TestCase
 
     public function test_destroy_returns_404_when_item_belongs_to_a_different_list(): void
     {
+        // Both lists are owned by the SAME user on purpose: this test pins list-membership
+        // routing, not authorization/scoping (covered in tests/Feature/UserScoping/ListItemsScopingTest.php).
         $user = $this->actingAsUser();
         $listA = BookList::factory()->forUser($user)->create();
         $listB = BookList::factory()->forUser($user)->create();

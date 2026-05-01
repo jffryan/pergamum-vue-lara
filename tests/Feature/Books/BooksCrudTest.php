@@ -32,7 +32,8 @@ class BooksCrudTest extends TestCase
             'books' => [['book' => ['book_id', 'title', 'slug'], 'authors', 'versions', 'genres', 'readInstances']],
             'pagination' => ['total', 'perPage', 'currentPage', 'lastPage', 'from', 'to'],
         ]);
-        $this->assertSame(3, $response->json('pagination.total'));
+        $returnedIds = collect($response->json('books'))->pluck('book.book_id')->all();
+        $this->assertEqualsCanonicalizing($books->pluck('book_id')->all(), $returnedIds);
     }
 
     public function test_index_search_filters_by_title(): void
@@ -120,7 +121,7 @@ class BooksCrudTest extends TestCase
         $this->assertEqualsCanonicalizing(['Fantasy', 'Adventure'], $book->genres->pluck('name')->all());
     }
 
-    public function test_store_with_existing_slug_only_appends_a_new_version(): void
+    public function test_store_with_existing_slug_creates_distinct_book_with_suffix(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->create(['name' => 'Audiobook']);
@@ -142,9 +143,13 @@ class BooksCrudTest extends TestCase
 
         $response->assertOk();
         $existing->refresh();
-        $this->assertCount(2, $existing->versions);
-        $this->assertCount(0, $existing->authors, 'authors should not be re-attached on the existing-book branch');
-        $this->assertDatabaseMissing('authors', ['first_name' => 'New', 'last_name' => 'Author']);
+        $this->assertCount(1, $existing->versions, 'existing book should not gain a version');
+
+        $this->assertDatabaseHas('books', ['title' => 'Recursion', 'slug' => 'recursion-1']);
+        $created = Book::where('slug', 'recursion-1')->firstOrFail();
+        $this->assertCount(1, $created->versions);
+        $this->assertCount(1, $created->authors);
+        $this->assertDatabaseHas('authors', ['first_name' => 'New', 'last_name' => 'Author']);
     }
 
     public function test_destroy_removes_book_versions_and_orphan_authors(): void
