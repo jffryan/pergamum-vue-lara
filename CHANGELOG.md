@@ -6,6 +6,8 @@ All notable changes to Pergamum will be documented in this file.
 
 - Bulk upload now derives book and author slugs with the shared `App\Support\Slugger` helper and validates ratings with `App\Support\RatingValidator`, matching every other creation path. Existing book and author slugs are normalized to the same rule by migration, so a book imported from CSV and the same book created in the SPA are one row rather than two. Some book and author detail URLs change as a result.
 - Bulk upload's whole-file rejection messages (missing column, unknown column, duplicate column) now render in the UI instead of a generic "An error occurred during upload."
+- Bulk upload can file an entire import into a brand-new list. `POST /api/bulk-upload` accepts an optional `list_name`; every version a successful row found or created is appended to a new list owned by the uploader, in CSV row order. The response grows a `list` block. The list is created lazily, so an import where every row fails leaves nothing behind and the name stays free for a retry. A name already taken by one of your lists rejects the whole upload with `422 list_name_taken` before anything is imported. `BulkUploadView` gains an "add to a new list" checkbox.
+- Bulk upload's CSV header now requires only `title`, `authors`, and `format`. Every other column may be omitted, so a file of nothing but paperbacks no longer has to carry an empty `audio_runtime` column. Per-row value requirements are unchanged — a paperback row with no page count still fails with `page_count_required`. Every file that was valid before is still valid.
 
 ## [0.1.3] - 2026-08-02
 

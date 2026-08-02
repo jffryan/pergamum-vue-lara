@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BulkImportService;
-use App\Services\Exceptions\BulkImportHeaderException;
+use App\Services\Exceptions\BulkImportFileException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,6 +16,9 @@ class BulkUploadController extends Controller
         $request->validate([
             'csv_file' => 'required|file|mimes:csv,txt',
             'dry_run' => 'sometimes|boolean',
+            // `required` rather than `nullable` so a blank-but-present name is a
+            // standard {message, errors} 422 instead of an empty-slug list.
+            'list_name' => 'sometimes|required|string|max:255',
         ]);
 
         $dryRun = $request->boolean('dry_run');
@@ -25,8 +28,9 @@ class BulkUploadController extends Controller
                 $request->file('csv_file'),
                 (int) auth()->id(),
                 $dryRun,
+                $request->input('list_name'),
             );
-        } catch (BulkImportHeaderException $e) {
+        } catch (BulkImportFileException $e) {
             return response()->json([
                 'reason_code' => $e->reasonCode,
                 'reason' => $e->getMessage(),

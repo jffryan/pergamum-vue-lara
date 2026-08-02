@@ -2,12 +2,10 @@
 
 namespace App\Services\Exceptions;
 
-use RuntimeException;
-
-class BulkImportHeaderException extends RuntimeException
+class BulkImportHeaderException extends BulkImportFileException
 {
-    public function __construct(string $message, public readonly string $reasonCode = 'header_invalid')
+    public function __construct(string $message)
     {
-        parent::__construct($message);
+        parent::__construct($message, 'header_invalid');
     }
 }

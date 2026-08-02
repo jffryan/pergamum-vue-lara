@@ -12,13 +12,45 @@
             />
         </div>
 
+        <div class="mb-4">
+            <label class="flex items-center gap-2">
+                <input type="checkbox" v-model="addToList" />
+                <span>Add everything imported to a new list</span>
+            </label>
+
+            <input
+                v-if="addToList"
+                v-model="listName"
+                type="text"
+                maxlength="255"
+                placeholder="New list name"
+                class="mt-2 block border border-zinc-400 px-2 py-1"
+            />
+        </div>
+
         <button
-            :disabled="!selectedFile || loading"
+            :disabled="submitDisabled"
             @click="submit"
             class="btn bg-zinc-700 text-white disabled:opacity-50"
         >
             {{ loading ? "Uploading..." : "Upload" }}
         </button>
+
+        <p v-if="list" class="mt-6">
+            <template v-if="list.list_id">
+                Added {{ list.items_added }}
+                {{ list.items_added === 1 ? "item" : "items" }} to
+                <router-link
+                    :to="{ name: 'lists.show', params: { id: list.list_id } }"
+                    class="underline"
+                >
+                    {{ list.name }}
+                </router-link>
+            </template>
+            <template v-else>
+                No list was created — no rows succeeded.
+            </template>
+        </p>
 
         <div v-if="summary" class="mt-6">
             <p class="font-medium mb-2">
@@ -69,26 +101,40 @@ export default {
             loading: false,
             summary: null,
             results: [],
+            list: null,
+            addToList: false,
+            listName: "",
             error: null,
         };
     },
+    computed: {
+        submitDisabled() {
+            if (!this.selectedFile || this.loading) return true;
+            return this.addToList && !this.listName.trim();
+        },
+    },
     methods: {
-        onFileChange(event) {
-            this.selectedFile = event.target.files[0] || null;
+        clearResults() {
             this.summary = null;
             this.results = [];
+            this.list = null;
             this.error = null;
         },
+        onFileChange(event) {
+            this.selectedFile = event.target.files[0] || null;
+            this.clearResults();
+        },
         async submit() {
-            if (!this.selectedFile) return;
+            if (this.submitDisabled) return;
             this.loading = true;
-            this.error = null;
-            this.summary = null;
-            this.results = [];
+            this.clearResults();
             try {
-                const response = await bulkUpload(this.selectedFile);
+                const response = await bulkUpload(this.selectedFile, {
+                    listName: this.addToList ? this.listName.trim() : null,
+                });
                 this.summary = response.data.summary;
                 this.results = response.data.results;
+                this.list = response.data.list;
             } catch (err) {
                 // Whole-file rejections use {reason_code, reason}; Laravel's own
                 // request validation uses {message, errors}. Read both.

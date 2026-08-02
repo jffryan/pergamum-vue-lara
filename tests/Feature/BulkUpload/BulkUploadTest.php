@@ -126,6 +126,56 @@ class BulkUploadTest extends TestCase
         $this->assertSame(0, Book::count());
     }
 
+    public function test_paperback_only_file_without_an_audio_runtime_column_succeeds(): void
+    {
+        $user = $this->actingAsUser();
+        $this->paper();
+
+        $headers = ['title', 'authors', 'format', 'page_count'];
+        $file = $this->csvFile([
+            ['Dune', 'Frank|Herbert', 'Paper', '412'],
+        ], $headers);
+
+        $response = $this->postJson('/api/bulk-upload', ['csv_file' => $file]);
+
+        $response->assertOk();
+        $this->assertSame('success', $response->json('results.0.status'));
+        $this->assertDatabaseHas('books', ['slug' => 'dune']);
+        $this->assertDatabaseHas('versions', ['page_count' => 412]);
+    }
+
+    public function test_file_with_only_the_three_required_columns_succeeds_for_an_audiobook_row(): void
+    {
+        $this->actingAsUser();
+        $this->audiobook();
+
+        // page_count and audio_runtime are optional *columns*; the per-row gate still
+        // fires, so an audiobook row with neither column present fails the row.
+        $file = $this->csvFile([
+            ['Dune', 'Frank|Herbert', 'Audiobook'],
+        ], ['title', 'authors', 'format']);
+
+        $response = $this->postJson('/api/bulk-upload', ['csv_file' => $file]);
+
+        $response->assertOk();
+        $this->assertSame('audio_runtime_required', $response->json('results.0.reason_code'));
+    }
+
+    public function test_header_missing_page_count_still_fails_a_paperback_row(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+
+        $file = $this->csvFile([
+            ['Dune', 'Frank|Herbert', 'Paper'],
+        ], ['title', 'authors', 'format']);
+
+        $response = $this->postJson('/api/bulk-upload', ['csv_file' => $file]);
+
+        $response->assertOk();
+        $this->assertSame('page_count_required', $response->json('results.0.reason_code'));
+    }
+
     public function test_header_with_unknown_column_returns_422(): void
     {
         $this->actingAsUser();

@@ -4,29 +4,56 @@ namespace App\Services;
 
 use App\Models\Author;
 use App\Models\Book;
+use App\Models\BookList;
 use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
+use App\Services\BulkImport\ImportRow;
+use App\Services\BulkImport\ListCollector;
 use App\Services\Exceptions\BulkImportHeaderException;
+use App\Services\Exceptions\BulkImportListNameException;
+use App\Services\Exceptions\BulkImportRowException;
 use App\Support\RatingValidator;
 use App\Support\Slugger;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class BulkImportService
 {
-    private const REQUIRED_HEADERS = ['title', 'authors', 'format', 'page_count', 'audio_runtime'];
+    /** Every column name the importer recognizes. Anything else fails the file. */
+    private const KNOWN_COLUMNS = [
+        'title',
+        'authors',
+        'format',
+        'page_count',
+        'audio_runtime',
+        'version_nickname',
+        'genres',
+        'date_read',
+        'rating',
+    ];
 
-    private const OPTIONAL_HEADERS = ['version_nickname', 'genres', 'date_read', 'rating'];
+    /**
+     * Columns that must be present in the header. This is about column presence only —
+     * whether a *value* is required is a per-row question (page_count vs audio_runtime
+     * depends on the row's format), answered by the gates in validateRow.
+     */
+    private const REQUIRED_COLUMNS = ['title', 'authors', 'format'];
 
     private const DATE_FORMATS = ['Y-m-d', 'n/j/Y', 'm/d/Y'];
 
-    public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false): array
+    public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array
     {
+        // Deliberately ahead of header validation, so a request that is both
+        // name-colliding and header-invalid reports list_name_taken. Nothing has been
+        // opened or written at this point, so a collision costs the user nothing.
+        $collector = $listName === null ? null : $this->makeListCollector($listName, $userId, $dryRun);
+
         $handle = fopen($file->getPathname(), 'r');
 
         try {
@@ -46,7 +73,7 @@ class BulkImportService
                 }
 
                 $cells = $this->mapRow($row, $headerMap);
-                $rowResult = $this->processRow($cells, $rowNumber, $userId, $dryRun);
+                $rowResult = $this->processRow($cells, $rowNumber, $userId, $dryRun, $collector);
                 $results[] = $rowResult;
 
                 if ($rowResult['status'] === 'success') {
@@ -64,6 +91,7 @@ class BulkImportService
                     'failed' => $failed,
                 ],
                 'results' => $results,
+                'list' => $collector?->toArray(),
             ];
         } finally {
             if (is_resource($handle)) {
@@ -72,17 +100,37 @@ class BulkImportService
         }
     }
 
+    /**
+     * @throws BulkImportListNameException when the user already owns a list with this slug
+     */
+    private function makeListCollector(string $listName, int $userId, bool $dryRun): ListCollector
+    {
+        // Str::slug, not Slugger — list slugs follow ListController::store so the list
+        // this creates is indistinguishable from a hand-created one. The collision is on
+        // slug rather than raw name, so "My List" and "my list" collide.
+        $slug = Str::slug($listName);
+
+        $taken = BookList::where('user_id', $userId)
+            ->where('slug', $slug)
+            ->exists();
+
+        if ($taken) {
+            throw new BulkImportListNameException($listName);
+        }
+
+        return new ListCollector($listName, $slug, $userId, $dryRun);
+    }
+
     private function validateHeader(array $header): array
     {
         $normalized = array_map(fn ($cell) => strtolower(trim((string) $cell)), $header);
 
-        $allowed = array_merge(self::REQUIRED_HEADERS, self::OPTIONAL_HEADERS);
-        $unknown = array_values(array_filter($normalized, fn ($name) => $name !== '' && ! in_array($name, $allowed, true)));
+        $unknown = array_values(array_filter($normalized, fn ($name) => $name !== '' && ! in_array($name, self::KNOWN_COLUMNS, true)));
         if (! empty($unknown)) {
             throw new BulkImportHeaderException('Unknown column(s): '.implode(', ', $unknown));
         }
 
-        $missing = array_values(array_diff(self::REQUIRED_HEADERS, $normalized));
+        $missing = array_values(array_diff(self::REQUIRED_COLUMNS, $normalized));
         if (! empty($missing)) {
             throw new BulkImportHeaderException('Missing required column(s): '.implode(', ', $missing));
         }
@@ -123,7 +171,36 @@ class BulkImportService
         return $cells;
     }
 
-    private function processRow(array $cells, int $rowNumber, int $userId, bool $dryRun): array
+    private function processRow(array $cells, int $rowNumber, int $userId, bool $dryRun, ?ListCollector $collector): array
+    {
+        $title = $cells['title'] ?? '';
+        $formatName = $cells['format'] ?? '';
+
+        try {
+            $row = $this->validateRow(
+                $cells,
+                $formatName === '' ? null : $this->findFormat($formatName),
+            );
+        } catch (BulkImportRowException $e) {
+            return $this->fail($rowNumber, $title, $e->reasonCode, $e->getMessage());
+        }
+
+        return $this->persistRow($row, $rowNumber, $userId, $dryRun, $collector);
+    }
+
+    /**
+     * Turn a row's raw cells into a validated ImportRow, or throw the row exception
+     * carrying the reason code the caller reports.
+     *
+     * Pure: no file handle, no database. The format is resolved by the caller and
+     * passed in (null when the name matched nothing), which is what keeps every gate
+     * in here testable against a plain array of cells.
+     *
+     * @param  array<string, string>  $cells
+     *
+     * @throws BulkImportRowException
+     */
+    public function validateRow(array $cells, ?Format $format): ImportRow
     {
         $title = $cells['title'] ?? '';
         $authorsRaw = $cells['authors'] ?? '';
@@ -136,49 +213,42 @@ class BulkImportService
         $ratingRaw = $cells['rating'] ?? '';
 
         if ($title === '') {
-            return $this->fail($rowNumber, $title, 'missing_required_field', 'title is required');
+            throw new BulkImportRowException('title is required', 'missing_required_field');
         }
         if ($authorsRaw === '') {
-            return $this->fail($rowNumber, $title, 'missing_required_field', 'authors is required');
+            throw new BulkImportRowException('authors is required', 'missing_required_field');
         }
         if ($formatName === '') {
-            return $this->fail($rowNumber, $title, 'missing_required_field', 'format is required');
+            throw new BulkImportRowException('format is required', 'missing_required_field');
         }
-
-        $format = Format::whereRaw('LOWER(name) = ?', [strtolower($formatName)])->first();
-        if (! $format) {
-            return $this->fail($rowNumber, $title, 'format_not_found', "format '{$formatName}' not found");
+        if ($format === null) {
+            throw new BulkImportRowException("format '{$formatName}' not found", 'format_not_found');
         }
 
         $isAudio = strcasecmp($format->name, 'Audiobook') === 0;
 
         if ($isAudio) {
             if ($audioRuntimeRaw === '') {
-                return $this->fail($rowNumber, $title, 'audio_runtime_required', 'audio_runtime is required for Audiobook rows');
+                throw new BulkImportRowException('audio_runtime is required for Audiobook rows', 'audio_runtime_required');
             }
-        } else {
-            if ($pageCountRaw === '') {
-                return $this->fail($rowNumber, $title, 'page_count_required', 'page_count is required for non-audio formats');
-            }
+        } elseif ($pageCountRaw === '') {
+            throw new BulkImportRowException('page_count is required for non-audio formats', 'page_count_required');
         }
-
-        $pageCount = $pageCountRaw === '' ? 0 : (int) $pageCountRaw;
-        $audioRuntime = $audioRuntimeRaw === '' ? null : (int) $audioRuntimeRaw;
 
         $authors = $this->parseAuthors($authorsRaw);
         if ($authors === null) {
-            return $this->fail($rowNumber, $title, 'author_entry_malformed', 'one or more author entries are malformed (expected First|Last)');
+            throw new BulkImportRowException('one or more author entries are malformed (expected First|Last)', 'author_entry_malformed');
         }
 
         $rating = null;
         if ($ratingRaw !== '') {
             if (! is_numeric($ratingRaw)) {
-                return $this->fail($rowNumber, $title, 'rating_not_numeric', "rating '{$ratingRaw}' is not numeric");
+                throw new BulkImportRowException("rating '{$ratingRaw}' is not numeric", 'rating_not_numeric');
             }
             // is_numeric is checked first so a non-numeric rating keeps its own reason
             // code; RatingValidator::isValid folds both checks into one boolean.
             if (! RatingValidator::isValid($ratingRaw)) {
-                return $this->fail($rowNumber, $title, 'rating_out_of_range', "rating '{$ratingRaw}' must be between 0.5 and 5 in 0.5 steps");
+                throw new BulkImportRowException("rating '{$ratingRaw}' must be between 0.5 and 5 in 0.5 steps", 'rating_out_of_range');
             }
             $rating = (float) $ratingRaw;
         }
@@ -187,26 +257,52 @@ class BulkImportService
         if ($dateReadRaw !== '') {
             $dateRead = $this->parseDate($dateReadRaw);
             if ($dateRead === null) {
-                return $this->fail($rowNumber, $title, 'date_parse_failed', "date_read '{$dateReadRaw}' did not match Y-m-d, n/j/Y, or m/d/Y");
+                throw new BulkImportRowException("date_read '{$dateReadRaw}' did not match Y-m-d, n/j/Y, or m/d/Y", 'date_parse_failed');
             }
         }
 
+        return new ImportRow(
+            title: $title,
+            authors: $authors,
+            format: $format,
+            pageCount: $pageCountRaw === '' ? 0 : (int) $pageCountRaw,
+            audioRuntime: $audioRuntimeRaw === '' ? null : (int) $audioRuntimeRaw,
+            nickname: $nickname === '' ? null : $nickname,
+            genres: $this->parseList($genresRaw),
+            dateRead: $dateRead,
+            rating: $rating,
+        );
+    }
+
+    private function persistRow(ImportRow $row, int $rowNumber, int $userId, bool $dryRun, ?ListCollector $collector): array
+    {
+        $collector?->beginRow();
+
         DB::beginTransaction();
         try {
-            $book = $this->resolveBook($title);
-            $this->attachAuthors($book, $authors);
-            $this->attachGenres($book, $this->parseList($genresRaw));
-            $version = $this->resolveVersion($book, $format, $nickname === '' ? null : $nickname, $pageCount, $audioRuntime);
+            $book = $this->resolveBook($row->title);
+            $this->attachAuthors($book, $row->authors);
+            $this->attachGenres($book, $row->genres);
+            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime);
 
-            if ($dateRead !== null) {
+            if ($row->dateRead !== null) {
                 ReadInstance::create([
                     'user_id' => $userId,
                     'book_id' => $book->book_id,
                     'version_id' => $version->version_id,
-                    'date_read' => $dateRead,
-                    'rating' => $rating,
+                    'date_read' => $row->dateRead,
+                    'rating' => $row->rating,
                 ]);
             }
+
+            // Found and created versions both count — the list reflects the CSV's
+            // contents, not the delta. The key is resolveVersion's dedupe tuple, with
+            // the book's slug standing in for its id so it survives a dry-run rollback.
+            $collector?->add($version, implode('|', [
+                $book->slug,
+                $row->format->format_id,
+                $row->nickname ?? '',
+            ]));
 
             if ($dryRun) {
                 DB::rollBack();
@@ -216,19 +312,25 @@ class BulkImportService
 
             return [
                 'row' => $rowNumber,
-                'title' => $title,
+                'title' => $row->title,
                 'status' => 'success',
             ];
         } catch (Throwable $e) {
             DB::rollBack();
+            $collector?->rollBackRow();
             Log::error('BulkImport row failed', [
                 'row' => $rowNumber,
-                'title' => $title,
+                'title' => $row->title,
                 'exception' => $e,
             ]);
 
-            return $this->fail($rowNumber, $title, 'internal_error', 'an unexpected error occurred while importing this row');
+            return $this->fail($rowNumber, $row->title, 'internal_error', 'an unexpected error occurred while importing this row');
         }
+    }
+
+    private function findFormat(string $name): ?Format
+    {
+        return Format::whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
     }
 
     private function fail(int $rowNumber, string $title, string $reasonCode, string $reason): array
