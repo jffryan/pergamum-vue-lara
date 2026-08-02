@@ -7,6 +7,8 @@ status: living
 
 Tracks rough edges and follow-up work for the Lists domain (BookList / ListItem). Descriptive content lives in `/documentation/lists.md`.
 
+**Incoming writer:** `/feature-plans/bulk-upload.md` has a designed-but-unbuilt "add imported versions to a new list" option that creates a `BookList` and appends `ListItem`s directly from `BulkImportService`, bypassing `ListController` / `ListItemController`. It relies on the `(user_id, slug)` and `(list_id, version_id)` unique indexes and on `Str::slug($name)` matching `ListController::store`. Any change to list creation rules, slug derivation, or the item-append contract needs to land there too.
+
 ## Known limitations
 
 ### Authorization

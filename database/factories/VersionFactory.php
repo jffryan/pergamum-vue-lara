@@ -23,7 +23,21 @@ class VersionFactory extends Factory
             'page_count' => fake()->numberBetween(80, 1200),
             'audio_runtime' => null,
             'nickname' => fake()->optional()->words(2, true),
+            'is_discarded' => false,
+            'discarded_at' => null,
         ];
+    }
+
+    /**
+     * Pass `null` for the date to model the common case: we know the copy is
+     * gone, we don't know when.
+     */
+    public function discarded(?string $discardedAt = null): static
+    {
+        return $this->state(fn () => [
+            'is_discarded' => true,
+            'discarded_at' => $discardedAt,
+        ]);
     }
 
     public function withReadInstances(int $count = 1, array $overrides = []): static

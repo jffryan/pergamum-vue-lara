@@ -81,7 +81,17 @@
                 </div>
                 <div class="mb-8">
                     <h3>Versions</h3>
-                    <VersionTable :versions="currentBook.versions" />
+                    <VersionTable
+                        :versions="currentBook.versions"
+                        @discard="discardCopy"
+                        @restore="restoreCopy"
+                    />
+                    <AlertBox
+                        v-if="versionActionError"
+                        :message="versionActionError"
+                        alert-type="danger"
+                        class="mt-2"
+                    />
                 </div>
                 <div v-if="bookHasBeenCompleted">
                     <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
@@ -150,6 +160,7 @@ import { useBooksStore, useListsStore } from "@/stores";
 
 import { fetchBookData } from "@/services/BookServices";
 import { getAllLists } from "@/api/ListController";
+import { discardVersion, restoreVersion } from "@/api/VersionController";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -179,6 +190,7 @@ export default {
             showErrorMessage: false,
             error: "",
             flagChanges: false,
+            versionActionError: "",
         };
     },
     computed: {
@@ -275,6 +287,31 @@ export default {
         },
     },
     methods: {
+        async discardCopy({ version_id, discarded_at }) {
+            await this.applyVersionAction(
+                () => discardVersion(version_id, discarded_at),
+                "Unable to discard this copy. Please try again.",
+            );
+        },
+        async restoreCopy(version_id) {
+            await this.applyVersionAction(
+                () => restoreVersion(version_id),
+                "Unable to restore this copy. Please try again.",
+            );
+        },
+        async applyVersionAction(request, errorMessage) {
+            this.versionActionError = "";
+            try {
+                const res = await request();
+                this.BooksStore.replaceVersion(
+                    this.currentBook.book.book_id,
+                    res.data,
+                );
+            } catch (error) {
+                console.error("Error updating version:", error);
+                this.versionActionError = errorMessage;
+            }
+        },
         findReadInstanceVersion(version_id) {
             return this.currentBook.versions.find(
                 (version) => version.version_id === version_id,

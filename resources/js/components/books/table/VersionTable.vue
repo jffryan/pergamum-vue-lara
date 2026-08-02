@@ -17,8 +17,11 @@
                 :version="version"
                 :class="[
                     idx % 2 === 0 ? 'bg-slate-200' : 'bg-slate-300',
+                    version.is_discarded ? 'opacity-60' : '',
                     ' text-black cursor-pointer hover:bg-slate-600 hover:text-white',
                 ]"
+                @discard="$emit('discard', $event)"
+                @restore="$emit('restore', $event)"
             />
         </div>
     </div>
@@ -38,6 +41,7 @@ export default {
     components: {
         VersionTableRow,
     },
+    emits: ["discard", "restore"],
     data() {
         return {
             columns: [
@@ -47,11 +51,11 @@ export default {
                 },
                 {
                     name: "Page Count",
-                    span: 3,
+                    span: 2,
                 },
                 {
                     name: "Audio Runtime",
-                    span: 3,
+                    span: 2,
                     clickHandler: this.toggleSortByFormat,
                     ascending: "sortByFormat",
                     descending: "sortByFormatDesc",
@@ -59,6 +63,13 @@ export default {
                 {
                     name: "Nickname",
                     span: 3,
+                    clickHandler: null,
+                    ascending: null,
+                    descending: null,
+                },
+                {
+                    name: "Status",
+                    span: 2,
                     clickHandler: null,
                     ascending: null,
                     descending: null,

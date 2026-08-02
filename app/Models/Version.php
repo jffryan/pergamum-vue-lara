@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,27 @@ class Version extends Model
 
     protected $primaryKey = 'version_id';
 
-    protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id', 'nickname'];
+    protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id', 'nickname', 'is_discarded', 'discarded_at'];
+
+    protected $casts = [
+        'is_discarded' => 'boolean',
+        'discarded_at' => 'date:Y-m-d',
+    ];
+
+    /**
+     * Copies we no longer own. `is_discarded` is the state; `discarded_at` is
+     * optional and null means "discarded, date unknown" — do not infer the
+     * state from the date.
+     */
+    public function scopeDiscarded(Builder $query): Builder
+    {
+        return $query->where('is_discarded', true);
+    }
+
+    public function scopeNotDiscarded(Builder $query): Builder
+    {
+        return $query->where('is_discarded', false);
+    }
 
     public function format(): BelongsTo
     {

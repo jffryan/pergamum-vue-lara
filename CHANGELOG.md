@@ -2,6 +2,14 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.3] - 2026-08-02
+
+- Copies can be marked as discarded — books we used to own but no longer do. Recorded on the version as `versions.is_discarded` plus an optional `versions.discarded_at` date, so the copy keeps its format and its read history. A null date means "discarded, date unknown", which is the expected case for anything got rid of before tracking started. Discarded is deliberately *not* a new `Format`; format stays the medium.
+- New endpoints `PATCH /api/versions/{version}/discard` (optional `{ discarded_at }` body) and `PATCH /api/versions/{version}/restore`.
+- `GET /api/books` accepts `?discarded=exclude|only|all`, defaulting to `exclude`. A book drops off the shelf only when *every* version is discarded. The filter applies to the `?search=` branch too, so the library and its search agree.
+- The library gains an "On the shelf" / "Discarded" toggle; the book detail page's version table gains a Status column with discard/restore controls.
+- Fixed unsafe `orWhere` precedence in the books search query — appended filters previously bound to the last OR term only.
+
 ## [0.1.2] - 2026-04-29
 
 - Bulk upload rewritten with a header-named CSV contract (`title, authors, format, page_count, audio_runtime, version_nickname, genres, date_read, rating`). Multi-author, multi-version, re-read, and audiobook rows are supported; per-row failures carry a `reason_code`; a `dry_run=1` flag previews without writing.

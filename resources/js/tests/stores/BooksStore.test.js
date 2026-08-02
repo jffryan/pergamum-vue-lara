@@ -103,6 +103,46 @@ describe("BooksStore", () => {
     });
 
     // ------------------------
+    // replaceVersion
+    // ------------------------
+    it("should merge the updated version into the cached book", () => {
+        store.addBook({
+            book: { book_id: 1 },
+            versions: [
+                { version_id: 1, nickname: "Hardback", is_discarded: false },
+                { version_id: 2, nickname: "Audio", is_discarded: false },
+            ],
+        });
+
+        store.replaceVersion(1, {
+            version_id: 2,
+            is_discarded: true,
+            discarded_at: null,
+        });
+
+        expect(store.allBooks[0].versions[1]).toEqual({
+            version_id: 2,
+            nickname: "Audio",
+            is_discarded: true,
+            discarded_at: null,
+        });
+        expect(store.allBooks[0].versions[0].is_discarded).toBe(false);
+    });
+
+    it("should ignore a version replacement for an unknown book or version", () => {
+        const book = {
+            book: { book_id: 1 },
+            versions: [{ version_id: 1, is_discarded: false }],
+        };
+        store.addBook(book);
+
+        store.replaceVersion(99, { version_id: 1, is_discarded: true });
+        store.replaceVersion(1, { version_id: 99, is_discarded: true });
+
+        expect(store.allBooks[0].versions[0].is_discarded).toBe(false);
+    });
+
+    // ------------------------
     // updateBook
     // ------------------------
     it("should update an existing book", () => {

@@ -1,6 +1,19 @@
 <template>
     <div>
-        <h1>Library</h1>
+        <h1>{{ showingDiscarded ? "Discarded" : "Library" }}</h1>
+        <div class="mb-4">
+            <router-link
+                :to="{ name: 'library.index' }"
+                :class="showingDiscarded ? '' : 'font-bold underline'"
+                class="mr-4"
+                >On the shelf</router-link
+            >
+            <router-link
+                :to="{ name: 'library.index', query: { discarded: 'only' } }"
+                :class="showingDiscarded ? 'font-bold underline' : ''"
+                >Discarded</router-link
+            >
+        </div>
         <div v-if="isLoading">
             <PageLoadingIndicator />
         </div>
@@ -67,6 +80,17 @@ export default {
         currentPage() {
             return this.$route.query.page || 1;
         },
+        // Absent means "on the shelf" — the backend defaults to excluding
+        // books whose every version has been discarded.
+        discardedMode() {
+            return this.$route.query.discarded || "";
+        },
+        showingDiscarded() {
+            return this.discardedMode === "only";
+        },
+        discardedParam() {
+            return this.discardedMode ? { discarded: this.discardedMode } : {};
+        },
         displayedBooks() {
             // This only works if the book you're looking for is on the page you're actively on.
             // That doesn't really work for users...
@@ -88,6 +112,7 @@ export default {
         async fetchData() {
             const options = {
                 page: this.currentPage,
+                ...this.discardedParam,
             };
 
             try {
@@ -115,6 +140,7 @@ export default {
             try {
                 const res = await getAllBooks({
                     search: this.searchTerm,
+                    ...this.discardedParam,
                 });
                 if (!res.data || res.status !== 200) {
                     throw new Error(
@@ -140,10 +166,15 @@ export default {
             const paginationLabels = [...Array(lastPage).keys()].map(
                 (i) => i + 1,
             );
+            // Keep the shelf/discarded context when paginating.
+            const suffix = this.discardedMode
+                ? `&discarded=${this.discardedMode}`
+                : "";
+
             return paginationLabels.map((label) => {
                 return {
                     label,
-                    url: `?page=${label}`,
+                    url: `?page=${label}${suffix}`,
                     active: label === currentPage,
                 };
             });
@@ -155,6 +186,9 @@ export default {
             immediate: true,
             handler: "fetchData",
         },
+        // Toggling between the shelf and the discarded list leaves the page at
+        // 1, so currentPage alone won't refire.
+        discardedMode: "fetchData",
     },
 };
 </script>

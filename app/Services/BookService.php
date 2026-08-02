@@ -106,6 +106,8 @@ class BookService
                     'version_id' => $version->version_id,
                     'page_count' => $version->page_count,
                     'audio_runtime' => $version->audio_runtime,
+                    'is_discarded' => $version->is_discarded,
+                    'discarded_at' => $version->discarded_at?->format('Y-m-d'),
                     'format' => [
                         'format_id' => $version->format->format_id,
                         'name' => $version->format->name,

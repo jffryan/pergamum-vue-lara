@@ -47,6 +47,17 @@ const useBooksStore = defineStore("BooksStore", {
                 console.error("Failed to add version:", error);
             }
         },
+        replaceVersion(bookId, version) {
+            const book = this.allBooks.find((b) => b.book.book_id === bookId);
+            if (!book) return;
+
+            const index = book.versions.findIndex(
+                (v) => v.version_id === version.version_id,
+            );
+            if (index === -1) return;
+
+            book.versions[index] = { ...book.versions[index], ...version };
+        },
         updateBook(book) {
             const index = this.allBooks.findIndex(
                 (b) => b.book.book_id === book.book.book_id,

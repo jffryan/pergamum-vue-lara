@@ -32,6 +32,7 @@ Book ──< Version ──< ReadInstance
   - `GET /completed/years`, `GET /completed/{year}` — read-history aggregations.
   - `POST /add-read-instance` — record a new read against an existing book+version.
   - `POST /versions` (`VersionController::addNewVersion`) — add a version to an existing book.
+  - `PATCH /versions/{version}/discard`, `PATCH /versions/{version}/restore` (`VersionController::discard` / `restore`) — mark a copy as no longer owned, or undo that.
   - Book *creation* uses a two-step flow on `NewBookController`: `POST /create-book/title` (find-or-stub by title) then `POST /create-book` (complete with authors/versions/genres/read history).
 
 - **Controllers**: `BookController`, `VersionController`, `NewBookController`. Controllers are intentionally thin and delegate to:
@@ -46,7 +47,8 @@ Book ──< Version ──< ReadInstance
 - **Stores**: `BooksStore` (catalog/list state), `NewBookStore` (multi-step creation form). Read history and version edits flow through `BooksStore`.
 - **Service**: `resources/js/services/BookServices.js` orchestrates creation/edit flows (validation, error surfacing) across stores.
 - **Routes**: `router/book-routes.js`. Detail pages route by slug (`/book/{slug}`); the numeric-ID endpoint exists but the SPA does not use it.
-- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views.
+- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views. `LibraryView` reads `?discarded=` off the route query and renders an "On the shelf" / "Discarded" toggle; the mode is threaded into the API call, the pagination links, and a watcher (page stays at 1 when toggling, so `currentPage` alone won't refetch).
+- **Components**: `VersionTable` / `VersionTableRow` render a book's copies. The row owns the discard affordance — a "Discard" button that reveals an inline, optional date input, and a "Restore" button once discarded. Both emit up through `VersionTable` to `BookView`, which calls the API and merges the response via `BooksStore.replaceVersion(bookId, version)`.
 
 ## Non-obvious decisions and gotchas
 
@@ -63,6 +65,11 @@ Book ──< Version ──< ReadInstance
 - **`destroy` cascades and prunes orphaned authors.** Deleting a book deletes its versions and read instances, then deletes any author who is left with zero books. The response includes `deleted_authors` so the UI can confirm.
 - **`Book::formats()` is a `belongsToMany` *through* the `versions` table.** It's a convenience for "what formats does this book exist in"; it is not a true M2M and there is no `book_format` pivot.
 - **`prepareVersions` branches on format name.** It looks at `$format->name == 'Audiobook'` / `'Paper'` to decide which fields apply. Adding a new format with different field semantics requires editing this method directly.
+- **Discarded is a state on `Version`, deliberately *not* a `Format`.** A copy we no longer own is recorded with `versions.is_discarded` + `versions.discarded_at`, leaving `format_id` intact. Format is the medium (Paper, Audiobook, Ebook); collapsing the two would overwrite the medium of every discarded copy — which matters because `ReadInstance` hangs off `Version`, so past reads would lose their format, and because `prepareVersions` branches on format name to decide whether `audio_runtime` applies. Do not add a "Discarded" row to `formats`.
+- **`is_discarded` is the state; `discarded_at` is optional provenance.** Much of the historical library was got rid of at an unrecoverable point in the past, so `discarded_at = null` means "discarded, date unknown" — it does **not** mean "not discarded". Never infer the state from the date; query through `Version::scopeDiscarded()` / `scopeNotDiscarded()`. Same shape as the nullable `read_instances.date_read`.
+- **A book is "discarded" only when *every* version is.** `BookController::applyDiscardedFilter` implements this: owning the paperback but having got rid of the audiobook leaves the book on the shelf. Books with zero versions count as on-shelf so they never silently disappear from the library. Any new listing endpoint has to apply this filter itself — there is no global scope.
+- **`BookController::update` does not touch the discard columns.** `updateVersions` fills only `page_count` / `format_id` / `nickname` / `audio_runtime`, so editing a book can't accidentally un-discard a copy. Keep it that way — discarding is a separate, explicit transition.
+- **The search branch's `orWhere` chain is grouped.** `searchBooks` wraps its title/first-name/last-name terms in a closure. Without that grouping, any `AND` clause appended afterwards (the shelf filter) binds only to the last `orWhere` term because `AND` has higher precedence — the search would leak discarded books. Preserve the grouping when adding search terms.
 
 ## Usage notes
 
@@ -75,6 +82,10 @@ Book ──< Version ──< ReadInstance
 ### Adding a version to an existing book
 
 Either `POST /books` with the existing book's title (the slug match triggers the version-only branch) or `POST /versions` with `{ book_id, page_count, format_id, audio_runtime?, nickname? }`. Prefer the latter for clarity in new code.
+
+### Discarding a copy
+
+`PATCH /versions/{version_id}/discard` with an optional body `{ discarded_at: 'Y-m-d' | null }`. Omit the key (or send `null`) when the date isn't known — that is the expected case for anything got rid of before tracking started. Sending the key explicitly always writes it, including `null`, which clears a previously-recorded date; omitting the key on a re-discard preserves whatever is already there. Returns the updated version with `format` loaded. `PATCH /versions/{version_id}/restore` clears both the flag and the date. Neither endpoint takes a policy — versions are global, like the rest of the catalog.
 
 ### Recording a read
 
@@ -90,7 +101,11 @@ Both return the same shape; pick based on what the caller has.
 
 ### Listing / searching
 
-`GET /books` paginates (default 20, `?limit=` to override), sorts by primary author's last name, and accepts `?search=` (matches title or author name) and `?format=` (filters by format name). Response shape: `{ books, pagination: { total, perPage, currentPage, lastPage, from, to } }`. Items are run through `BookService::getBooksList`, which is the canonical "card-shaped" book payload — reuse it instead of building a parallel projection.
+`GET /books` paginates (default 20, `?limit=` to override), sorts by primary author's last name, and accepts `?search=` (matches title or author name), `?format=` (filters by format name), and `?discarded=`.
+
+`?discarded=` takes `exclude` (the default — hides books whose every version is discarded), `only` (just those books, i.e. the "Discarded" shelf), or `all` (no filtering). `0`/`false` alias to `exclude` and `1`/`true` to `only`; anything unrecognized falls back to `exclude`. The filter applies to the `?search=` branch too, so searching the library can't surface books the library itself won't show.
+
+Response shape: `{ books, pagination: { total, perPage, currentPage, lastPage, from, to } }`. Items are run through `BookService::getBooksList`, which is the canonical "card-shaped" book payload — reuse it instead of building a parallel projection.
 
 ## Related
 

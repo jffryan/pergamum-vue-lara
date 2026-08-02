@@ -42,6 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/create-authors', [AuthorController::class, 'getOrSetToBeCreatedAuthorsByName']);
     Route::post('/add-read-instance', [BookController::class, 'addReadInstance']);
     Route::post('/versions', [VersionController::class, 'addNewVersion']);
+    Route::patch('/versions/{version}/discard', [VersionController::class, 'discard']);
+    Route::patch('/versions/{version}/restore', [VersionController::class, 'restore']);
 
     // Statistics
     Route::get('/statistics', [StatisticsController::class, 'fetchUserStats']);

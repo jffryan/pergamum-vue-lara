@@ -8,4 +8,14 @@ const getAllVersions = async (options = {}) =>
 const createVersion = async (version) =>
     makeRequest("post", buildUrl("versions"), { version });
 
-export { getAllVersions, createVersion };
+// DISCARD — pass null (or omit) when the date we got rid of it is unknown
+const discardVersion = async (version_id, discarded_at = null) =>
+    makeRequest("patch", buildUrl("versions", `${version_id}/discard`), {
+        discarded_at,
+    });
+
+// RESTORE — we have the copy again
+const restoreVersion = async (version_id) =>
+    makeRequest("patch", buildUrl("versions", `${version_id}/restore`));
+
+export { getAllVersions, createVersion, discardVersion, restoreVersion };

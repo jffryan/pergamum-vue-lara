@@ -55,6 +55,8 @@ class BookController extends Controller
             });
         }
 
+        $this->applyDiscardedFilter($query, $request);
+
         $query->orderBy('primary_author_last_name', 'asc');
 
         // Determine the pagination size, default to 30 if not specified
@@ -77,6 +79,56 @@ class BookController extends Controller
                 'to' => $books->lastItem(),
             ],
         ]);
+    }
+
+    /**
+     * Constrain a books query by whether the book is still on the shelf.
+     *
+     * A book is "discarded" only when *every* version of it is discarded —
+     * owning the paperback but having got rid of the audiobook still leaves
+     * the book in the library. Books with no versions at all are treated as
+     * on-shelf so they never silently vanish.
+     *
+     * `?discarded=` accepts `exclude` (default), `only`, or `all`, with
+     * `0`/`false` and `1`/`true` as aliases for the first two.
+     */
+    private function applyDiscardedFilter($query, Request $request): void
+    {
+        $mode = $this->normalizeDiscardedMode($request->input('discarded'));
+
+        if ($mode === 'all') {
+            return;
+        }
+
+        if ($mode === 'only') {
+            $query->whereHas('versions', function ($q) {
+                $q->discarded();
+            })->whereDoesntHave('versions', function ($q) {
+                $q->notDiscarded();
+            });
+
+            return;
+        }
+
+        $query->where(function ($q) {
+            $q->whereDoesntHave('versions')
+                ->orWhereHas('versions', function ($v) {
+                    $v->notDiscarded();
+                });
+        });
+    }
+
+    private function normalizeDiscardedMode($value): string
+    {
+        if ($value === null || $value === '') {
+            return 'exclude';
+        }
+
+        return match (strtolower((string) $value)) {
+            'all' => 'all',
+            'only', '1', 'true' => 'only',
+            default => 'exclude',
+        };
     }
 
     public function getBooksByFormat(Request $request)
@@ -554,10 +606,18 @@ class BookController extends Controller
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->where('books.title', 'like', "%$search%")
-            ->orWhere('authors.first_name', 'like', "%$search%")
-            ->orWhere('authors.last_name', 'like', "%$search%")
+            // Grouped: an ungrouped orWhere chain lets any subsequent AND
+            // clause (the shelf filter below) bind to the last term only.
+            ->where(function ($q) use ($search) {
+                $q->where('books.title', 'like', "%$search%")
+                    ->orWhere('authors.first_name', 'like', "%$search%")
+                    ->orWhere('authors.last_name', 'like', "%$search%");
+            })
             ->groupBy('books.book_id', 'books.title', 'books.slug');
+
+        // Search obeys the same shelf filter as the listing, so searching the
+        // library can't turn up books the library itself won't show.
+        $this->applyDiscardedFilter($query, $request);
 
         $query->orderBy('primary_author_last_name', 'asc');
 
