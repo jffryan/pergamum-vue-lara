@@ -9,9 +9,10 @@ use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\User;
 use App\Models\Version;
+use App\Support\BookCreator;
+use App\Support\Slugger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class BulkUploadTest extends TestCase
@@ -279,7 +280,7 @@ class BulkUploadTest extends TestCase
         $this->assertSame(1, Genre::count());
     }
 
-    public function test_long_title_gets_clean_slug_without_truncation_suffix(): void
+    public function test_long_title_slug_matches_shared_slugger(): void
     {
         $this->actingAsUser();
         $this->paper();
@@ -291,7 +292,40 @@ class BulkUploadTest extends TestCase
 
         $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk();
         $book = Book::firstOrFail();
-        $this->assertSame(Str::slug($longTitle), $book->slug);
+        $this->assertSame(Slugger::for($longTitle), $book->slug);
+    }
+
+    public function test_long_title_import_matches_the_book_a_spa_create_would_produce(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+
+        $longTitle = str_repeat('Word ', 20).'End';
+        $existing = BookCreator::create($longTitle);
+
+        $file = $this->csvFile([
+            $this->row(['title' => $longTitle, 'authors' => 'A|B', 'format' => 'Paper', 'page_count' => '100']),
+        ]);
+
+        $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk();
+
+        $this->assertSame(1, Book::count());
+        $this->assertSame($existing->book_id, Book::firstOrFail()->book_id);
+    }
+
+    public function test_long_author_name_slug_matches_shared_slugger(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+
+        $last = str_repeat('Longname ', 8).'End';
+        $file = $this->csvFile([
+            $this->row(['title' => 'X', 'authors' => "First|{$last}", 'format' => 'Paper', 'page_count' => '100']),
+        ]);
+
+        $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk();
+        $author = Author::firstOrFail();
+        $this->assertSame(Slugger::for('First '.$last), $author->slug);
     }
 
     // ---------- Per-row failures ----------

@@ -31,7 +31,7 @@ Whole-file errors (header validation) return HTTP 422 with a `reason_code`. Per-
 - **API layer**: `resources/js/api/BulkUploadApi.js` — `bulkUpload(file)` builds a `FormData`, sets `Content-Type: multipart/form-data`, and calls `axios.post('/api/bulk-upload', …)` directly. Does **not** route through `apiHelpers.js` (`makeRequest` / `buildUrl`) — multipart bodies don't fit `makeRequest`'s JSON shape, so this is the one acceptable bypass.
 - **Stores**: none. State lives view-locally in `BulkUploadView.data()`.
 - **Routes**: `router/book-routes.js` defines `/bulk-upload` (named `books.bulk-upload`).
-- **Views**: `views/BulkUploadView.vue` — file input, submit button, a per-row results table colored by status. Renders `reason` (human string) when a row fails.
+- **Views**: `views/BulkUploadView.vue` — file input, submit button, a per-row results table colored by status. Renders `reason` (human string) when a row fails. On a whole-file rejection it reads `reason` first, then `message` (Laravel's own request-validation 422 shape), then a generic fallback.
 
 ## CSV contract
 
@@ -41,7 +41,7 @@ Header is **required and validated by name**. Column order is irrelevant. Header
 
 | Column            | Required | Notes |
 |-------------------|----------|-------|
-| `title`           | yes      | Used to derive `Book.slug` (`Str::slug`, no truncation). |
+| `title`           | yes      | Used to derive `Book.slug` (`App\Support\Slugger`). |
 | `authors`         | yes      | `;`-separated list of entries; each entry is `First\|Last`. Single-author rows use one entry. Empty `First` or empty `Last` are allowed (one of the two must be non-empty per entry). |
 | `format`          | yes      | Looked up case-insensitively in `formats.name`. Must already exist; bulk upload does not auto-create formats. |
 | `page_count`      | yes for non-audio | Integer. Blank is allowed for `Audiobook` rows; the version is stored with `page_count = 0` in that case. |
@@ -60,8 +60,8 @@ Header is **required and validated by name**. Column order is irrelevant. Header
 
 Each row describes one (book, version, optional read instance). Rows are de-duped against existing rows at each layer:
 
-1. **Book**: find-or-create by `slug = Str::slug(title)`. Title on existing books is left alone.
-2. **Authors**: each entry → find-or-create by `Str::slug(trim($first.' '.$last))`. Attached if not already attached. Co-author ordinal continues from the book's current max.
+1. **Book**: find-or-create by `slug = Slugger::for(title)`. Title on existing books is left alone.
+2. **Authors**: each entry → find-or-create by `Slugger::for(trim($first.' '.$last))`. Attached if not already attached. Co-author ordinal continues from the book's current max.
 3. **Genres**: each entry → find by `LOWER(TRIM(name))` first; if none, create with the trimmed (case-preserved) value. Attached if not already attached.
 4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime` and `page_count` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits).
 5. **Read instance**: if `date_read` is non-blank, always create a new `ReadInstance` against the resolved version with `user_id = auth()->id()`. Multiple rows with the same (title, format, nickname) but different dates produce multiple read instances — re-reads roundtrip cleanly.
@@ -130,7 +130,7 @@ The header-invalid 422 path is unaffected by `dry_run`.
 - **Format lookup is case-insensitive via `whereRaw('LOWER(name) = ?', …)`.** Non-index-friendly at scale, but the `formats` table has fewer than a dozen rows in practice. Bulk upload does not create new formats — unknown format names fail the row.
 - **`Audiobook` is matched case-insensitively (`strcasecmp`)** when deciding whether `audio_runtime` or `page_count` is required. The `formats.name` value still has to be exactly `Audiobook` for the rest of the app (the SPA's hardcoded `format_id === 2` checks and `BookController::index`'s name comparison both expect that exact string — see `/feature-plans/reset-database.md`).
 - **`page_count` defaults to `0` for audiobook rows with a blank `page_count`.** The `versions.page_count` column is `NOT NULL` in the schema. Storing `0` is unambiguous as "n/a for an audiobook"; if a stricter representation is wanted in future, that's a schema change.
-- **Author slug derivation is `Str::slug(trim($first.' '.$last))`.** Same rule as `AuthorFactory`. This is one rule rather than the four divergent normalizers documented before; the broader consolidation across the rest of the codebase is tracked in `/feature-plans/authors.md`.
+- **Book and author slugs come from `App\Support\Slugger`,** the same helper the SPA's creation paths use — 60-character cap, truncated at a hyphen boundary. A slug match means "same book" / "same author", so the importer does *not* use `BookCreator::create`, which suffixes `-2`/`-3` on collision. `lists.slug` and `formats.slug` are different entities and derive from raw `Str::slug`.
 - **Genre case dedupe stores the trimmed input as-typed.** The lookup is case- and whitespace-insensitive, but if a genre is being created for the first time the value persisted is whatever the row supplied (after `trim`).
 - **Version dedupe key is `(book_id, format_id, version_nickname)`.** Two paperback rows with different `version_nickname` values produce two versions; two paperback rows with the same blank nickname produce one shared version.
 - **Read instances are *always* created when `date_read` is set.** There is no dedupe on `(version_id, user_id, date_read)` — a CSV with two identical rows including the same `date_read` will create two `ReadInstance`s. This is intentional: the importer cannot tell whether the duplicate is an actual re-read recorded twice or a CSV mistake. Audit your CSV before importing if duplicates would be a problem.

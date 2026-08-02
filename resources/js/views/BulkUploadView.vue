@@ -90,7 +90,10 @@ export default {
                 this.summary = response.data.summary;
                 this.results = response.data.results;
             } catch (err) {
+                // Whole-file rejections use {reason_code, reason}; Laravel's own
+                // request validation uses {message, errors}. Read both.
                 this.error =
+                    err.response?.data?.reason ||
                     err.response?.data?.message ||
                     "An error occurred during upload.";
             } finally {

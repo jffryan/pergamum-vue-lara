@@ -9,11 +9,12 @@ use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\Exceptions\BulkImportHeaderException;
+use App\Support\RatingValidator;
+use App\Support\Slugger;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 class BulkImportService
@@ -174,11 +175,12 @@ class BulkImportService
             if (! is_numeric($ratingRaw)) {
                 return $this->fail($rowNumber, $title, 'rating_not_numeric', "rating '{$ratingRaw}' is not numeric");
             }
-            $ratingFloat = (float) $ratingRaw;
-            if ($ratingFloat < 0.5 || $ratingFloat > 5 || fmod($ratingFloat * 2, 1) !== 0.0) {
+            // is_numeric is checked first so a non-numeric rating keeps its own reason
+            // code; RatingValidator::isValid folds both checks into one boolean.
+            if (! RatingValidator::isValid($ratingRaw)) {
                 return $this->fail($rowNumber, $title, 'rating_out_of_range', "rating '{$ratingRaw}' must be between 0.5 and 5 in 0.5 steps");
             }
-            $rating = $ratingFloat;
+            $rating = (float) $ratingRaw;
         }
 
         $dateRead = null;
@@ -260,7 +262,7 @@ class BulkImportService
             if ($first === '' && $last === '') {
                 return null;
             }
-            $slug = Str::slug(trim($first.' '.$last));
+            $slug = Slugger::for(trim($first.' '.$last));
             if ($slug === '') {
                 return null;
             }
@@ -308,7 +310,10 @@ class BulkImportService
 
     private function resolveBook(string $title): Book
     {
-        $slug = Str::slug($title);
+        // Slugger for derivation only — deliberately not BookCreator::create, which
+        // suffixes -2/-3 on collision. Here a slug match means "same book" (see
+        // /documentation/bulk-upload.md, Row semantics 1).
+        $slug = Slugger::for($title);
         $book = Book::where('slug', $slug)->first();
         if ($book) {
             return $book;

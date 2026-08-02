@@ -2,6 +2,11 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.4] - 2026-08-02
+
+- Bulk upload now derives book and author slugs with the shared `App\Support\Slugger` helper and validates ratings with `App\Support\RatingValidator`, matching every other creation path. Existing book and author slugs are normalized to the same rule by migration, so a book imported from CSV and the same book created in the SPA are one row rather than two. Some book and author detail URLs change as a result.
+- Bulk upload's whole-file rejection messages (missing column, unknown column, duplicate column) now render in the UI instead of a generic "An error occurred during upload."
+
 ## [0.1.3] - 2026-08-02
 
 - Copies can be marked as discarded — books we used to own but no longer do. Recorded on the version as `versions.is_discarded` plus an optional `versions.discarded_at` date, so the copy keeps its format and its read history. A null date means "discarded, date unknown", which is the expected case for anything got rid of before tracking started. Discarded is deliberately *not* a new `Format`; format stays the medium.
