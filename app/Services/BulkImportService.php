@@ -225,14 +225,15 @@ class BulkImportService
             throw new BulkImportRowException("format '{$formatName}' not found", 'format_not_found');
         }
 
-        $isAudio = strcasecmp($format->name, 'Audiobook') === 0;
+        // The format declares which length field a row must carry, so a new
+        // format is a row in `formats` rather than another branch here. The two
+        // checks are independent — a format may legitimately expect both.
+        if ($format->expects('audio_runtime') && $audioRuntimeRaw === '') {
+            throw new BulkImportRowException("audio_runtime is required for {$format->name} rows", 'audio_runtime_required');
+        }
 
-        if ($isAudio) {
-            if ($audioRuntimeRaw === '') {
-                throw new BulkImportRowException('audio_runtime is required for Audiobook rows', 'audio_runtime_required');
-            }
-        } elseif ($pageCountRaw === '') {
-            throw new BulkImportRowException('page_count is required for non-audio formats', 'page_count_required');
+        if ($format->expects('page_count') && $pageCountRaw === '') {
+            throw new BulkImportRowException("page_count is required for {$format->name} rows", 'page_count_required');
         }
 
         $authors = $this->parseAuthors($authorsRaw);
@@ -265,8 +266,11 @@ class BulkImportService
             title: $title,
             authors: $authors,
             format: $format,
-            pageCount: $pageCountRaw === '' ? 0 : (int) $pageCountRaw,
-            audioRuntime: $audioRuntimeRaw === '' ? null : (int) $audioRuntimeRaw,
+            // A value the format doesn't expect is dropped, not stored: an
+            // audiobook that carries a page count would be counted twice by
+            // `estimatedTotalPagesByYear`, which folds its runtime into pages.
+            pageCount: $format->expects('page_count') && $pageCountRaw !== '' ? (int) $pageCountRaw : null,
+            audioRuntime: $format->expects('audio_runtime') && $audioRuntimeRaw !== '' ? (int) $audioRuntimeRaw : null,
             nickname: $nickname === '' ? null : $nickname,
             genres: $this->parseList($genresRaw),
             dateRead: $dateRead,
@@ -464,7 +468,7 @@ class BulkImportService
         }
     }
 
-    private function resolveVersion(Book $book, Format $format, ?string $nickname, int $pageCount, ?int $audioRuntime): Version
+    private function resolveVersion(Book $book, Format $format, ?string $nickname, ?int $pageCount, ?int $audioRuntime): Version
     {
         $query = Version::where('book_id', $book->book_id)
             ->where('format_id', $format->format_id);

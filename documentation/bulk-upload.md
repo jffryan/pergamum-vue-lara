@@ -41,7 +41,7 @@ Whole-file errors (header validation) return HTTP 422 with a `reason_code`. Per-
 
 Header is **required and validated by name**. Column order is irrelevant. Header comparison is case-insensitive and trims whitespace. Unknown column names are rejected (`reason_code: header_invalid`). Missing required columns are rejected the same way. The order in which the columns appear in your file does not matter; only the names do.
 
-**Column presence and value requirements are separate questions.** Only `title`, `authors`, and `format` must appear in the header. Every other column may be omitted entirely. Whether a *value* is required is decided per row — a paperback row still needs a `page_count`, and it fails with `page_count_required` whether the cell is blank or the column is absent. A file of nothing but paperbacks therefore does not need to carry an empty `audio_runtime` column.
+**Column presence and value requirements are separate questions.** Only `title`, `authors`, and `format` must appear in the header. Every other column may be omitted entirely. Whether a *value* is required is decided per row, by the row's format — a physical row still needs a `page_count`, and it fails with `page_count_required` whether the cell is blank or the column is absent. A file of nothing but physical books therefore does not need to carry an empty `audio_runtime` column.
 
 The "Column required" figure below is about the header only.
 
@@ -50,8 +50,8 @@ The "Column required" figure below is about the header only.
 | `title`           | yes      | Used to derive `Book.slug` (`App\Support\Slugger`). |
 | `authors`         | yes      | `;`-separated list of entries; each entry is `First\|Last`. Single-author rows use one entry. Empty `First` or empty `Last` are allowed (one of the two must be non-empty per entry). |
 | `format`          | yes      | Looked up case-insensitively in `formats.name`. Must already exist; bulk upload does not auto-create formats. |
-| `page_count`      | no       | Integer. The *value* is required for non-audio rows (`page_count_required`). Blank or absent is fine for `Audiobook` rows; the version is stored with `page_count = 0` in that case. |
-| `audio_runtime`   | no       | Integer minutes. The *value* is required for `Audiobook` rows (`audio_runtime_required`). Blank or absent otherwise. |
+| `page_count`      | no       | Integer. The *value* is required when the row's format declares `expects_page_count` (`page_count_required`). Blank or absent is fine otherwise, and the version stores no page count. A value supplied for a format that doesn't carry one is discarded. |
+| `audio_runtime`   | no       | Integer minutes. The *value* is required when the row's format declares `expects_audio_runtime` (`audio_runtime_required`). Blank or absent otherwise, and a value supplied for a format that doesn't carry one is discarded. |
 | `version_nickname`| no       | Free text; disambiguates versions sharing `(book, format)` (e.g., two paperbacks). |
 | `genres`          | no       | `;`-separated list. Lookup is case-insensitive and trims whitespace; `Fantasy`, `fantasy`, ` Fantasy ` all dedupe to the existing genre. |
 | `date_read`       | no       | Accepts `Y-m-d`, `n/j/Y`, `m/d/Y`. Blank means "no read instance for this row." |
@@ -127,8 +127,8 @@ Note this endpoint returns **two different 422 shapes**. Whole-file rejections r
 |-----------------------------|---------|
 | `missing_required_field`    | `title`, `authors`, or `format` was blank. |
 | `format_not_found`          | `format` did not match any row in `formats` (case-insensitive). |
-| `audio_runtime_required`    | `format = Audiobook` row had a blank `audio_runtime`. |
-| `page_count_required`       | Non-audio row had a blank `page_count`. |
+| `audio_runtime_required`    | The row's format declares `expects_audio_runtime` and the cell was blank. |
+| `page_count_required`       | The row's format declares `expects_page_count` and the cell was blank. |
 | `date_parse_failed`         | `date_read` did not match `Y-m-d`, `n/j/Y`, or `m/d/Y`. |
 | `rating_out_of_range`       | `rating` was outside 0.5–5 or not a half-step. |
 | `rating_not_numeric`        | `rating` was non-numeric. |
@@ -183,8 +183,8 @@ The header-invalid 422 path is unaffected by `dry_run`.
 - **Per-row transactions, not whole-file.** Each row runs its own `DB::beginTransaction` / `DB::commit`; a failing row rolls back its own writes only and the loop continues. There is no all-or-nothing mode — partial imports are the design. Callers must inspect `summary` and `results` to decide what to do.
 - **`fclose($handle)` is in a `finally`.** A truly unexpected exception escaping the per-row catch will not leak the file handle.
 - **Format lookup is case-insensitive via `whereRaw('LOWER(name) = ?', …)`.** Non-index-friendly at scale, but the `formats` table has fewer than a dozen rows in practice. Bulk upload does not create new formats — unknown format names fail the row.
-- **`Audiobook` is matched case-insensitively (`strcasecmp`)** when deciding whether `audio_runtime` or `page_count` is required. The `formats.name` value still has to be exactly `Audiobook` for the rest of the app (the SPA's hardcoded `format_id === 2` checks and `BookController::index`'s name comparison both expect that exact string — see `/feature-plans/reset-database.md`).
-- **`page_count` defaults to `0` for audiobook rows with a blank `page_count`.** The `versions.page_count` column is `NOT NULL` in the schema. Storing `0` is unambiguous as "n/a for an audiobook"; if a stricter representation is wanted in future, that's a schema change.
+- **Which length value a row must carry comes from the format's capability flags**, not from its name. `BulkImportService::validateRow` reads `expects_page_count` / `expects_audio_runtime` off the resolved `Format`, so a second spoken-word medium is a row in `formats` rather than another `strcasecmp` against `'Audiobook'`. The two checks are independent — a format may legitimately demand both. See `/documentation/formats.md`.
+- **A length value the format doesn't carry is dropped, not stored.** An audiobook row with a `page_count` cell filled in stores no page count, because `estimatedTotalPagesByYear` already folds that version's runtime into pages and would otherwise count it twice. `versions.page_count` is nullable as of `2026_08_02_000002`; the old convention of storing `0` for audiobooks is gone, and both read as zero to every `SUM`.
 - **Book and author slugs come from `App\Support\Slugger`,** the same helper the SPA's creation paths use — 60-character cap, truncated at a hyphen boundary. A slug match means "same book" / "same author", so the importer does *not* use `BookCreator::create`, which suffixes `-2`/`-3` on collision. `lists.slug` and `formats.slug` are different entities and derive from raw `Str::slug`.
 - **List slugs use `Str::slug`, not `Slugger`.** `Slugger` (60-char cap) governs books and authors. `lists.slug` follows `ListController::store` so a bulk-created list is byte-identical to a hand-created one, and list slugs are unique per user rather than globally. `formats.slug` is likewise plain `Str::slug`. This is not drift.
 - **`ListCollector` snapshots its bookkeeping per row.** A row that throws rolls its transaction back, and the collector restores the seen-set, the `ordinal`, *and* its list handle. Snapshotting the handle is what distinguishes a list created inside the rolled-back row (dropped, so the next successful row creates it again) from one committed by an earlier row (kept — otherwise the next row would try to create a second list with the same slug and hit the per-user unique index).

@@ -21,7 +21,7 @@ readonly class ImportRow
         public string $title,
         public array $authors,
         public Format $format,
-        public int $pageCount,
+        public ?int $pageCount,
         public ?int $audioRuntime,
         public ?string $nickname,
         public array $genres,

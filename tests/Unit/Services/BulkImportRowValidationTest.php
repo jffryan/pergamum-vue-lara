@@ -21,10 +21,26 @@ class BulkImportRowValidationTest extends TestCase
         $this->service = new BulkImportService;
     }
 
+    /**
+     * A print format: pages required, no runtime. The name is arbitrary —
+     * validation reads the capability flags, never the name.
+     */
     private function format(string $name): Format
+    {
+        return $this->formatWith($name, pages: true, audio: false);
+    }
+
+    private function audioFormat(string $name): Format
+    {
+        return $this->formatWith($name, pages: false, audio: true);
+    }
+
+    private function formatWith(string $name, bool $pages, bool $audio): Format
     {
         $format = new Format;
         $format->name = $name;
+        $format->expects_page_count = $pages;
+        $format->expects_audio_runtime = $audio;
 
         return $format;
     }
@@ -112,33 +128,82 @@ class BulkImportRowValidationTest extends TestCase
         $this->assertRejects('format_not_found', $this->cells(['format' => 'Papyrus']), null);
     }
 
-    public function test_audiobook_row_requires_a_runtime(): void
+    public function test_a_format_expecting_a_runtime_requires_one(): void
     {
         $cells = $this->cells(['format' => 'Audiobook', 'page_count' => '', 'audio_runtime' => '']);
 
-        $this->assertRejects('audio_runtime_required', $cells, $this->format('Audiobook'));
+        $this->assertRejects('audio_runtime_required', $cells, $this->audioFormat('Audiobook'));
     }
 
-    public function test_audiobook_row_defaults_page_count_to_zero(): void
+    public function test_a_format_that_expects_no_pages_stores_none(): void
     {
         $cells = $this->cells(['format' => 'Audiobook', 'page_count' => '', 'audio_runtime' => '480']);
 
-        $row = $this->service->validateRow($cells, $this->format('Audiobook'));
+        $row = $this->service->validateRow($cells, $this->audioFormat('Audiobook'));
 
-        $this->assertSame(0, $row->pageCount);
+        $this->assertNull($row->pageCount);
         $this->assertSame(480, $row->audioRuntime);
     }
 
-    public function test_audiobook_matching_is_case_insensitive(): void
+    /**
+     * The old rule matched `$format->name` against 'Audiobook', so anything
+     * else spoken-word was silently treated as print. The capability is what
+     * decides now, and the name is free to be whatever the library calls it.
+     */
+    public function test_requirements_follow_the_capability_not_the_name(): void
     {
-        $cells = $this->cells(['format' => 'audiobook', 'page_count' => '', 'audio_runtime' => '']);
+        $cells = $this->cells(['format' => 'Podcast', 'page_count' => '', 'audio_runtime' => '']);
 
-        $this->assertRejects('audio_runtime_required', $cells, $this->format('audiobook'));
+        $this->assertRejects('audio_runtime_required', $cells, $this->audioFormat('Podcast'));
     }
 
-    public function test_non_audio_row_requires_a_page_count(): void
+    /**
+     * A value the format doesn't carry is dropped rather than stored: an
+     * audiobook holding a page count would be double-counted by
+     * `estimatedTotalPagesByYear`, which already folds its runtime into pages.
+     */
+    public function test_a_value_the_format_does_not_expect_is_discarded(): void
     {
-        $this->assertRejects('page_count_required', $this->cells(['page_count' => '']), $this->format('Paper'));
+        $cells = $this->cells(['format' => 'Audiobook', 'page_count' => '300', 'audio_runtime' => '480']);
+
+        $row = $this->service->validateRow($cells, $this->audioFormat('Audiobook'));
+
+        $this->assertNull($row->pageCount);
+
+        $printRow = $this->service->validateRow(
+            $this->cells(['page_count' => '300', 'audio_runtime' => '480']),
+            $this->format('Physical'),
+        );
+
+        $this->assertNull($printRow->audioRuntime);
+        $this->assertSame(300, $printRow->pageCount);
+    }
+
+    public function test_a_format_expecting_pages_requires_a_page_count(): void
+    {
+        $this->assertRejects('page_count_required', $this->cells(['page_count' => '']), $this->format('Physical'));
+    }
+
+    /**
+     * The two checks are independent, so a format may demand both.
+     */
+    public function test_a_format_expecting_both_requires_both(): void
+    {
+        $both = $this->formatWith('Read-along', pages: true, audio: true);
+
+        $this->assertRejects(
+            'audio_runtime_required',
+            $this->cells(['page_count' => '300', 'audio_runtime' => '']),
+            $both,
+        );
+
+        $row = $this->service->validateRow(
+            $this->cells(['page_count' => '300', 'audio_runtime' => '480']),
+            $both,
+        );
+
+        $this->assertSame(300, $row->pageCount);
+        $this->assertSame(480, $row->audioRuntime);
     }
 
     public function test_malformed_author_entry_is_rejected(): void

@@ -2,6 +2,17 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.6] - 2026-08-02
+
+- Formats now declare what they are measured in. `formats.expects_page_count` and `formats.expects_audio_runtime` replace every way the app used to identify a medium — `$format->name == 'Audiobook'` / `'Paper'` in `BookController`, `strcasecmp(…, 'Audiobook')` in the bulk importer, `format?.name === "Audiobook"` in two Vue files, and a hardcoded `format_id === 2` in three more. Adding a medium with different length semantics is now a row in `formats`, not a branch. `GET /api/config/formats` carries the two flags, `POST /api/formats` accepts them (defaulting to a print format), and the SPA reads them through `resources/js/utils/formats.js`.
+- **Fixed: creating or editing a version of any format other than Audiobook could 500.** The old `'Paper'` branch never matched anything — the format is named "Physical" — so every non-audio format fell through to a branch that read `audio_runtime` unguarded, and a payload omitting it threw `Undefined array key`.
+- **Fixed: an audiobook could not be stored without a page count.** `versions.page_count` was `NOT NULL`, so a null page count was an integrity-constraint violation and the importer wrote `0` to work around it. The column is nullable, and a format that carries no page count now stores none. Both read as zero to every `SUM`, so no statistic changed.
+- **Fixed: `NewVersionsInput` required a page count for audiobooks**, whose page-count input it doesn't render — an error with nothing on screen to clear it. Validation now follows the format's capabilities, on both the new-version and create/edit forms.
+- A length value the format doesn't carry is nulled on write rather than passed through, on every path. Re-formatting an audiobook as physical clears its runtime instead of leaving an orphan that `audioRuntimeByYear` still sums, and an import row can't smuggle a page count onto an audiobook that `estimatedTotalPagesByYear` would then count twice.
+- `database/seeders/FormatSeeder.php` (wired into `DatabaseSeeder`) seeds the canonical formats with their capability flags, so `migrate:fresh --seed` produces a database the bulk importer can write to. It `updateOrCreate`s on name, so it also repairs an existing database's flags. This unblocks `/feature-plans/reset-database.md`, whose two largest footgun sections are now moot.
+- `ConfigStore.createFormat` refetches the format list instead of pushing the POST response onto it — the two shapes differ, and the forms now read capability flags off whatever is cached.
+- Admin format creation gained checkboxes for the two capabilities.
+
 ## [0.1.5] - 2026-08-02
 
 - Statistics are now a scoped metric registry (`app/Statistics/`) behind one endpoint: `GET /api/statistics/{scope?}/{scopeId?}`, with `scope` defaulting to `user`, so `GET /api/statistics` still resolves. `?metrics=` takes a comma-separated subset; an unknown key for the scope is a 422, an unknown scope a 404, someone else's list a 403. **Breaking:** the response is now `{ scope, metrics, meta }` with camelCase metric keys throughout — `total_books` → `totalBooks`, `total_books_read` → `totalBooksRead`, `totalPagesByYear` → `pagesReadByYear`, and `booksReadByYear` → `readsByYear`. `App\Services\StatisticsService` is deleted.

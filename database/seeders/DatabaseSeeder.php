@@ -14,11 +14,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        // \App\Models\User::factory(10)->create();
-
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        // Formats are config, not user data — every other domain object is
+        // created through the app, but a fresh database has to start with these.
+        $this->call(FormatSeeder::class);
     }
 }

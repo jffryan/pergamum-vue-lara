@@ -13,7 +13,32 @@ class Format extends Model
 
     protected $primaryKey = 'format_id';
 
-    protected $fillable = ['name', 'slug'];
+    protected $fillable = ['name', 'slug', 'expects_page_count', 'expects_audio_runtime'];
+
+    protected $casts = [
+        'expects_page_count' => 'boolean',
+        'expects_audio_runtime' => 'boolean',
+    ];
+
+    /**
+     * The length fields this format carries, keyed by column.
+     *
+     * Callers that need to decide what to persist or what to ask for should go
+     * through here rather than matching on `name` or `format_id`: a format is
+     * the config, so adding "Comic" with a panel count is a row, not a branch.
+     */
+    public function expectedLengthFields(): array
+    {
+        return [
+            'page_count' => $this->expects_page_count,
+            'audio_runtime' => $this->expects_audio_runtime,
+        ];
+    }
+
+    public function expects(string $field): bool
+    {
+        return $this->expectedLengthFields()[$field] ?? false;
+    }
 
     public function versions(): HasMany
     {

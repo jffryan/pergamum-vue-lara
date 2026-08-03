@@ -31,7 +31,7 @@
             </p>
             <div class="flex justify-between gap-x-4 mb-4">
                 <!-- Page count field -->
-                <div class="w-full">
+                <div v-if="expectsPageCount" class="w-full">
                     <label
                         for="page_count"
                         class="block mb-2 font-bold text-zinc-600 mr-6"
@@ -55,7 +55,7 @@
                     </p>
                 </div>
                 <!-- Audio runtime field -->
-                <div v-if="version.format?.name === 'Audiobook'" class="mb-4 w-full">
+                <div v-if="expectsAudioRuntime" class="mb-4 w-full">
                     <label
                         for="audio_runtime"
                         class="block mb-2 font-bold text-zinc-600 mr-6"
@@ -120,6 +120,7 @@
 
 <script>
 import { useBooksStore, useConfigStore, useNewBookStore } from "@/stores";
+import { expects } from "@/utils/formats";
 
 export default {
     name: "NewVersionsInput",
@@ -164,6 +165,12 @@ export default {
         formats() {
             return this.ConfigStore.books.formats;
         },
+        expectsPageCount() {
+            return expects(this.version.format, "page_count");
+        },
+        expectsAudioRuntime() {
+            return expects(this.version.format, "audio_runtime");
+        },
     },
     async created() {
         await this.ConfigStore.checkForFormats();
@@ -171,10 +178,12 @@ export default {
     methods: {
         validateVersion() {
             this.isValid.format = !!this.version.format;
-            this.isValid.page_count = !!this.version.page_count;
-            if (this.version.format?.name === "Audiobook") {
-                this.isValid.audio_runtime = !!this.version.audio_runtime;
-            }
+            // A field the format doesn't carry isn't hidden-but-required — it
+            // passes, because there is no input on screen to fix it with.
+            this.isValid.page_count =
+                !this.expectsPageCount || !!this.version.page_count;
+            this.isValid.audio_runtime =
+                !this.expectsAudioRuntime || !!this.version.audio_runtime;
             return Object.values(this.isValid).every((isValid) => isValid);
         },
         async submitVersion() {

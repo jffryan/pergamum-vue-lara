@@ -24,11 +24,15 @@ const useConfigStore = defineStore("ConfigStore", {
                 console.log(error);
             }
         },
-        async createFormat(name) {
+        async createFormat(name, capabilities = {}) {
             const response = await makeRequest("post", buildUrl("formats"), {
                 name,
+                ...capabilities,
             });
-            this.books.formats.push(response.data);
+            // Refetch rather than push the created row: POST returns the whole
+            // model, the cache holds the /config/formats projection, and the
+            // forms read capability flags off whatever shape is in here.
+            await this.setFormats();
             return response.data;
         },
     },

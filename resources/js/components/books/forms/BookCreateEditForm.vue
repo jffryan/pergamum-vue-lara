@@ -175,7 +175,10 @@
             <!-- END VERSION NICKNAME -->
             <div class="flex justify-between gap-x-4 mb-4">
                 <!-- Page count field -->
-                <div class="mb-4 w-full">
+                <div
+                    v-if="expectsPageCount(bookForm.versions[idx].format)"
+                    class="mb-4 w-full"
+                >
                     <label
                         for="page_count"
                         class="block mb-2 font-bold text-zinc-600 mr-6"
@@ -202,7 +205,7 @@
 
                 <!-- Audio runtime field -->
                 <div
-                    v-if="bookForm.versions[idx].format === 2"
+                    v-if="expectsAudioRuntime(bookForm.versions[idx].format)"
                     class="mb-4 w-full"
                 >
                     <label
@@ -283,10 +286,12 @@
                         class="bg-zinc-100 p-4 mb-4 border rounded-md border-zinc-400"
                     >
                         <p>{{ version.format.name }}</p>
-                        <p v-if="version.format_id === 2">
+                        <p v-if="version.format?.expects_audio_runtime">
                             {{ version.audio_runtime }}
                         </p>
-                        <p>{{ version.page_count }}</p>
+                        <p v-if="version.format?.expects_page_count">
+                            {{ version.page_count }}
+                        </p>
                     </div>
                 </div>
 
@@ -341,6 +346,8 @@ import {
     validateNumber,
 } from "@/utils/validators";
 
+import { formatExpects } from "@/utils/formats";
+
 export default {
     name: "BookCreateEditForm",
     props: {
@@ -387,6 +394,22 @@ export default {
         },
     },
     methods: {
+        // The version rows hold a bare format_id from the <select>, so the
+        // capability has to be resolved against the config store's format list.
+        expectsPageCount(formatId) {
+            return formatExpects(
+                this.ConfigStore.books.formats,
+                formatId,
+                "page_count",
+            );
+        },
+        expectsAudioRuntime(formatId) {
+            return formatExpects(
+                this.ConfigStore.books.formats,
+                formatId,
+                "audio_runtime",
+            );
+        },
         // Default form data
         initializeBookForm() {
             return {
@@ -543,12 +566,17 @@ export default {
         validateBook(bookForm) {
             const { title, genres } = bookForm.book;
 
+            // A length field the format doesn't carry has no input rendered for
+            // it, so requiring one would be an error the user cannot clear.
             const versionsValidation = bookForm.versions.map((version) => ({
                 format: validateNumber(version.format),
                 page_count:
+                    !this.expectsPageCount(version.format) ||
                     validateString(version.page_count) ||
                     validateNumber(version.page_count),
-                audio_runtime: validateNumber(version.audio_runtime),
+                audio_runtime:
+                    !this.expectsAudioRuntime(version.format) ||
+                    validateNumber(version.audio_runtime),
             }));
 
             const isValid = {

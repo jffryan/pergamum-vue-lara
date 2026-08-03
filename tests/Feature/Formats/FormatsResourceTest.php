@@ -32,7 +32,11 @@ class FormatsResourceTest extends TestCase
             ->assertJsonValidationErrors('name');
     }
 
-    public function test_config_formats_returns_id_and_name(): void
+    /**
+     * The book forms read the capability flags off this payload to decide which
+     * length inputs to render, so they are part of the projection's contract.
+     */
+    public function test_config_formats_returns_id_name_and_capabilities(): void
     {
         $this->actingAsUser();
         Format::factory()->create(['name' => 'Audiobook']);
@@ -44,8 +48,38 @@ class FormatsResourceTest extends TestCase
         $payload = $response->json();
         $this->assertNotEmpty($payload);
         foreach ($payload as $row) {
-            $this->assertEqualsCanonicalizing(['format_id', 'name'], array_keys($row));
+            $this->assertEqualsCanonicalizing(
+                ['format_id', 'name', 'expects_page_count', 'expects_audio_runtime'],
+                array_keys($row),
+            );
         }
+
+        $audiobook = collect($payload)->firstWhere('name', 'Audiobook');
+        $this->assertFalse($audiobook['expects_page_count']);
+        $this->assertTrue($audiobook['expects_audio_runtime']);
+
+        $ebook = collect($payload)->firstWhere('name', 'Ebook');
+        $this->assertTrue($ebook['expects_page_count']);
+        $this->assertFalse($ebook['expects_audio_runtime']);
+    }
+
+    public function test_store_defaults_to_a_print_format_and_accepts_overrides(): void
+    {
+        $this->actingAsUser();
+
+        $this->postJson('/api/formats', ['name' => 'Zine'])
+            ->assertCreated()
+            ->assertJsonPath('expects_page_count', true)
+            ->assertJsonPath('expects_audio_runtime', false);
+
+        $this->postJson('/api/formats', [
+            'name' => 'Podcast',
+            'expects_page_count' => false,
+            'expects_audio_runtime' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('expects_page_count', false)
+            ->assertJsonPath('expects_audio_runtime', true);
     }
 
     public function test_unauthenticated_store_is_rejected(): void

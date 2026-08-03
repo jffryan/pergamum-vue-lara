@@ -48,8 +48,10 @@
                         <p>
                             <strong>{{ version.format.name }}</strong>
                         </p>
-                        <p>{{ version.page_count }}</p>
-                        <p v-if="version.format_id === 2">
+                        <p v-if="version.format?.expects_page_count">
+                            {{ version.page_count }}
+                        </p>
+                        <p v-if="version.format?.expects_audio_runtime">
                             {{ version.audio_runtime }}
                         </p>
                     </div>

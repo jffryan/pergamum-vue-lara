@@ -80,7 +80,7 @@
                                 >{{ format.name }}</option>
                             </select>
                         </div>
-                        <div class="mb-4">
+                        <div v-if="expectsPageCount(version)" class="mb-4">
                             <label class="block mb-2 font-bold text-zinc-600">Page Count</label>
                             <input
                                 type="text"
@@ -88,7 +88,7 @@
                                 @input="version.page_count = $event.target.value.replace(/[^0-9]/g, '')"
                             />
                         </div>
-                        <div v-if="isAudiobook(version)" class="mb-4">
+                        <div v-if="expectsAudioRuntime(version)" class="mb-4">
                             <label class="block mb-2 font-bold text-zinc-600">Audio Runtime (minutes)</label>
                             <input
                                 type="text"
@@ -190,6 +190,7 @@ import {
 } from "@/services/BookServices";
 import { updateBook, deleteBook } from "@/api/BookController";
 import { validateString } from "@/utils/validators";
+import { formatExpects } from "@/utils/formats";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -253,8 +254,15 @@ export default {
             await deleteBook(book_id);
             this.$router.push({ name: "library.index" });
         },
-        isAudiobook(version) {
-            return this.formats.find((f) => f.format_id === version.format_id)?.name === "Audiobook";
+        expectsPageCount(version) {
+            return formatExpects(this.formats, version.format_id, "page_count");
+        },
+        expectsAudioRuntime(version) {
+            return formatExpects(
+                this.formats,
+                version.format_id,
+                "audio_runtime",
+            );
         },
         addBlankAuthor() {
             if (this.canAddMoreAuthors) {
@@ -284,13 +292,19 @@ export default {
             }
             const book_id = this.bookData.book.book_id;
 
-            const transformedVersions = this.bookData.versions.map((version) => ({
-                version_id: version.version_id,
-                format: version.format_id,
-                page_count: version.page_count,
-                audio_runtime: this.isAudiobook(version) ? version.audio_runtime : null,
-                nickname: version.nickname,
-            }));
+            const transformedVersions = this.bookData.versions.map(
+                (version) => ({
+                    version_id: version.version_id,
+                    format: version.format_id,
+                    page_count: this.expectsPageCount(version)
+                        ? version.page_count
+                        : null,
+                    audio_runtime: this.expectsAudioRuntime(version)
+                        ? version.audio_runtime
+                        : null,
+                    nickname: version.nickname,
+                }),
+            );
 
             const bookEdits = {
                 book_id,

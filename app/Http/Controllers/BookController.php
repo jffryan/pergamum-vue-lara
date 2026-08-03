@@ -244,12 +244,16 @@ class BookController extends Controller
                 $existing_version = $existing_versions->firstWhere('version_id', $patch_version['version_id']);
 
                 if ($existing_version) {
+                    $format = Format::find($patch_version['format']);
+
+                    if (! $format) {
+                        continue;
+                    }
+
                     $existing_version->fill([
-                        'page_count' => $patch_version['page_count'],
                         'format_id' => $patch_version['format'],
                         'nickname' => $patch_version['nickname'],
-                        'audio_runtime' => $patch_version['audio_runtime'] ?? null,
-                    ])->save();
+                    ] + $this->lengthFieldsFor($format, $patch_version))->save();
                 }
             } else {
                 // Prepare and save the new version as part of the update process
@@ -522,16 +526,11 @@ class BookController extends Controller
                 continue;
             }
 
-            $new_version['page_count'] = $version_data['page_count'];
             $new_version['format_id'] = $version_data['format'];
             $new_version['nickname'] = $version_data['nickname'];
 
-            if ($format->name == 'Audiobook') {
-                $new_version['audio_runtime'] = $version_data['audio_runtime'];
-            } elseif ($format->name == 'Paper') {
-                $new_version['audio_runtime'] = null;
-            } else {
-                $new_version['audio_runtime'] = $version_data['audio_runtime'];
+            foreach ($this->lengthFieldsFor($format, $version_data) as $field => $value) {
+                $new_version[$field] = $value;
             }
 
             $new_version->load('format');
@@ -539,6 +538,25 @@ class BookController extends Controller
         }
 
         return $new_versions;
+    }
+
+    /**
+     * Reduce a version payload to the length fields its format actually carries.
+     *
+     * A field the format doesn't expect is nulled rather than trusted, so
+     * re-formatting an audiobook as paper can't leave a stale runtime behind;
+     * a field it does expect is coalesced, so a payload that omits it stores
+     * null instead of throwing an undefined-key 500.
+     */
+    private function lengthFieldsFor(Format $format, array $version_data): array
+    {
+        $fields = [];
+
+        foreach ($format->expectedLengthFields() as $field => $expected) {
+            $fields[$field] = $expected ? ($version_data[$field] ?? null) : null;
+        }
+
+        return $fields;
     }
 
     private function handleGenres($genresData)

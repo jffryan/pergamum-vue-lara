@@ -25,25 +25,13 @@ Multi-read history, multi-version books, multi-author rows, and audio runtimes a
 
 ## Footguns the fresh DB will expose
 
-### 1. Hardcoded `format_id === 2` for Audiobook (frontend)
+### 1 & 2. ~~Hardcoded `format_id === 2` and format-name string matching~~ — resolved
 
-Three places assume Audiobook lives at `format_id = 2`:
+Both are gone. `formats` now carries `expects_page_count` / `expects_audio_runtime`, and every consumer — `BookController` (create *and* edit), `BulkImportService`, and all four book forms via `resources/js/utils/formats.js` — reads those instead of an id or a name. A fresh database may assign whatever `format_id` values it likes, and a format may be renamed, without changing any behavior in the import or the forms. See `/documentation/formats.md`.
 
-- `resources/js/components/books/forms/BookCreateEditForm.vue:205` — `v-if="bookForm.versions[idx].format === 2"` gates the audio-runtime input.
-- `resources/js/components/books/forms/BookCreateEditForm.vue:286` — same check, second occurrence.
-- `resources/js/views/AddVersionView.vue:42` — `v-if="version.format_id === 2"`.
-- `resources/js/views/AddReadHistoryView.vue:52` — `v-if="version.format_id === 2"`.
+The seeder that these sections asked for exists: `database/seeders/FormatSeeder.php`, wired into `DatabaseSeeder`, so `php artisan migrate:fresh --seed` produces a database the importer can immediately write to. It seeds Physical / Audiobook / Pirated / Ebook / Graphic Novel with their capability flags and their slugs, in the order matching the current ids.
 
-A fresh DB with auto-increment IDs will assign whatever order the seeder inserts. **Mitigation:** the format seeder MUST insert in a fixed order so that Audiobook lands at `format_id = 2`. See seeder spec below. (The right long-term fix — capability flags on `formats`, tracked as item 3 in `/feature-plans/formats.md` — is out of scope for the reset itself.)
-
-### 2. Hardcoded format-name string matching (backend + frontend)
-
-- `app/Http/Controllers/BookController.php:522` — `$format->name == 'Audiobook'` and `:524` `'Paper'` decide whether `audio_runtime` is kept.
-- `resources/js/views/EditBookView.vue:257` — `f.name === "Audiobook"`.
-- `resources/js/components/newBook/NewVersionsInput.vue:58` — `version.format?.name === 'Audiobook'` (template).
-- `resources/js/components/newBook/NewVersionsInput.vue:175` — `version.format?.name === "Audiobook"` (validation).
-
-**Mitigation:** the seeder must use the exact strings `'Audiobook'` and `'Paper'`. Capitalization matters for the backend comparisons (`==` is case-sensitive in PHP for these strings). The CSV importer's lookup is case-insensitive, so the CSV side is fine.
+**One correction to what this plan assumed:** there is no format named `'Paper'`. It is `'Physical'`. `BookController::prepareVersions`' `'Paper'` branch had therefore never matched anything, and a seeder built to this plan's spec would have created a sixth, spurious format. The other footguns below still stand.
 
 ### 3. `formats.slug` must be populated, not just `name`
 
@@ -97,32 +85,20 @@ The SPA caches formats. Anyone with the app open during the reset will see an em
 
 1. **Export the current DB to CSV** before doing anything destructive, even from the broken state, in case rows are still readable. `mysqldump` the full DB to a `.sql` file too as a belt-and-suspenders backup.
 2. **Audit the CSV** before importing:
-   - Format names exactly match the planned seed (`Audiobook`, `Paper`, `Ebook`).
+   - Format names exactly match `FormatSeeder::FORMATS` (`Physical`, `Audiobook`, `Pirated`, `Ebook`, `Graphic Novel`). The lookup is case-insensitive, but an unmatched name fails the row.
    - Author entries use the `First|Last` shape and use `;` to separate co-authors.
    - Genres use `;` to separate entries; case differences are fine (the importer dedupes case-insensitively).
-   - Audiobook rows have `audio_runtime` set; non-audio rows have `page_count` set.
+   - Rows whose format declares `expects_audio_runtime` have `audio_runtime` set; rows whose format declares `expects_page_count` have `page_count` set. A value a format doesn't carry is discarded rather than stored, so a stray `page_count` on an audiobook row is harmless.
    - Re-reads are represented as separate rows with the same `(title, format, version_nickname)` and different `date_read`.
 3. **Dry-run the import** before committing: `POST /api/bulk-upload` with `dry_run=1` to surface per-row failures without touching the DB. Iterate on the CSV until the dry-run summary is clean.
 
-### Step 2 — Build the format seeder
+### Step 2 — ~~Build the format seeder~~ (done)
 
-Create `database/seeders/FormatSeeder.php` that inserts in a fixed order with explicit `format_id` and `slug`:
+`database/seeders/FormatSeeder.php` exists and is called from `DatabaseSeeder::run()`, so `migrate:fresh --seed` is enough. It seeds Physical / Audiobook / Pirated / Ebook / Graphic Novel with their slugs and capability flags.
 
-```php
-DB::table('formats')->insert([
-    ['format_id' => 1, 'name' => 'Paper',     'slug' => 'paper',     'created_at' => now(), 'updated_at' => now()],
-    ['format_id' => 2, 'name' => 'Audiobook', 'slug' => 'audiobook', 'created_at' => now(), 'updated_at' => now()],
-    ['format_id' => 3, 'name' => 'Ebook',     'slug' => 'ebook',     'created_at' => now(), 'updated_at' => now()],
-]);
-```
+It does **not** pin `format_id` explicitly, and doesn't need to — nothing keys off the id any more (§1). It `updateOrCreate`s on name rather than raw-inserting, so re-running it against a populated database repairs flags instead of colliding.
 
-Explicit `format_id` matters — it locks Audiobook at `2` so the four hardcoded `=== 2` checks (§1) keep working until the capability-flags refactor lands. Using raw `DB::table->insert` instead of `Format::create` lets us set the PK directly and matches what `/feature-plans/formats.md` item 8 prescribes.
-
-Wire it from `DatabaseSeeder::run()`:
-
-```php
-$this->call(FormatSeeder::class);
-```
+Review the list before the reset: it is the set that exists today, which is not the set this plan originally assumed. If any of those formats are ones you don't want carried into the fresh database, drop them from the seeder first — and make sure the CSV doesn't reference them, because an unmatched format fails the row.
 
 ### Step 3 — Reset and reseed
 
@@ -145,9 +121,8 @@ Lists are gone. Recreate the canonical ones via the SPA. Document the list of li
 
 ## Touches existing systems
 
-- `database/seeders/DatabaseSeeder.php` (currently empty).
-- New `database/seeders/FormatSeeder.php`.
-- The hardcoded `format_id === 2` checks in `BookCreateEditForm.vue`, `AddVersionView.vue`, `AddReadHistoryView.vue` — NOT modified here, but their assumption is being preserved by the seeder. Coordinate with `/feature-plans/formats.md` item 3 (capability flags) — that work would remove the assumption entirely; until it lands, the seeder pinning IDs is the load-bearing piece.
+- `database/seeders/DatabaseSeeder.php` and `database/seeders/FormatSeeder.php` — both now exist; the reset only consumes them.
+- The book / version forms no longer assume anything about format ids or names, so the reset is free to reassign ids. See `/documentation/formats.md`.
 - `books.slug` and `authors.slug` are both uniquely indexed at the DB level (the latter via `2026_04_30_000000_make_authors_slug_unique_and_required.php`), so the bulk importer's find-or-create-by-slug logic is backstopped. Pre-existing duplicates have already been surfaced and resolved by that migration rather than mid-restore.
 
 ## Open questions
@@ -158,9 +133,9 @@ Lists are gone. Recreate the canonical ones via the SPA. Document the list of li
 ## Future improvements
 
 - Build a real export endpoint that produces a CSV the importer can roundtrip without loss (lists in particular are still gone). Removes the data-loss surface from any future reset.
-- Capability flags on `formats` (`/feature-plans/formats.md` item 3) — once done, the seeder no longer needs to pin `format_id = 2`.
+- ~~Capability flags on `formats`~~ — shipped, and with them the seeder. The reset itself is now the only outstanding work in this plan.
 
 ## Known limitations
 
 - Lists are not preserved across the reset.
-- The seeder pins `format_id` values explicitly; if a future migration or developer reorders the seeder rows, the SPA's hardcoded `=== 2` checks will silently break.
+- `Book.nickname` is still not in the CSV contract and does not survive.
