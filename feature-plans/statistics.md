@@ -7,6 +7,8 @@ status: living
 
 Tracks rough edges and follow-up work for the user-wide statistics dashboard (`GET /api/statistics`, `StatisticsDashboard.vue`). Descriptive content lives in `/documentation/statistics.md`. Per-list statistics are owned by `/feature-plans/lists.md`; year-browse aggregations are in `/feature-plans/read-history.md`. Cross-cutting items link there rather than restate.
 
+> **Superseded in large part by `/feature-plans/statistics-widgets.md`** (draft), which restructures statistics into a scoped backend metric registry plus a config-driven widget system on the frontend. That plan absorbs items 2–11, 13 (the `meta.catalogWide` half), 14, 15, and 16 below, and resolves the open semantic questions (casing, `readsByYear` vs. `uniqueBooksReadByYear`, undated reads, rating halving). The limitations recorded here stay accurate as a description of the *current* code and as the checklist that refactor has to satisfy — don't delete them until it ships.
+
 ## Known limitations
 
 ### Authorization & scoping
