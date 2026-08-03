@@ -111,7 +111,7 @@
                 <div class="grid grid-cols-2">
                     <div
                         v-for="history in bookData.readInstances"
-                        :key="history.read_instances_id"
+                        :key="history.read_instance_id"
                         class="p-4 mb-4 bg-zinc-100 border rounded-md border-zinc-400 shadow-md"
                     >
                         <p v-if="bookData.versions.length > 1">

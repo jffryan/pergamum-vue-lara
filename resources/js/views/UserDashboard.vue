@@ -1,12 +1,19 @@
+<script>
+import StatisticsGrid from "@/components/statistics/StatisticsGrid.vue";
+import userDashboard from "@/services/statistics/surfaces/userDashboard";
+
+export default {
+    name: "UserDashboard",
+    components: { StatisticsGrid },
+    data() {
+        return { surface: userDashboard };
+    },
+};
+</script>
+
 <template>
     <main>
-        <div class="flex">
-            <div class="lg:w-1/2 flex justify-center flex-col">
-                <h2 class="text-2xl font-bold mb-4">Welcome to your Dashboard</h2>
-                <p class="text-gray-700">
-                    This is a placeholder view. You're logged in!
-                </p>
-            </div>
-        </div>
+        <h2 class="text-2xl font-bold mb-4">Welcome to your Dashboard</h2>
+        <StatisticsGrid :surface="surface" />
     </main>
 </template>

@@ -9,7 +9,9 @@
                     for="date_read"
                     class="block mb-2 font-bold text-zinc-600 mr-6"
                     >Date Completed
-                    <span class="font-normal text-zinc-400 text-sm">(optional)</span></label
+                    <span class="font-normal text-zinc-400 text-sm"
+                        >(optional)</span
+                    ></label
                 >
                 <input
                     type="text"
@@ -20,7 +22,9 @@
                     placeholder="MM/DD/YYYY"
                     class="border-2 border-t-transparent border-x-transparent border-b-zinc-400 p-2 w-full mb-2 focus:border-2 focus:outline-none focus:border-zinc-600 focus:rounded-md transition-all"
                 />
-                <p class="text-xs text-zinc-400">Leave blank if you don't remember when you read this.</p>
+                <p class="text-xs text-zinc-400">
+                    Leave blank if you don't remember when you read this.
+                </p>
             </div>
             <!-- END DATE COMPLETED -->
             <div class="mb-4">
@@ -58,7 +62,7 @@
 </template>
 
 <script>
-import { useBooksStore, useNewBookStore } from "@/stores";
+import { useBooksStore, useNewBookStore, useStatisticsStore } from "@/stores";
 
 import axios from "axios";
 
@@ -67,10 +71,12 @@ export default {
     setup() {
         const BooksStore = useBooksStore();
         const NewBookStore = useNewBookStore();
+        const StatisticsStore = useStatisticsStore();
 
         return {
             BooksStore,
             NewBookStore,
+            StatisticsStore,
         };
     },
     props: {
@@ -132,6 +138,10 @@ export default {
                 console.log("ERROR: ", res);
                 return;
             }
+
+            // A new read moves every read-derived number, on the user scope and
+            // on any list holding this book.
+            this.StatisticsStore.invalidateAll();
 
             // Find matching book_id in BooksStore.allBooks array then update the record
             const bookIndex = this.BooksStore.allBooks.findIndex(

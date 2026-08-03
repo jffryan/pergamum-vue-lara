@@ -9,7 +9,9 @@ class ReadInstance extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = 'read_instances_id';
+    // Singular, matching the column the migration actually creates. The table
+    // is plural, the key is not.
+    protected $primaryKey = 'read_instance_id';
 
     protected $casts = ['date_read' => 'date'];
 

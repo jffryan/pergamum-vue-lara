@@ -36,7 +36,7 @@ Tracks rough edges and follow-up work for the Lists domain (BookList / ListItem)
 - **`show` eager-loads the entire list with deep relations.** `items.version.book.authors`, `…book.genres`, `…book.readInstances` (filtered to the user), `…version.format` — fine for lists of dozens, expensive for hundreds. No pagination, no streaming. Stats view re-fetches the same payload.
 - **`index` returns *every* list with a slim items projection,** but doesn't paginate either. A user with hundreds of lists pays an N+1-ish cost (one `lists` query + one `list_items` query per request) on every page load that hits the navbar.
 - **`index` items omit `ordinal` from the projection** (`with('items:list_item_id,list_id,version_id')`). The relation's `orderBy('ordinal')` keeps array order correct, so the SPA still receives items in stored order, but each item carries no positional metadata. The moment a frontend wants to reason about position from the index payload (e.g. inline drag-reorder in the lists nav, or "position 5 of 12" badges), it has to derive it from array index — which breaks as soon as anything is filtered out client-side. Add `ordinal` to the projection.
-- **No statistics endpoint.** Stats are recomputed on every visit to `lists.statistics` from a fresh full-list payload. Caching the computed shape — even just in `ListsStore` — would avoid redundant work when bouncing between the list and its stats.
+- ~~**No statistics endpoint.**~~ Shipped as the `list` scope of the metric registry — `GET /api/statistics/list/{id}`, cached per scope in `StatisticsStore`. See `/documentation/statistics.md`.
 - **`reorder` does N `UPDATE` statements inside the transaction,** one per item. For a 200-item reorder that's 200 round-trips. A single `CASE WHEN list_item_id = ? THEN ? … END` update would collapse it.
 - **`reorder` takes no row-level lock on the list.** Two concurrent reorders against the same list interleave their per-item updates and produce a hybrid ordering that matches neither client's intent. `SELECT … FOR UPDATE` on the parent list (or a serializable transaction) inside the `DB::transaction` would close it. Low odds in practice — one user, one tab — but trivial to trigger from two browser tabs and silent when it happens.
 - **`reorder` doesn't bump `lists.updated_at`.** Only the per-row `list_items.updated_at` advances, because the `update(['ordinal' => …])` call is on `ListItem`, not `BookList`. Anything that surfaces "list last modified" sees rename/add/remove but not reorder. Touch the parent at the end of the transaction (`$list->touch()`) if/when that field becomes visible.
@@ -51,7 +51,7 @@ Tracks rough edges and follow-up work for the Lists domain (BookList / ListItem)
 ### Extensibility
 
 - **No list "type."** Every list is a flat ordered collection. A "to-read" list, a "currently reading" list, a "favorites of 2026" list, and a "sci-fi recommendations" list are all the same shape today. CLAUDE.md flags exactly this case ("another list type") as the place to introduce a config-driven dispatch — the moment a second list-type ships (e.g. with item-level status: queued / reading / done), the policy / show shape / stats shape will all need to branch.
-- **Statistics live entirely in the view component.** Eight computed properties in `ListStatisticsView.vue` do all the math. Reusing any of them outside that view (e.g. on the list index, or in a dashboard) requires copy-paste or extraction. A `useListStatistics(list)` composable is the natural seam.
+- ~~**Statistics live entirely in the view component.**~~ Moved server-side; `/feature-plans/statistics-widgets.md` supersedes the `useListStatistics(list)` composable idea. The list's numbers are now requestable from any surface via a config entry.
 - **`ListsStore` doesn't model items.** Item add/remove/reorder mutate `this.list.items` locally in the view. If two views ever care about the same list's items simultaneously, they'll drift.
 - **No tests for the lists feature.** `tests/Feature` has no `ListController` or `ListItemController` coverage; the policy is also untested. Any of the refactors below will be flying blind without first adding coverage.
 
@@ -61,7 +61,7 @@ Tracks rough edges and follow-up work for the Lists domain (BookList / ListItem)
 - **`ListView.vue::searchForBook` paginates books at 20 per page** (the books index default) but only ever shows the first page. Searching a common word truncates results silently.
 - **No optimistic updates** on add/remove. UI waits for the round trip; the "✓ Added" badge can lag visibly.
 - **Rename and delete have no loading state.** Double-clicks on Save can fire two PATCHes; double-clicks on the delete confirm can fire two DELETEs (the second 404s, harmless but noisy in the console).
-- **Statistics view re-fetches the list** instead of reading `ListsStore.currentList`. Bouncing list → stats → list does three full GETs.
+- ~~**Statistics view re-fetches the list**~~ — `ListStatisticsView` now reads `ListsStore.currentList` and only fetches on a cache miss.
 
 ## Future improvements
 
@@ -70,7 +70,7 @@ In rough priority order — earlier items unblock later ones.
 1. **Add Feature tests** for create/update/destroy, item add/remove, reorder (including the partial-payload rejection), and the policy (cross-user access denied). Everything else below is risky without these.
 2. **Introduce `FormRequest` classes** (`StoreListRequest`, `UpdateListRequest`, `StoreListItemRequest`, `ReorderListRequest`). Move the `array_diff` membership check on `reorder` into the request and return a structured 422 with the offending IDs.
 3. **Decide what to do with the slug column.** Either route by `/lists/{user}/{slug}` (and surface a slug-conflict UX) or drop the column and its unique index. Right now it's a 500-waiting-to-happen with no upside.
-4. **Extract a `useListStatistics(list)` composable** out of `ListStatisticsView.vue`. This is the seam for using the same numbers on the list index, the user dashboard, or anywhere else.
+4. ~~**Extract a `useListStatistics(list)` composable**~~ — done differently and better by `/feature-plans/statistics-widgets.md`: the numbers moved server-side into the `list` metric scope, so any surface can request them without a composable at all.
 5. **Soft-delete lists** (`SoftDeletes` trait + `deleted_at`). The hard cascade-on-delete is the most user-hostile behavior in the lists flow.
 6. **Optimistic updates in `ListsStore`** for add/remove/reorder. Move item-level state out of view-local `this.list.items` into the store at the same time, so two views can share it.
 7. **Drag-and-drop reorder UI** in `ListItemsTable.vue`. The endpoint exists; this is purely frontend work (Vue Draggable or similar).
@@ -82,4 +82,4 @@ In rough priority order — earlier items unblock later ones.
 13. **"Duplicate list" and "merge lists" endpoints**, once the type system above is in place.
 14. **Normalize the item response shape** between `POST /lists/{id}/items` and the item objects inside `GET /lists/{id}`. One eager-load definition, used by both.
 15. **Loading/disabled state on rename and delete** in `ListView.vue` to prevent double-submits.
-16. **Server-side list statistics endpoint** (`GET /lists/{id}/statistics`) once the show payload is paginated — at that point client-side derivation no longer has the data it needs.
+16. ~~**Server-side list statistics endpoint**~~ — shipped ahead of the pagination work this item assumed would gate it, as `GET /api/statistics/list/{id}`. See `/feature-plans/statistics-widgets.md`. Item 8 (paginating `show`) is now unblocked: the statistics no longer need the full item set in the payload, only the genre drill-down table does.

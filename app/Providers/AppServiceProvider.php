@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Services\StatisticsService;
+use App\Statistics\MetricRegistry;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -14,8 +14,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->singleton(StatisticsService::class, function ($app) {
-            return new StatisticsService;
+        $this->app->singleton(MetricRegistry::class, function ($app) {
+            return new MetricRegistry(array_map(
+                fn (string $metric) => $app->make($metric),
+                config('statistics.metrics', [])
+            ));
         });
     }
 

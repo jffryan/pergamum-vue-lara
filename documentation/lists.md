@@ -7,11 +7,11 @@ status: living
 
 ## Scope
 
-Covers the `BookList` / `ListItem` domain — user-owned ordered collections of book versions, plus the policy-based authorization that's specific to this feature. List statistics are computed client-side from the show payload and are documented here, not in `statistics.md` (which covers the server-side aggregations).
+Covers the `BookList` / `ListItem` domain — user-owned ordered collections of book versions, plus the policy-based authorization that's specific to this feature. List *statistics* are a scope of the shared metric registry and are documented in `statistics.md`; this doc covers the list domain those metrics read from.
 
 ## Summary
 
-Lists are user-owned, ordered collections of book *versions* (not logical books). A user creates named lists, adds versions of books to them, reorders them, and views aggregate statistics (completion %, total pages, genre breakdown, average rating) computed client-side from the list payload. Lists are the only feature in the app with real per-user authorization today.
+Lists are user-owned, ordered collections of book *versions* (not logical books). A user creates named lists, adds versions of books to them, reorders them, and views aggregate statistics (completion %, total pages, genre breakdown, average rating) served by `GET /api/statistics/list/{id}`. Lists are the only feature in the app with real per-user authorization today.
 
 ```
 User ──< BookList ──< ListItem ──> Version ──> Book ──< Author / Genre / ReadInstance
@@ -37,7 +37,7 @@ User ──< BookList ──< ListItem ──> Version ──> Book ──< Auth
 - **API layer**: `resources/js/api/ListController.js` — `getAllLists`, `getOneList`, `createList`, `updateList`, `deleteList`, `reorderList`, `addItemToList`, `removeItemFromList`. Built on `apiHelpers.js` (`makeRequest`/`buildUrl`) for the resource routes; the nested `/items` and `/reorder` paths are hand-built strings since `buildUrl` only handles the flat shape.
 - **Stores**: `ListsStore` (Pinia) — holds `allLists` (the index payload) and `currentList` (the show payload). Provides `setAllLists`, `setCurrentList`, `addList`, `updateList`, `removeList`. Item-level mutations (add/remove/reorder) are *not* in the store today; the views mutate `this.list.items` locally after the API round-trip.
 - **Routes**: `resources/js/router/list-routes.js` — `lists.index`, `lists.show`, `lists.statistics`. All three route by numeric `list_id`, **not** slug.
-- **Views**: `ListsView.vue` (index + create), `ListView.vue` (detail, rename, delete, item add/remove, search-to-add), `ListStatisticsView.vue` (computed-from-payload stats).
+- **Views**: `ListsView.vue` (index + create), `ListView.vue` (detail, rename, delete, item add/remove, search-to-add), `ListStatisticsView.vue` (a `StatisticsGrid` plus the genre drill-down table).
 - **Components**: `resources/js/components/lists/ListItemsTable.vue` is the only list-specific component; statistics reuses `components/books/table/BookshelfTable.vue` for the genre-filtered view.
 
 ## Non-obvious decisions and gotchas
@@ -51,11 +51,10 @@ User ──< BookList ──< ListItem ──> Version ──> Book ──< Auth
 - **No `ListItemPolicy`.** Item mutations authorize against `$this->authorize('update', $list)`. If you add an item-level action that should have different rules (e.g. "anyone can comment on an item on a public list"), you'll need to add the policy first — don't extend the implicit "update the parent" check.
 - **`reorder` validates membership before touching the DB.** The check is `count(array_diff($itemIds, $listItemIds)) > 0 || count($itemIds) !== count($listItemIds)` — both directions, so passing a subset returns 422 instead of silently dropping items from the order.
 - **`destroy` on `ListItemController` re-checks `list_id` match** even though the route already binds `{list}` and `{item}`. This guards against `DELETE /lists/1/items/999` where item 999 belongs to a different list — without the check, route-model binding would happily delete it. Replicate this pattern if you add more nested item actions.
-- **Statistics are computed entirely client-side** from the show payload. There is no `/lists/{id}/statistics` endpoint; `ListStatisticsView.vue` calls `getOneList` and derives every number locally. This means stats accuracy is bounded by what `ListController::show` eager-loads (see below).
-- **The show payload is intentionally heavy.** `ListController::show` eager-loads `items.version.book.authors`, `items.version.book.genres`, `items.version.format`, and `items.version.book.readInstances` filtered to the current user. The statistics view depends on all of these; trimming the payload will silently break stats.
-- **Read-instance scoping mirrors books.** The `readInstances` eager-load is constrained to `auth()->id()` — without that filter, completion % and average rating would mix users.
-- **Stats dedupe by book_id.** A list's uniqueness constraint is on `(list_id, version_id)`, so the *same book* can appear multiple times via different versions (e.g. paperback + audiobook of the same title). `ListStatisticsView` collapses these to one entry per `book_id` for "books on list" / "completed" / genre / rating math, but `totalPages` sums across *all* items (versions), not unique books. That asymmetry is intentional — pages reflect what's physically on the list.
-- **Ratings are doubled at rest** (see books doc); `ListStatisticsView::averageRating` divides by 2 for display. Any new client-side stat that touches `read_instances.rating` must do the same.
+- **Statistics are computed server-side** by the `list` scope of the metric registry (`GET /api/statistics/list/{id}` — see `statistics.md`), not derived from the show payload. `ListStatisticsView.vue` still loads the list, but only for the heading and the genre drill-down table, which need the items themselves rather than an aggregate.
+- **The show payload is intentionally heavy.** `ListController::show` eager-loads `items.version.book.authors`, `items.version.book.genres`, `items.version.format`, and `items.version.book.readInstances` filtered to the current user. The drill-down table depends on all of these; the statistics no longer do.
+- **Read-instance scoping mirrors books.** The `readInstances` eager-load is constrained to `auth()->id()` — without that filter, the drill-down table would show other users' reads.
+- **Stats dedupe by book_id, except pages.** A list's uniqueness constraint is on `(list_id, version_id)`, so the *same book* can appear multiple times via different versions (paperback + audiobook of one title). `totalItems`, `completedCount` and `genreBreakdown` collapse those to one book; `totalPages` sums across *all* items. That asymmetry is intentional — books count works, pages count physical volume. See the works-versus-volume note in `statistics.md`.
 
 ## Usage notes
 
@@ -93,10 +92,10 @@ User ──< BookList ──< ListItem ──> Version ──> Book ──< Auth
 
 ### Statistics
 
-There is no statistics endpoint. The `lists.statistics` route fetches the list via `getOneList` and computes all numbers in `ListStatisticsView.vue`. If you need stats outside that view, call `getOneList` and reuse the computed properties or extract them into a helper.
+`GET /api/statistics/list/{list_id}` serves `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `averageRating` and `ratingDistribution`. A list you don't own is a 403. Any surface can request them — see "Adding a surface" in `statistics.md` — so list numbers are no longer trapped in one view.
 
 ## Related
 
 - Plan file: `/feature-plans/lists.md` — future improvements and known limitations for this domain.
 - `/documentation/books.md` — list items pin versions, not books; the rating-doubling convention is defined there and applies to the client-side stats here.
-- `/documentation/statistics.md` — server-side aggregations; contrast with the client-side stats described above.
+- `/documentation/statistics.md` — the metric registry that serves list statistics, and how to add a metric or a surface.

@@ -84,38 +84,20 @@ class BookController extends Controller
     /**
      * Constrain a books query by whether the book is still on the shelf.
      *
-     * A book is "discarded" only when *every* version of it is discarded —
-     * owning the paperback but having got rid of the audiobook still leaves
-     * the book in the library. Books with no versions at all are treated as
-     * on-shelf so they never silently vanish.
-     *
-     * `?discarded=` accepts `exclude` (default), `only`, or `all`, with
-     * `0`/`false` and `1`/`true` as aliases for the first two.
+     * The rule itself lives on the model — see `Book::scopeOnShelf()` and
+     * `Book::scopeFullyDiscarded()`. This method only maps the query string
+     * onto it: `?discarded=` accepts `exclude` (default), `only`, or `all`,
+     * with `0`/`false` and `1`/`true` as aliases for the first two.
      */
     private function applyDiscardedFilter($query, Request $request): void
     {
         $mode = $this->normalizeDiscardedMode($request->input('discarded'));
 
-        if ($mode === 'all') {
-            return;
-        }
-
-        if ($mode === 'only') {
-            $query->whereHas('versions', function ($q) {
-                $q->discarded();
-            })->whereDoesntHave('versions', function ($q) {
-                $q->notDiscarded();
-            });
-
-            return;
-        }
-
-        $query->where(function ($q) {
-            $q->whereDoesntHave('versions')
-                ->orWhereHas('versions', function ($v) {
-                    $v->notDiscarded();
-                });
-        });
+        match ($mode) {
+            'all' => null,
+            'only' => $query->fullyDiscarded(),
+            default => $query->onShelf(),
+        };
     }
 
     private function normalizeDiscardedMode($value): string
@@ -335,10 +317,10 @@ class BookController extends Controller
 
         try {
             foreach ($readInstancesData as $instanceData) {
-                if (isset($instanceData['read_instances_id']) && $instanceData['read_instances_id'] != null) {
+                if (isset($instanceData['read_instance_id']) && $instanceData['read_instance_id'] != null) {
                     // Update existing read instance (scoped to current user)
                     $existing_read_instance = ReadInstance::where('user_id', auth()->id())
-                        ->findOrFail($instanceData['read_instances_id']);
+                        ->findOrFail($instanceData['read_instance_id']);
                     $existing_read_instance->update([
                         'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
                         'rating' => $instanceData['rating'],
@@ -398,7 +380,7 @@ class BookController extends Controller
             // Update read instances (existing ones only — no UI to add new instances from edit view)
             $existingInstances = array_values(array_filter(
                 $data['readInstances'] ?? [],
-                fn ($ri) => ! empty($ri['read_instances_id'])
+                fn ($ri) => ! empty($ri['read_instance_id'])
             ));
             if (! empty($existingInstances)) {
                 $readInstancesResponse = $this->updateReadInstances($existing_book, $existingInstances);

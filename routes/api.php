@@ -45,8 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/versions/{version}/discard', [VersionController::class, 'discard']);
     Route::patch('/versions/{version}/restore', [VersionController::class, 'restore']);
 
-    // Statistics
-    Route::get('/statistics', [StatisticsController::class, 'fetchUserStats']);
+    // Statistics — `scope` defaults to `user`, so /api/statistics still works.
+    // Adding an author or genre surface is a ScopeResolver case, not a route.
+    Route::get('/statistics/{scope?}/{scopeId?}', [StatisticsController::class, 'show']);
 
     Route::get('/config/formats', [ConfigController::class, 'getFormats']);
     Route::post('/formats', [FormatController::class, 'store']);

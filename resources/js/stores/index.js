@@ -6,6 +6,7 @@ import useConfigStore from "./ConfigStore";
 import useGenreStore from "./GenreStore";
 import useListsStore from "./ListsStore";
 import useNewBookStore from "./NewBookStore";
+import useStatisticsStore from "./StatisticsStore";
 
 export {
     useAuthStore,
@@ -15,4 +16,5 @@ export {
     useGenreStore,
     useListsStore,
     useNewBookStore,
+    useStatisticsStore,
 };

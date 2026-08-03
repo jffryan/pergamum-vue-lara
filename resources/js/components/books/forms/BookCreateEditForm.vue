@@ -257,7 +257,7 @@
             <div v-if="bookForm.book.is_completed">
                 <div
                     v-for="readInstance in bookForm.readInstances"
-                    :key="readInstance.read_instances_id"
+                    :key="readInstance.read_instance_id"
                     class="mb-4"
                 >
                     <label

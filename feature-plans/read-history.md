@@ -12,7 +12,7 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 ### Authorization & ownership
 
 - **No policy on read instances.** `addReadInstance` only requires `auth:sanctum`; the user_id is stamped from the session, but nothing prevents a user from passing an arbitrary `book_id` / `version_id` they don't otherwise interact with. Today every book is global, so this is moot — the moment book ownership exists (see `/feature-plans/books.md`), this becomes a leak.
-- **No edit or delete endpoints for read instances.** There's `POST /add-read-instance` but no `PATCH /read-instances/{id}` or `DELETE /read-instances/{id}`. A misclicked rating, a wrong date, or a duplicate read entered twice cannot be corrected through the UI — only by editing the row in MySQL. The `ReadInstance` PK is `read_instances_id`; nothing in the SPA exposes it.
+- **No edit or delete endpoints for read instances.** There's `POST /add-read-instance` but no `PATCH /read-instances/{id}` or `DELETE /read-instances/{id}`. A misclicked rating, a wrong date, or a duplicate read entered twice cannot be corrected through the UI — only by editing the row in MySQL. The `ReadInstance` PK is `read_instance_id`; nothing in the SPA exposes it beyond the book edit form.
 
 ### Validation & request shape
 

@@ -39,17 +39,9 @@ class StatisticsScopingTest extends TestCase
         $response = $this->getJson('/api/statistics');
 
         $response->assertOk();
-        $this->assertSame(1, $response->json('total_books_read'));
-
-        $byYear = $response->json('booksReadByYear');
-        $this->assertCount(1, $byYear);
-        $this->assertSame(2024, (int) $byYear[0]['year']);
-        $this->assertSame(1, (int) $byYear[0]['total']);
-
-        $pagesByYear = $response->json('totalPagesByYear');
-        $this->assertCount(1, $pagesByYear);
-        $this->assertSame(2024, $pagesByYear[0]['year']);
-        $this->assertSame(400, $pagesByYear[0]['total']);
+        $this->assertSame(1, $response->json('metrics.totalBooksRead'));
+        $this->assertSame([['year' => 2024, 'total' => 1]], $response->json('metrics.readsByYear'));
+        $this->assertSame([['year' => 2024, 'total' => 400]], $response->json('metrics.pagesReadByYear'));
     }
 
     public function test_user_with_no_reads_sees_zeroed_stats(): void
@@ -70,8 +62,8 @@ class StatisticsScopingTest extends TestCase
         $response = $this->getJson('/api/statistics');
 
         $response->assertOk();
-        $this->assertSame(0, $response->json('total_books_read'));
-        $this->assertSame([], $response->json('booksReadByYear'));
-        $this->assertSame([], $response->json('totalPagesByYear'));
+        $this->assertSame(0, $response->json('metrics.totalBooksRead'));
+        $this->assertSame([], $response->json('metrics.readsByYear'));
+        $this->assertSame([], $response->json('metrics.pagesReadByYear'));
     }
 }

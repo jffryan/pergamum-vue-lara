@@ -57,13 +57,13 @@ tests/
     Lists/                      resource CRUD, reorder, item add/destroy
     ListItems/                  if separated; otherwise nested under Lists/
     NewBook/                    multi-step creation flow
-    Statistics/                 fetchUserStats happy + empty paths
+    Statistics/                 metric behavior, registry contract, list scope
     BulkUpload/                 happy path, malformed payload, partial failure
     UserScoping/                cross-user isolation tests (one file per domain)
     Concerns/                   shared traits (e.g. CreatesBookGraph)
   Unit/
     Policies/                   BookListPolicyTest etc.
-    Services/                   StatisticsService, BookService, AuthorService
+    Services/                   BookService, AuthorService
 ```
 
 One file per controller method group is fine; one file per controller is preferred when methods share fixtures. Use the existing files as templates — they encode the conventions below.
@@ -78,7 +78,7 @@ Auth-surface tests (login, register, logout) are the exception: they exercise th
 
 ### Custom primary keys
 
-Models use `book_id`, `author_id`, `version_id`, `read_instances_id`, `list_id`, `list_item_id`, `user_id`, etc. — never plain `id`. This affects:
+Models use `book_id`, `author_id`, `version_id`, `read_instance_id`, `list_id`, `list_item_id`, `user_id`, etc. — never plain `id`. This affects:
 
 - `assertDatabaseHas` / `assertDatabaseMissing`: pass `['book_id' => $book->book_id]`, never `['id' => …]`.
 - Factory overrides: `Book::factory()->create(['book_id' => 99])` works; `['id' => 99]` silently fails.
@@ -141,7 +141,7 @@ When a factory leaks rows that callers can't override (a known case is documente
 `tests/Unit/` holds tests that don't need the HTTP stack. Two categories:
 
 - **Policies** — `BookListPolicyTest` is the template. Each ability (`viewAny`, `view`, `create`, `update`, `delete`) gets at least one positive and one negative case.
-- **Services** — construct the service directly, mock dependencies with Mockery, assert on the return. Use a real DB only when the service's logic genuinely depends on SQL behavior (`StatisticsService::yearly` with raw `selectRaw('YEAR(date_read)…')` is the case where this is necessary).
+- **Services** — construct the service directly, mock dependencies with Mockery, assert on the return. Use a real DB only when the logic genuinely depends on SQL behavior — statistics metrics are the standing example, which is why they are Feature tests against the endpoint rather than unit tests.
 
 Model accessor / mutator tests live in `tests/Unit/Models/` if they're worth pinning (the rating-doubling mutator is a good candidate). Skip tests for trivial framework behavior.
 

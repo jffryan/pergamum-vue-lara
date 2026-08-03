@@ -52,10 +52,19 @@
             </div>
 
             <div class="flex gap-4 mb-4">
-                <router-link :to="{ name: 'lists.index' }" class="text-sm text-gray-500 hover:underline">
+                <router-link
+                    :to="{ name: 'lists.index' }"
+                    class="text-sm text-gray-500 hover:underline"
+                >
                     ← Back to Lists
                 </router-link>
-                <router-link :to="{ name: 'lists.statistics', params: { id: list.list_id } }" class="text-sm text-gray-500 hover:underline">
+                <router-link
+                    :to="{
+                        name: 'lists.statistics',
+                        params: { id: list.list_id },
+                    }"
+                    class="text-sm text-gray-500 hover:underline"
+                >
                     Statistics →
                 </router-link>
             </div>
@@ -69,7 +78,10 @@
             <!-- Add a book -->
             <div class="mt-6">
                 <h2 class="text-lg font-semibold mb-2">Add a book</h2>
-                <form @submit.prevent="searchForBook" class="flex flex-col sm:flex-row gap-2 mb-3">
+                <form
+                    @submit.prevent="searchForBook"
+                    class="flex flex-col sm:flex-row gap-2 mb-3"
+                >
                     <input
                         v-model="searchTerm"
                         type="text"
@@ -92,7 +104,10 @@
                     >
                         <div class="font-medium mb-2">
                             {{ result.book.title }}
-                            <span class="text-gray-500 font-normal text-sm" v-if="primaryAuthor(result)">
+                            <span
+                                class="text-gray-500 font-normal text-sm"
+                                v-if="primaryAuthor(result)"
+                            >
                                 — {{ primaryAuthor(result) }}
                             </span>
                         </div>
@@ -101,7 +116,9 @@
                                 v-for="version in result.versions"
                                 :key="version.version_id"
                                 @click="addVersion(version)"
-                                :disabled="addedVersionIds.has(version.version_id)"
+                                :disabled="
+                                    addedVersionIds.has(version.version_id)
+                                "
                                 class="text-sm border rounded px-2 py-1"
                                 :class="
                                     addedVersionIds.has(version.version_id)
@@ -110,17 +127,28 @@
                                 "
                             >
                                 {{ version.format.name }}
-                                <span v-if="version.page_count" class="text-xs opacity-70">
+                                <span
+                                    v-if="version.page_count"
+                                    class="text-xs opacity-70"
+                                >
                                     ({{ version.page_count }}pp)
                                 </span>
-                                <span v-if="addedVersionIds.has(version.version_id)" class="text-xs">
+                                <span
+                                    v-if="
+                                        addedVersionIds.has(version.version_id)
+                                    "
+                                    class="text-xs"
+                                >
                                     ✓ Added
                                 </span>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div v-else-if="hasSearched && !isSearching" class="text-gray-500 text-sm">
+                <div
+                    v-else-if="hasSearched && !isSearching"
+                    class="text-gray-500 text-sm"
+                >
                     No books found.
                 </div>
             </div>
@@ -138,7 +166,7 @@ import {
 } from "@/api/ListController";
 import { getAllBooks } from "@/api/BookController";
 
-import { useListsStore } from "@/stores";
+import { useListsStore, useStatisticsStore } from "@/stores";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import ListItemsTable from "@/components/lists/ListItemsTable.vue";
@@ -153,7 +181,8 @@ export default {
     },
     setup() {
         const ListsStore = useListsStore();
-        return { ListsStore };
+        const StatisticsStore = useStatisticsStore();
+        return { ListsStore, StatisticsStore };
     },
     data() {
         return {
@@ -188,7 +217,8 @@ export default {
             } catch (error) {
                 console.error("Error fetching list:", error);
                 this.showErrorMessage = true;
-                this.error = "Unable to load this list. Please try again later.";
+                this.error =
+                    "Unable to load this list. Please try again later.";
             } finally {
                 this.isLoading = false;
             }
@@ -204,7 +234,10 @@ export default {
         async saveRename() {
             if (!this.editName.trim()) return;
             try {
-                const res = await updateList(this.list.list_id, this.editName.trim());
+                const res = await updateList(
+                    this.list.list_id,
+                    this.editName.trim(),
+                );
                 this.list.name = res.data.name;
                 this.list.slug = res.data.slug;
                 this.ListsStore.updateList(res.data);
@@ -214,7 +247,8 @@ export default {
             }
         },
         async confirmDelete() {
-            if (!confirm(`Delete "${this.list.name}"? This cannot be undone.`)) return;
+            if (!confirm(`Delete "${this.list.name}"? This cannot be undone.`))
+                return;
             try {
                 await deleteList(this.list.list_id);
                 this.ListsStore.removeList(this.list.list_id);
@@ -229,6 +263,7 @@ export default {
                 this.list.items = this.list.items.filter(
                     (i) => i.list_item_id !== item.list_item_id,
                 );
+                this.StatisticsStore.invalidate("list", this.list.list_id);
             } catch (error) {
                 console.error("Error removing item from list:", error);
             }
@@ -238,7 +273,9 @@ export default {
             this.isSearching = true;
             this.hasSearched = false;
             try {
-                const res = await getAllBooks({ search: this.searchTerm.trim() });
+                const res = await getAllBooks({
+                    search: this.searchTerm.trim(),
+                });
                 this.searchResults = res.data.books || [];
                 this.hasSearched = true;
             } catch (error) {
@@ -249,8 +286,12 @@ export default {
         },
         async addVersion(version) {
             try {
-                const res = await addItemToList(this.list.list_id, version.version_id);
+                const res = await addItemToList(
+                    this.list.list_id,
+                    version.version_id,
+                );
                 this.list.items.push(res.data);
+                this.StatisticsStore.invalidate("list", this.list.list_id);
             } catch (error) {
                 console.error("Error adding item to list:", error);
             }

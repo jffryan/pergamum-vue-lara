@@ -7,7 +7,7 @@ status: living
 
 ## Scope
 
-Covers two surfaces built on `ReadInstance`: the per-book "add read history" flow (`/books/:slug/add-read-history` → `AddReadHistoryView`) and the year-browse "Completed" view (`/completed` → `CompletedView`). The `ReadInstance` model itself — schema, mutators, dual-attached FKs, the `auth()->id()` scoping convention — is owned by `books.md`; this doc links rather than restates. Read history captured *during* book creation is part of the new-book flow and lives in `new-book-creation.md`. Aggregated statistics (totals, ratings) are in `statistics.md` (planned).
+Covers two surfaces built on `ReadInstance`: the per-book "add read history" flow (`/books/:slug/add-read-history` → `AddReadHistoryView`) and the year-browse "Completed" view (`/completed` → `CompletedView`). The `ReadInstance` model itself — schema, mutators, dual-attached FKs, the `auth()->id()` scoping convention — is owned by `books.md`; this doc links rather than restates. Read history captured *during* book creation is part of the new-book flow and lives in `new-book-creation.md`. Aggregated statistics (totals, ratings) are in `statistics.md`.
 
 ## Summary
 
@@ -23,7 +23,7 @@ A `ReadInstance` is a per-user reading event with a `date_read` (optional) and `
   - `GET /completed/{year}` → `BookController::getBooksByYear` → `BookService::getCompletedItemsForYear($year)` — every book the user has at least one read against in `$year`, with version + read-instance payloads scoped to that year.
 - **Controllers**: `BookController` is thin for `getCompletedYears` and `getBooksByYear` (delegates to `BookService`). `addReadInstance` holds its own logic — it `findOrFail`s the book and version, instantiates a `ReadInstance` from the request, attaches `auth()->id()`, and then double-saves through both `$book->readInstances()` and `$version->readInstances()`.
 - **Services**: `BookService::getAvailableYears()` and `BookService::getCompletedItemsForYear($year)`. The latter uses `whereHas('versions.readInstances', …)` to filter the book set, then re-runs the same year + user filter inside an eager-load on `versions.readInstances` and on the direct `readInstances` relation, then sorts the resulting collection in PHP by the first read instance's `date_read`. `transformCompletedBook` reshapes versions to a slim `{ version_id, page_count, audio_runtime, format: { format_id, name, slug }, readInstances }` payload.
-- **Models**: `ReadInstance` (PK `read_instances_id`, fillable `user_id`, `book_id`, `version_id`, `date_read`, `rating`). Date mutator returns `Y-m-d`; rating mutator doubles input on write. See `books.md` for both.
+- **Models**: `ReadInstance` (PK `read_instance_id`, fillable `user_id`, `book_id`, `version_id`, `date_read`, `rating`). Date mutator returns `Y-m-d`; rating mutator doubles input on write. See `books.md` for both.
 - **Policies / authorization**: none. User scoping is enforced manually in every query via `where('user_id', auth()->id())`.
 - **Migrations**: `2023_…_create_read_instances_table.php`. `date_read` is nullable; `book_id` and `version_id` are both NOT NULL FKs.
 
@@ -103,4 +103,4 @@ Sorted ascending by the first (earliest in the year) read instance's `date_read`
 - Plan file: `/feature-plans/read-history.md` — known limitations and future improvements.
 - `/documentation/books.md` — `ReadInstance` schema, dual-attached FKs, rating mutator, date serialization, and the user-scoping convention.
 - `/documentation/new-book-creation.md` — read-history captured at book-create time (pushed into `currentBookData.read_instances` and persisted alongside the book in `POST /create-book`).
-- `/documentation/statistics.md` (planned) — aggregate metrics derived from `ReadInstance`.
+- `/documentation/statistics.md` — aggregate metrics derived from `ReadInstance`, including the shared `ReadInstanceQuery` helper every per-year metric builds on.

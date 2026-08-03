@@ -79,7 +79,7 @@ In rough priority order. Cheap wins are deliberately front-loaded; this surface 
 ### Discoverability
 
 8. **Route-driven sidebar.** Annotate each top-level route with `meta: { sidebar: { title, group, order } }` and have `SidebarNav` derive its menu from the route table. Removes the "added a route, forgot the link" failure mode permanently. Same shape as the proposed `AdminHome` rework in `/feature-plans/admin.md` — design once, apply to both.
-9. **Decide what `/dashboard` is.** Either fold `StatisticsDashboard` into `UserDashboard` (so the prominent header CTA goes somewhere useful), redirect `/dashboard` → `/library`, or build a real home dashboard with last-read / lists-summary / quick-add. Owned by `/feature-plans/auth.md` item 11; the chrome side is the header-CTA destination.
+9. ~~**Decide what `/dashboard` is.**~~ Resolved by `/feature-plans/statistics-widgets.md`: it's a summary statistics surface, so the header CTA now lands somewhere useful. Adding last-read / lists-summary / quick-add blocks to it is a matter of extending the `userDashboard` surface config.
 10. **Breadcrumbs.** A small `<Breadcrumbs>` component above `<RouterView>` driven by `route.matched` + `meta.breadcrumb`. Skippable until the URL depth gets uncomfortable; useful immediately for the book/list deep paths.
 11. **Anonymous landing.** Either make `HomeView` a real marketing-style landing page for logged-out users (with a clear "Login" CTA distinct from the header button) or redirect anonymous `/` to `/login`. Today the home page does almost nothing.
 

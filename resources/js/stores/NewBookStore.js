@@ -143,7 +143,7 @@ const useNewBookStore = defineStore("NewBookStore", {
             }
 
             const formattedReadInstance = {
-                read_instances_id: null,
+                read_instance_id: null,
                 date_read: readInstance.date_read,
                 rating: readInstance.rating,
             };

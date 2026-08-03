@@ -81,7 +81,7 @@ In rough priority order.
 8. **Build the registration UI.** `RegisterView.vue` + `UserRegisterForm.vue` + a `/register` route entry + a link from `LoginView`. Endpoint already exists.
 9. **Fix the logout failure path.** Even on a 401 from `/logout`, clear local `AuthStore` state and redirect — the server already thinks the user is gone.
 10. **Add a loading state to the login button** and disable double-submits while a login is in flight.
-11. **Decide what `/dashboard` should be.** Either fold `StatisticsDashboard` into `UserDashboard`, change the default post-login redirect to `/library`, or build a real home dashboard.
+11. ~~**Decide what `/dashboard` should be.**~~ Resolved by `/feature-plans/statistics-widgets.md`: `/dashboard` is a summary statistics surface (`userDashboard`), sharing widgets and a cached scope with the fuller `/statistics` page. The placeholder is gone.
 12. **Fold `password.confirm` into sensitive endpoints.** Wire the middleware up; require it for any future "change email" / "delete account" / "rotate password" surface.
 13. **Add password-strength rules.** Switch register validation to `Password::min(8)->mixedCase()->uncompromised()`. Likely uncontroversial.
 14. **Wire up email verification.** Apply `MustVerifyEmail` to `User`, register the verification routes, send the verification mail on register, gate write-paths behind `verified`. The `email_verified_at` column is already there.

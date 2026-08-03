@@ -7,79 +7,141 @@ status: living
 
 ## Scope
 
-Covers the server-side, user-wide statistics dashboard at `/statistics` (`StatisticsDashboard.vue` → `GET /api/statistics` → `StatisticsService::getUserStats`). **Does not** cover per-list statistics — those are computed client-side from the list show payload and are owned by `lists.md`. Also does not cover the year-browse "Completed" surface, which is read-history aggregation in `read-history.md`. `LibraryView.vue` is a paginated book list, not a stats surface, despite being mentioned in the same plan.
+Covers every statistics surface in the app: the user-wide dashboard at `/statistics`, the post-login summary at `/dashboard`, and per-list statistics at `/lists/:id/statistics`. All three go through one endpoint (`GET /api/statistics/{scope?}/{scopeId?}`), one backend metric registry (`app/Statistics/`), and one frontend widget registry plus grid host. Does **not** cover the year-browse "Completed" surface, which is read-history aggregation — see `read-history.md`.
 
 ## Summary
 
-A single endpoint (`GET /api/statistics`) returns a flat object of pre-computed numbers covering the catalog and the current user's reading: total catalog size, unique books read, reads-per-year, pages-per-year, % of catalog completed, and five most recently created books. The dashboard view consumes the payload directly and computes `totalReads` client-side by summing the per-year counts. Metrics split between *catalog-wide* (no user filter) and *user-scoped* (filtered by `auth()->id()`) — a distinction not visible in the response shape.
+A **metric** is one number or one series, computed on demand. A **scope** is what the numbers are about — the requesting user, or one of their lists (authors, genres, formats and an admin scope are the intended next entries). Metrics declare which scopes they support, which other metrics they depend on, and which caveats apply to them; the registry resolves a requested key list into a response.
+
+On the frontend a **surface** is a plain config object: which widgets, fed by which metrics, with what labels and grid spans. `StatisticsGrid` reads a surface, derives the metric set from it, asks `StatisticsStore` for exactly that set, and renders. Adding a statistics page is writing a config file; adding a chart is registering a widget.
 
 ## How it's wired
 
-### Backend
+### Backend (`app/Statistics/`)
 
-- **Routes** (`routes/api.php`, `auth:sanctum`):
-  - `GET /api/statistics` → `StatisticsController::fetchUserStats` — single endpoint, no parameters.
-- **Controllers**: `StatisticsController` is thin — one method that returns `$statisticsService->getUserStats()` as JSON.
-- **Services**: `StatisticsService` holds every metric. `getUserStats()` is the canonical entrypoint and assembles the response from six private methods:
-  - `calculateTotalBooks()` — `Book::count()`, **catalog-wide, not user-scoped**.
-  - `calculateTotalBooksRead()` — books with at least one `ReadInstance` for the current user.
-  - `calculateBooksReadByYear()` — `ReadInstance::selectRaw('YEAR(date_read) as year, COUNT(*) as total')`, user-scoped, `whereNotNull('date_read')`, grouped + ordered descending.
-  - `calculateTotalPagesReadByYear()` — joins `versions`, sums `versions.page_count` per year, user-scoped, casts year/total to int in PHP.
-  - `calculatePercentageOfBooksRead()` — recomputes the two totals above and rounds to 2 decimals.
-  - `retrieveFiveMostRecentlyCreatedBooks()` — `Book::latest()->limit(5)`, **catalog-wide, not user-scoped**, no eager loads.
-- **Models**: no dedicated model. Reads through `Book` (PK `book_id`) and `ReadInstance` (PK `read_instances_id`); see `books.md` for both.
-- **Policies / authorization**: none. The endpoint is gated by `auth:sanctum`; user scoping is applied per-query via `auth()->id()` where it applies, and is intentionally absent from the catalog-wide metrics.
-- **Migrations**: none specific to statistics — reads from `books`, `read_instances`, `versions`.
+```
+Scope.php                  value object: type, userId, id, resolved model
+ScopeResolver.php          scope type string -> Scope (lookup + authorization)
+Contracts/Metric.php       key, supports, dependsOn, isCatalogWide, isShelfScoped,
+                           isEstimated, estimationMeta, compute
+AbstractMetric.php         defaults — user-scoped, measured, no dependencies
+MetricRegistry.php         key -> metric; dependency ordering, per-metric error isolation
+MetricResults.php          computed-value bag handed to dependent metrics
+Support/ReadInstanceQuery  shared read-history base query + groupedByYear()
+Support/ListQuery          shared list-membership queries
+Metrics/*.php              one class per metric
+```
+
+- **Route** (`routes/api.php`, `auth:sanctum`): `GET /api/statistics/{scope?}/{scopeId?}` → `StatisticsController::show`. `scope` defaults to `user`, so `GET /api/statistics` still works.
+- **Request**: `App\Http\Requests\StatisticsRequest` resolves the scope (which is also where it gets authorized) and validates `?metrics=` — a comma-separated list — against the keys the resolved scope supports.
+- **Controller**: `StatisticsController::show` is four lines: resolve scope, compute, respond.
+- **Registration**: `config/statistics.php` lists the metric classes and holds the estimate constants. `AppServiceProvider` builds the singleton `MetricRegistry` from it.
+- **Authorization**: `auth:sanctum` covers the user scope. The list scope runs `BookListPolicy::view` through `Gate::authorize`, so someone else's list is a 403 rather than an empty page.
 
 ### Frontend
 
-- **API layer**: **none.** `StatisticsDashboard.vue` calls `axios.get("/api/statistics")` directly, bypassing the `api/` layer (same layering violation as `UpdateBookReadInstance` in `read-history.md`).
-- **Stores**: none. The response is held in `StatisticsDashboard.data().statistics`; no Pinia store backs it.
-- **Service**: none.
-- **Routes**: defined directly in `resources/js/router/index.js` as `name: 'statistics'`, path `/statistics` (not split into a per-feature routes file). Linked from `components/navs/SidebarNav.vue`.
-- **Views**: `views/StatisticsDashboard.vue` — the only consumer.
-- **Components**: none feature-specific. The dashboard is a flat grid of cards inline in the view.
+```
+api/StatisticsController.js              getStatistics(scope, scopeId, metricKeys)
+stores/StatisticsStore.js                per-scope cache, partial fetch, dedupe, invalidation
+services/statistics/formatters.js        number | percent | rating | duration | compact
+services/statistics/footnotes.js         caveats generated from meta
+services/statistics/widgetRegistry.js    widget key -> component + props mapping
+services/statistics/surfaces/*.js        userStatistics, userDashboard, listStatistics
+components/statistics/StatisticsGrid.vue the host
+components/statistics/WidgetShell.vue    span, heading, footnote, unavailable state
+components/statistics/widgets/*.vue      StatTile, SeriesList, BreakdownList, EntityLinkList
+```
+
+Views are thin: `StatisticsDashboard.vue`, `UserDashboard.vue`, and `ListStatisticsView.vue` each pass a surface config to `StatisticsGrid`. `ListStatisticsView` keeps its own list payload for the heading and the genre drill-down table, because those need the items themselves rather than an aggregate.
 
 ## Non-obvious decisions and gotchas
 
-- **Catalog metrics are not user-scoped.** `total_books` and `newestBooks` are global queries against `books` — every book in the database, regardless of who created it. `total_books_read`, `booksReadByYear`, and `totalPagesByYear` *are* user-scoped. The `percentageOfBooksRead` therefore divides a user-scoped numerator by a catalog-wide denominator. In a single-user instance this is fine; the moment book ownership exists (see `/feature-plans/books.md`), the percentage and "Newest Books" become wrong without rework.
-- **`StatisticsDashboard` calls axios directly.** No `api/StatisticsController.js` wrapper exists. Adding one is the right move; until then, this is the place to grep when the route or response shape changes.
-- **Response keys mix snake_case and camelCase.** `total_books`, `total_books_read`, `percentageOfBooksRead`, `booksReadByYear`, `totalPagesByYear`, `newestBooks` — three distinct conventions in one payload. Any new metric should pick one and document it; today the dashboard maps each key in `computed` so the inconsistency doesn't propagate to the template.
-- **Per-year shapes differ.** `booksReadByYear` is returned as a collection of raw Eloquent rows where `year` is a MySQL string and `total` an int. `totalPagesByYear` is mapped to `[{ year: int, total: int }]` arrays. Consumers needing strict types must remember which is which — the dashboard's `v-for :key="year.year"` works either way only because Vue stringifies keys.
-- **`booksReadByYear` counts reads, not unique books.** `COUNT(*)` over `read_instances` includes re-reads, so a user who read the same book twice in 2025 contributes 2 to that year. The dashboard's "Total Books Read Per Year" label is therefore misleading — it's actually "total reads with a date_read per year." `totalReads` (computed client-side as the sum of these) is correctly labeled "(incl. re-reads)".
-- **`totalReads` excludes undated reads.** It's computed client-side as `booksReadByYear.reduce(...)`, and `booksReadByYear` filters `whereNotNull('date_read')`. A user with undated reads will see a `totalReads` smaller than their actual `read_instances` row count. `total_books_read` is *not* affected — it counts books with at least one read regardless of date.
-- **Rating is not exposed at all.** Despite the doubled-on-write rating mutator (see `books.md`), no metric in this payload uses ratings — no average rating, no distribution, no per-year breakdown. The list-stats view computes an average rating client-side and halves it; if a server-side rating metric is ever added here, it must do the same halving.
-- **`calculatePercentageOfBooksRead` re-runs the two count queries.** It calls `calculateTotalBooks()` and `calculateTotalBooksRead()` again rather than reusing the values already assembled in `getUserStats()`. Two extra queries per request; trivial today but worth knowing if the totals ever become expensive.
-- **`newestBooks` is bare `Book` models.** No eager loading of authors, genres, or versions. The dashboard only renders `title` and `slug`, but any future component that needs richer detail will trigger N+1 fetches or have to re-request the books from `BookController::show`.
-- **`YEAR()` and the join are MySQL-specific and not index-friendly.** `selectRaw('YEAR(date_read)')` and the implicit `read_instances ⋈ versions` join can't use an index on `date_read`; both year-aggregations will full-scan `read_instances` at scale. Same caveat as `BookService::getAvailableYears` (see `read-history.md`); whatever index strategy lands there should be reused here.
-- **No caching.** `StatisticsDashboard` refetches on every mount. There's no Pinia store, no `If-None-Match`, no server-side cache. Cheap today; will be the obvious win once the dataset grows.
+- **The response describes its own caveats.** `meta` carries three lists, each populated from a declaration on the metric class rather than a hand-maintained list in the controller, so a new metric can't silently omit itself:
+  - `catalogWide` — *whose* data: the metric ignores user scoping (`totalBooks`, `newestBooks`).
+  - `shelfScoped` — *which* copies: fully-discarded books are excluded (`newestBooks`).
+  - `estimated` — *how sure*: the value is derived, with the conversion factors echoed.
+
+  The axes are orthogonal. `newestBooks` appearing in two lists is the point, not a bug.
+
+- **`totalBooks` is catalogue-wide because it has to be.** It's the denominator of `percentageOfBooksRead`, whose numerator counts books the user has read *including discarded ones*. Shelf-scoping the denominator alone would let the percentage exceed 100. `tests/Feature/Statistics/StatisticsTest.php::test_percentage_cannot_exceed_one_hundred_when_books_are_discarded` is the guard.
+
+- **`newestBooks` is shelf-scoped** — it excludes books whose every version is discarded, via `Book::scopeOnShelf()`. It sits in no ratio, so nothing forces its axis, and bulk upload makes this matter: `created_at` is import time, not acquisition time, so importing a historical backlog would otherwise fill the card with books you no longer own.
+
+- **Reads keep discarded copies.** Every read-derived metric aggregates over `read_instances` without consulting discard state. Getting rid of a book later doesn't undo having read it.
+
+- **Counts of works dedupe by book; measures of physical volume do not.** `totalItems` and `completedCount` answer "how many distinct books", so a paperback and an audiobook of one novel is one book. `totalPages` answers "how much shelf is this", and two genuinely distinct copies are two real objects with real pages — so it sums every version, undeduped, deliberately. This is why the list surface labels it "Total Pages (all copies)": without the qualifier a reader divides one number by the other.
+
+- **Ratings are halved at the metric layer.** `read_instances.rating` is stored doubled (see `books.md`); every rating metric returns the 0–5 display scale as a float. Widgets never halve.
+
+- **`readsByYear` counts reads; `uniqueBooksReadByYear` counts books.** The old `booksReadByYear` was the former under a label claiming the latter. Both are available; the label no longer lies.
+
+- **`totalReads` does not filter on `date_read`.** The dashboard used to derive it by summing the per-year counts, which silently undercounted for anyone with undated reads.
+
+- **Audiobooks store zero pages, not null.** `versions.page_count` is `NOT NULL` and `BulkImportService` writes 0 for audio rows, so an audiobook contributes nothing to a page sum and can't double-count the book it shares. `estimatedTotalPagesByYear` adds `audioRuntimeByYear × pagesPerAudioMinute` on top; the factor lives in `config/statistics.php` and is echoed in `meta.estimated` because it is a stated assumption, not a fact.
+
+- **The version join carries a `book_id` predicate.** `ReadInstanceQuery::joinVersions()` joins on both `version_id` and `book_id`. `ReadInstance::booted()` blocks new mismatches, but a historical row whose version belongs to another book would otherwise contribute that book's page count.
+
+- **One failing metric degrades one card.** Each metric computes inside its own `try`/`catch`; a failure is logged, listed in `meta.failed`, and omitted from `metrics`. Dependents of a failed metric fail too and are listed as well. `WidgetShell` renders "Unavailable right now" for those, and the rest of the surface loads.
+
+- **Dependencies compute once.** `MetricRegistry` topologically orders `dependsOn()` and passes results through `MetricResults`. Dependencies are computed even when not requested, but only requested keys appear in the response — `?metrics=percentageOfBooksRead` returns exactly one key and runs two count queries, not four.
+
+- **Unknown metric keys are a 422.** A typo in a surface config fails loudly rather than rendering a quietly missing card. `resources/js/tests/services/statistics/surfaces.test.js` catches it earlier still, by checking every surface's keys against a mirror of `config/statistics.php`.
+
+- **The store fetches deltas.** `StatisticsStore` caches per scope key (`"user"`, `"list:12"`) and tracks which keys have been *requested* — not just which came back, so a metric that failed server-side isn't re-requested on every visit. Visiting `/dashboard` then `/statistics` fetches only the metrics the summary set didn't already pull. Concurrent requests for one scope share a promise.
+
+- **Invalidation is explicit.** `StatisticsStore.invalidateAll()` after a read-instance write (a new read moves numbers on every scope), `invalidate("list", id)` after list item add/remove.
 
 ## Usage notes
 
-`GET /api/statistics` (auth required) returns:
+`GET /api/statistics` — the user scope, every metric it supports.
+`GET /api/statistics/list/12?metrics=totalItems,completedCount` — one list, two metrics.
 
 ```
 {
-  total_books: int,                 // catalog-wide; not user-scoped
-  total_books_read: int,            // unique books with ≥1 read by current user
-  booksReadByYear: [                // user-scoped; excludes null date_read
-    { year: "2026", total: 12 },    // year is a string here
-    ...
-  ],
-  totalPagesByYear: [               // user-scoped; excludes null date_read and null page_count
-    { year: 2026, total: 4321 },    // year is an int here
-    ...
-  ],
-  percentageOfBooksRead: float,     // 0–100, 2 decimals; mixed-scope (see gotchas)
-  newestBooks: [Book, ...]          // catalog-wide; latest 5 by created_at; bare model payload
+  scope:   { type: "user", id: null },
+  metrics: {
+    totalBooksRead: 214,
+    readsByYear: [{ year: 2026, total: 31 }, …],   // always [{year:int,total:int}], newest first
+    …
+  },
+  meta: {
+    catalogWide: ["totalBooks", "newestBooks"],
+    shelfScoped: ["newestBooks"],
+    estimated:   { estimatedTotalPagesByYear: {
+                     pagesPerAudioMinute: 0.55,
+                     from: ["pagesReadByYear", "audioRuntimeByYear"],
+                     converted: "audioRuntimeByYear"
+                   } },
+    failed: []
+  }
 }
 ```
 
-No request parameters. The endpoint always returns the current user's view; `user_id` is taken from the session via `auth()->id()`.
+Metric keys are camelCase throughout. Omitting `?metrics=` returns everything the scope supports; an unknown key for that scope is a 422, an unknown scope type a 404, and a list you don't own a 403.
+
+**User scope**: `totalBooks`, `totalBooksRead`, `percentageOfBooksRead`, `totalReads`, `readsByYear`, `uniqueBooksReadByYear`, `pagesReadByYear`, `audioRuntimeByYear` (minutes), `estimatedTotalPagesByYear`, `averageRating` (0–5 or null), `ratingDistribution`, `newestBooks`.
+
+**List scope**: `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `averageRating`, `ratingDistribution`.
+
+### Adding a metric
+
+1. Write a class in `app/Statistics/Metrics/` extending `AbstractMetric`: a `key()`, a `compute(Scope, MetricResults)`, and overrides only for what makes it unusual — `$scopes`, `dependsOn()`, `isCatalogWide()`, `isShelfScoped()`, `isEstimated()`.
+2. Add it to `config/statistics.php`.
+3. Add its key to `BACKEND_METRICS` in `resources/js/tests/services/statistics/surfaces.test.js`.
+
+Read-derived metrics should start from `ReadInstanceQuery::forScope($scope)` so scope narrowing and the version join stay written once.
+
+### Adding a surface
+
+1. Write a config in `resources/js/services/statistics/surfaces/` — `scope`, and a `widgets` array of `{ id, widget, span, metrics, props }`. `visibleWhen(metrics)` hides a widget; `emptyWhen(metrics)` declares the whole surface empty.
+2. Register it in `surfaces/index.js`.
+3. Point a view at `<StatisticsGrid :surface="…" :scope-id="…" />`.
+
+Labels live in the surface config, not the widget or the metric — the same metric may want different phrasing on a dense dashboard than on a full page. Widget interactions come back as `@widget-event="{ widgetId, name, payload }"`, so a widget stays generic and the view decides what a click means.
 
 ## Related
 
-- Plan file: `/feature-plans/statistics.md` — known limitations and future improvements.
-- `/documentation/books.md` — `Book` / `ReadInstance` schema, the rating-doubling mutator, the user-scoping convention.
-- `/documentation/read-history.md` — `ReadInstance` aggregation by year for the `/completed` surface; shares the same MySQL-specific `YEAR()` query shape.
-- `/documentation/lists.md` — the *other* statistics surface, computed entirely client-side from the list show payload. Contrast: this doc covers the user-wide server-side aggregations.
+- Plan file: `/feature-plans/statistics-widgets.md` — future improvements and known limitations.
+- `/documentation/books.md` — `Book` / `ReadInstance` schema, the rating-doubling mutator, discarded versions.
+- `/documentation/lists.md` — the list domain whose statistics this now serves.
+- `/documentation/read-history.md` — the other read-instance aggregation surface.

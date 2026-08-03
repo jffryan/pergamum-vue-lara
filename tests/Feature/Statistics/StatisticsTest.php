@@ -19,19 +19,24 @@ class StatisticsTest extends TestCase
         $response = $this->getJson('/api/statistics');
 
         $response->assertOk()->assertJsonStructure([
-            'total_books',
-            'total_books_read',
-            'booksReadByYear',
-            'totalPagesByYear',
-            'percentageOfBooksRead',
-            'newestBooks',
+            'scope' => ['type', 'id'],
+            'metrics' => [
+                'totalBooks',
+                'totalBooksRead',
+                'readsByYear',
+                'pagesReadByYear',
+                'percentageOfBooksRead',
+                'newestBooks',
+            ],
+            'meta' => ['catalogWide', 'shelfScoped', 'estimated', 'failed'],
         ]);
-        $this->assertSame(0, $response->json('total_books'));
-        $this->assertSame(0, $response->json('total_books_read'));
-        $this->assertSame(0, $response->json('percentageOfBooksRead'));
-        $this->assertSame([], $response->json('booksReadByYear'));
-        $this->assertSame([], $response->json('totalPagesByYear'));
-        $this->assertSame([], $response->json('newestBooks'));
+        $this->assertSame('user', $response->json('scope.type'));
+        $this->assertSame(0, $response->json('metrics.totalBooks'));
+        $this->assertSame(0, $response->json('metrics.totalBooksRead'));
+        $this->assertEquals(0, $response->json('metrics.percentageOfBooksRead'));
+        $this->assertSame([], $response->json('metrics.readsByYear'));
+        $this->assertSame([], $response->json('metrics.pagesReadByYear'));
+        $this->assertSame([], $response->json('metrics.newestBooks'));
     }
 
     public function test_aggregates_reads_across_years_and_orders_desc(): void
@@ -59,15 +64,15 @@ class StatisticsTest extends TestCase
 
         $response = $this->getJson('/api/statistics')->assertOk();
 
-        $byYear = collect($response->json('booksReadByYear'));
-        $this->assertSame([2025, 2024], $byYear->pluck('year')->map(fn ($y) => (int) $y)->all());
-        $this->assertSame([1, 2], $byYear->pluck('total')->map(fn ($t) => (int) $t)->all());
+        $this->assertSame([
+            ['year' => 2025, 'total' => 1],
+            ['year' => 2024, 'total' => 2],
+        ], $response->json('metrics.readsByYear'));
 
-        $pages = $response->json('totalPagesByYear');
         $this->assertSame([
             ['year' => 2025, 'total' => 200],
             ['year' => 2024, 'total' => 750],
-        ], $pages);
+        ], $response->json('metrics.pagesReadByYear'));
     }
 
     public function test_null_date_read_is_excluded_from_year_aggregations(): void
@@ -85,9 +90,28 @@ class StatisticsTest extends TestCase
 
         $response = $this->getJson('/api/statistics')->assertOk();
 
-        $this->assertCount(1, $response->json('booksReadByYear'));
-        $this->assertSame(1, (int) $response->json('booksReadByYear.0.total'));
-        $this->assertSame([['year' => 2024, 'total' => 100]], $response->json('totalPagesByYear'));
+        $this->assertSame([['year' => 2024, 'total' => 1]], $response->json('metrics.readsByYear'));
+        $this->assertSame([['year' => 2024, 'total' => 100]], $response->json('metrics.pagesReadByYear'));
+    }
+
+    public function test_reads_by_year_counts_re_reads_separately(): void
+    {
+        $user = $this->actingAsUser();
+        $book = Book::factory()->create();
+        $version = Version::factory()->for($book, 'book')->create(['page_count' => 100]);
+
+        foreach (['2024-01-04', '2024-08-19'] as $date) {
+            ReadInstance::factory()->forUser($user)->create([
+                'book_id' => $book->book_id, 'version_id' => $version->version_id, 'date_read' => $date,
+            ]);
+        }
+
+        $response = $this->getJson('/api/statistics')->assertOk();
+
+        // The same book twice: two reads, one book, 200 pages of reading.
+        $this->assertSame([['year' => 2024, 'total' => 2]], $response->json('metrics.readsByYear'));
+        $this->assertSame(1, $response->json('metrics.totalBooksRead'));
+        $this->assertSame([['year' => 2024, 'total' => 200]], $response->json('metrics.pagesReadByYear'));
     }
 
     public function test_percentage_of_books_read_uses_global_book_count(): void
@@ -105,9 +129,39 @@ class StatisticsTest extends TestCase
 
         // Exactly the four books created above — the factory no longer persists
         // a stray Version → Book behind the book_id / version_id overrides.
-        $this->assertSame(4, $response->json('total_books'));
-        $this->assertSame(1, $response->json('total_books_read'));
-        $this->assertEquals(25.0, $response->json('percentageOfBooksRead'));
+        $this->assertSame(4, $response->json('metrics.totalBooks'));
+        $this->assertSame(1, $response->json('metrics.totalBooksRead'));
+        $this->assertEquals(25.0, $response->json('metrics.percentageOfBooksRead'));
+
+        // The catalogue-wide denominator is declared, not silently mixed in.
+        $this->assertContains('totalBooks', $response->json('meta.catalogWide'));
+        $this->assertNotContains('totalBooksRead', $response->json('meta.catalogWide'));
+    }
+
+    /**
+     * The guard on the constraint that forces `totalBooks` catalogue-wide: the
+     * numerator counts discarded books, so shelf-scoping the denominator "for
+     * consistency" would let this exceed 100.
+     */
+    public function test_percentage_cannot_exceed_one_hundred_when_books_are_discarded(): void
+    {
+        $user = $this->actingAsUser();
+
+        foreach (range(1, 4) as $i) {
+            $book = Book::factory()->create();
+            $factory = Version::factory()->for($book, 'book');
+            $version = ($i <= 2 ? $factory->discarded() : $factory)->create(['page_count' => 100]);
+
+            ReadInstance::factory()->forUser($user)->create([
+                'book_id' => $book->book_id, 'version_id' => $version->version_id, 'date_read' => '2024-05-05',
+            ]);
+        }
+
+        $response = $this->getJson('/api/statistics')->assertOk();
+
+        $this->assertSame(4, $response->json('metrics.totalBooks'));
+        $this->assertSame(4, $response->json('metrics.totalBooksRead'));
+        $this->assertEquals(100.0, $response->json('metrics.percentageOfBooksRead'));
     }
 
     public function test_newest_books_returns_five_most_recent_globally(): void
@@ -123,9 +177,73 @@ class StatisticsTest extends TestCase
 
         $response = $this->getJson('/api/statistics')->assertOk();
 
-        $newestIds = collect($response->json('newestBooks'))->pluck('book_id')->all();
+        $newestIds = collect($response->json('metrics.newestBooks'))->pluck('book_id')->all();
         $this->assertCount(5, $newestIds);
         $expected = collect(array_slice($books, 2))->reverse()->pluck('book_id')->values()->all();
         $this->assertSame($expected, $newestIds);
+    }
+
+    /**
+     * The two axes at once: a book whose every copy is gone leaves the shelf
+     * but stays in the catalogue, and reading it still happened.
+     */
+    public function test_newest_books_excludes_fully_discarded_books(): void
+    {
+        $user = $this->actingAsUser();
+
+        $kept = Book::factory()->create(['created_at' => now()->subDay()]);
+        Version::factory()->for($kept, 'book')->create();
+
+        $gone = Book::factory()->create(['created_at' => now()]);
+        $goneVersion = Version::factory()->for($gone, 'book')->discarded()->create(['page_count' => 320]);
+        ReadInstance::factory()->forUser($user)->create([
+            'book_id' => $gone->book_id, 'version_id' => $goneVersion->version_id, 'date_read' => '2024-02-02',
+        ]);
+
+        $response = $this->getJson('/api/statistics')->assertOk();
+
+        $newestIds = collect($response->json('metrics.newestBooks'))->pluck('book_id')->all();
+        $this->assertSame([$kept->book_id], $newestIds);
+        $this->assertSame(2, $response->json('metrics.totalBooks'));
+        $this->assertSame([['year' => 2024, 'total' => 1]], $response->json('metrics.readsByYear'));
+        $this->assertSame([['year' => 2024, 'total' => 320]], $response->json('metrics.pagesReadByYear'));
+
+        $this->assertContains('newestBooks', $response->json('meta.shelfScoped'));
+        $this->assertNotContains('totalBooks', $response->json('meta.shelfScoped'));
+    }
+
+    /**
+     * `ReadInstance::booted()` blocks new mismatches, but rows that predate it
+     * would otherwise contribute another book's page count.
+     */
+    public function test_pages_ignore_read_instances_whose_version_belongs_to_another_book(): void
+    {
+        $user = $this->actingAsUser();
+
+        $book = Book::factory()->create();
+        $version = Version::factory()->for($book, 'book')->create(['page_count' => 150]);
+
+        $otherBook = Book::factory()->create();
+        $otherVersion = Version::factory()->for($otherBook, 'book')->create(['page_count' => 900]);
+
+        ReadInstance::factory()->forUser($user)->create([
+            'book_id' => $book->book_id, 'version_id' => $version->version_id, 'date_read' => '2024-04-04',
+        ]);
+
+        // Straight to the DB — the model guard exists precisely to stop this.
+        ReadInstance::query()->insert([
+            'user_id' => $user->user_id,
+            'book_id' => $book->book_id,
+            'version_id' => $otherVersion->version_id,
+            'date_read' => '2024-04-05',
+            'rating' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/statistics')->assertOk();
+
+        $this->assertSame([['year' => 2024, 'total' => 150]], $response->json('metrics.pagesReadByYear'));
+        $this->assertSame([['year' => 2024, 'total' => 2]], $response->json('metrics.readsByYear'));
     }
 }
