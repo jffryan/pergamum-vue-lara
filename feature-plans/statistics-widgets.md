@@ -39,6 +39,7 @@ These are settled; the phases below assume them.
 - **Ratings are halved at the metric layer.** `read_instances.rating` is stored doubled (see `/documentation/books.md`). Every rating metric returns display scale (0–5) as a float. Widgets never halve; that rule dies with this refactor.
 - **Catalog-wide metrics stay catalog-wide, but declare themselves.** `totalBooks` and `newestBooks` still ignore the requesting user. Rather than silently mixing scopes, each metric class declares `isCatalogWide()`, and the response's `meta.catalogWide` lists the keys that ignored user scoping. When ownership lands (`/feature-plans/books.md`), flipping each one is a one-line change with a visible contract. The decision *whether* to flip stays in that plan.
 - **List statistics move server-side.** A `list` scope joins the registry rather than staying a client-side derivation. One data path, and list metrics become reusable outside `ListStatisticsView` (list index, dashboard) without copy-paste.
+- **Discarded copies are ignored by every metric, for now.** `versions.is_discarded` landed after this plan's first draft and cuts across the whole registry. Read-derived metrics are already settled by `/feature-plans/books.md`: reads aggregate over `read_instances`, and discarding a copy later doesn't undo having read it — so `readsByYear`, `totalReads`, `pagesReadByYear`, and the rating metrics keep counting discarded copies, deliberately. The catalog metrics are **not** settled, and this plan preserves rather than fixes them — see Open questions.
 
 ### 1. Backend: scopes, metrics, registry
 
@@ -76,10 +77,11 @@ app/Statistics/
 
 **Dependency resolution** fixes the double-query bug in `calculatePercentageOfBooksRead`, which today re-runs both count queries it depends on. `MetricRegistry` walks `dependsOn()`, computes each metric at most once per request, and passes results through `MetricResults`. Dependencies are computed even when not requested, but only requested keys appear in the response.
 
-**`Support/ReadInstanceQuery`** is the shared aggregation helper the authors / genres / formats plans keep pointing at. It builds the user-scoped `read_instances` base query and exposes `groupedByYear($select)`. Two things land here:
+**`Support/ReadInstanceQuery`** is the shared aggregation helper the authors / genres / formats plans keep pointing at. It builds the user-scoped `read_instances` base query and exposes `groupedByYear($select)`. One thing lands here:
 
-- A `(user_id, date_read)` composite index migration. `YEAR(date_read)` still can't be used for index *filtering*, but the `user_id` prefix turns the per-year `GROUP BY` from a table scan into a user-scoped index range scan — which is the actual win at this data size. Coordinate with `/feature-plans/read-history.md` item 17 so the migration lands once; single-year lookups there (`getAvailableYears`, `getCompletedItemsForYear`) should switch to `whereBetween` on the same index in the same change.
 - The `versions` join in `PagesReadByYear` gains a `read_instances.book_id = versions.book_id` predicate. Today it joins on `version_id` alone, so a mismatched read instance contributes the wrong page count. (`ReadInstance::booted()` now blocks new mismatches, but historical rows may exist.)
+
+**No index migration is needed.** An earlier draft of this plan called for a `(user_id, date_read)` composite index and coordination with `/feature-plans/read-history.md` item 17 so it landed once. It already exists — `database/migrations/2024_01_21_044437_create_read_instances_table.php` creates `(user_id, date_read)`, `(book_id, date_read)`, and `(user_id, book_id)` at table creation. Don't add a second one. `/feature-plans/statistics.md` item 4 makes the same wrong assumption; the half of it that's still real is the `YEAR(date_read)` → `whereBetween` rewrite, which is a query-shape change on top of an index that's already there.
 
 **Endpoint.** One route replaces the current one:
 
@@ -133,7 +135,9 @@ resources/js/
     widgets/EntityLinkList.vue           list of router-links (newest books)
 ```
 
-**`api/StatisticsController.js`** finally removes the direct `axios` import from the dashboard, using `makeRequest` / `buildUrl` like every other controller.
+**`api/StatisticsController.js`** finally removes the direct `axios` import from the dashboard, using `makeRequest` / `buildUrl` like every other controller. One snag: `buildUrl(entity, id)` builds a single path segment (`/api/<entity>/<id>`), so it can't express `/api/statistics/list/12` as-is. Either pass the composed tail (`` buildUrl("statistics", `${scope}/${scopeId}`) ``) or widen the helper to accept segments — decide in this phase rather than discovering it mid-build. Note `buildUrl` emits a trailing slash when `id` is falsy, so the bare `/api/statistics/` case must still match the optional-parameter route.
+
+**The `@` alias is fine.** `CLAUDE.md` flags it as unverified (there's no `resolve.alias` in `vite.config.js`), and this plan adds `@/` imports across four new directories. Verified empirically before starting: both `npm run build` and `vitest run` resolve `@/…` today. Not a blocker — but making it explicit is still worth folding in here, since `/feature-plans/frontend-tests.md` wants it before component tests land anyway.
 
 **`StatisticsStore`** caches by scope key (`"user"`, `"list:12"`). It tracks which metric keys are already cached for a scope and requests only the missing ones, merging into the cached bag — so `/dashboard` (summary set) followed by `/statistics` (full set) fetches only the delta. Concurrent requests for the same scope dedupe on a shared promise. `invalidate(scopeKey)` is called after any read-instance write and after list mutations; `refresh()` backs a manual retry button. This is also what lets a future header badge read `totalBooksRead` without its own fetch.
 
@@ -210,7 +214,7 @@ That last point keeps drill-downs where they belong. `BreakdownList` emits `sele
 Each phase leaves the app working.
 
 1. **Backend registry, existing metrics only.** `app/Statistics/` scaffolding, `user` scope, the eight current metrics under normalized camelCase keys, dependency resolution, the new generic route. Update `tests/Feature/Statistics/StatisticsTest.php` for the new key names — note that `test_percentage_of_books_read_uses_global_book_count` and `test_newest_books_returns_five_most_recent_globally` intentionally pin the catalog-vs-user split; they get renamed keys and an added assertion on `meta.catalogWide`, not relaxed semantics.
-2. **New user-scope metrics.** `totalReads`, `uniqueBooksReadByYear`, `averageRating`, `ratingDistribution`. Plus the `(user_id, date_read)` index migration and the `PagesReadByYear` join fix — coordinated with `/feature-plans/read-history.md`.
+2. **New user-scope metrics.** `totalReads`, `uniqueBooksReadByYear`, `averageRating`, `ratingDistribution`, plus the `PagesReadByYear` join fix. No migration — the `(user_id, date_read)` index already exists (see §1), so nothing here is coupled to `/feature-plans/read-history.md`.
 3. **Frontend plumbing.** `api/StatisticsController.js` + `StatisticsStore` + tests. `StatisticsDashboard` switches to the store but keeps its inline markup — the layering violation dies here, independently of the widget work.
 4. **Widget registry + grid.** The four widgets, `WidgetShell`, `StatisticsGrid`, formatters, and `userStatistics` surface config. `StatisticsDashboard` becomes one line.
 5. **`UserDashboard`.** `userDashboard` surface config; delete the placeholder markup.
@@ -227,8 +231,8 @@ Each phase leaves the app working.
 
 - **`app/Services/StatisticsService.php`** — fully absorbed into `app/Statistics/Metrics/`; likely deleted. Anything landing new metrics there before this ships will need porting.
 - **`routes/api.php`** — `GET /statistics` is replaced by `GET /statistics/{scope?}/{scopeId?}`. Old path still resolves.
-- **`tests/Feature/Statistics/StatisticsTest.php`** — every assertion keys off the old response shape; all five tests change. Also blocked on the `ReadInstanceFactory` leak in `/feature-plans/backend-tests.md` (the factory eagerly creates a `Version`, so list-scope tests can't assert literal counts either — fix that first).
-- **`read_instances` indexing** — the `(user_id, date_read)` migration is shared with `/feature-plans/read-history.md` item 17. Whichever plan moves first should land it; the other should not add a second index.
+- **`tests/Feature/Statistics/StatisticsTest.php`** — every assertion keys off the old response shape; all five tests change. The `ReadInstanceFactory` leak that used to block literal-count assertions here is **fixed** (prework, see `/feature-plans/backend-tests.md`), so metric tests can now assert exact row counts.
+- **`read_instances` indexing** — nothing to do. The `(user_id, date_read)` index has existed since the table was created; see §1.
 - **`ListStatisticsView.vue` / `ListsStore`** — this supersedes `/feature-plans/lists.md` item 4 (the `useListStatistics` composable seam — no longer needed, the metrics move server-side) and implements item 16 ahead of the pagination work that plan assumed would gate it. Update both when this lands.
 - **`UserDashboard.vue` and the post-login redirect** — owned by `/feature-plans/auth.md` item 11 and `/feature-plans/app-shell.md` item 9. This plan resolves the "what is `/dashboard`" question in favor of a summary statistics surface; both plans need their items closed out.
 - **`/feature-plans/authors.md` item 10, `/feature-plans/genres.md` item 12, `/feature-plans/formats.md` item 14** — these are the intended beneficiaries. Once this ships, each becomes "add a `ScopeResolver` case + a surface config," not new aggregation code. None of them should start before this lands, or they'll write the logic three more times.
@@ -237,6 +241,9 @@ Each phase leaves the app working.
 
 ## Open questions
 
+- **Should the catalog metrics respect the shelf?** `TotalBooks` (`Book::count()`) and `NewestBooks` (`Book::latest()->limit(5)`) ignore the "a book is discarded only when *every* version is" rule that `BookController::applyDiscardedFilter` enforces for `LibraryView`. So `percentageOfBooksRead` divides a user-scoped numerator by a denominator that includes books no longer on the shelf, and `newestBooks` can link to a book the library itself won't list. List-scope `totalPages` has the same shape — it sums discarded copies.
+
+  This is a second scoping axis, independent of the user-scoping axis that `isCatalogWide()` / `meta.catalogWide` track, and it should be a declared flag on `Metric` from the start rather than retrofitted alongside book ownership. Phase 1 preserves current behavior (it's a refactor) and documents the quirk in each metric class. If the answer turns out to be "yes, respect the shelf," the prerequisite is `/feature-plans/books.md` item 11 — moving the filter out of the private controller method into a `Book::scopeOnShelf()` — so the rule isn't reimplemented per metric.
 - **Should list `totalPages` dedupe by book?** Today it doesn't, while `totalItems` and `completedCount` do — so a list holding the paperback *and* the audiobook of one book counts one book but two page counts. Porting preserves the inconsistency. Fixing it changes a visible number, which is a product call, not a refactor call.
 - **What is `pagesReadByYear` for audiobook-heavy years?** `versions.audio_runtime` is populated but never aggregated, so an audiobook year reads as near-zero pages. Adding `audioRuntimeByYear` is trivial once the base query exists (`/feature-plans/statistics.md` item 10), but whether the dashboard shows two separate series or one normalized "time read" estimate needs a decision.
 - **Chart library.** The widget registry makes a `barChart` / `lineChart` widget a drop-in — same config shape, same metric keys, different component. No library is picked and none should be picked as part of this refactor; `SeriesList` ships first.

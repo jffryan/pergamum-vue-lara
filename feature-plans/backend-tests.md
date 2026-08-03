@@ -11,7 +11,9 @@ Tracks rough edges and follow-up work for the backend test suite. Descriptive co
 
 ### Factory hygiene
 
-- **`ReadInstanceFactory::definition()` leaks `Book` rows.** The definition calls `Version::factory()->create()` eagerly to source `book_id` / `version_id`, so even when callers override both via `forUser($u)->create(['book_id' => …, 'version_id' => …])`, an extra `Version` (and therefore an extra `Book`) is persisted. Surfaced while writing Priority 7: `tests/Feature/Statistics/StatisticsTest.php::test_percentage_of_books_read_uses_global_book_count` had to read `Book::count()` from the DB rather than assert against the four books explicitly created. Fix by switching `book_id` / `version_id` to closures that resolve only when the override isn't supplied — e.g. `'book_id' => fn (array $a) => isset($a['version_id']) ? Version::find($a['version_id'])->book_id : Book::factory()`. Once fixed, restore the literal-count assertion in that test.
+- ~~**`ReadInstanceFactory::definition()` leaks `Book` rows.**~~ Fixed as prework for `/feature-plans/statistics-widgets.md`. `book_id` / `version_id` are now lazy closures that derive one from the other, so an override no longer persists a stray `Version` → `Book`. The literal-count assertion in `tests/Feature/Statistics/StatisticsTest.php::test_percentage_of_books_read_uses_global_book_count` is restored and is what guards the fix.
+
+  Two constraints to preserve if that factory is edited again: `version_id` must stay declared **before** `book_id` (`expandAttributes()` resolves closures in array order, and the `version_id` callback distinguishes "caller supplied a book" from "caller supplied nothing" by testing whether `$attributes['book_id']` is still an unexpanded `Closure`), and the two values must always agree — `ReadInstance::booted()` throws a `DomainException` on a book/version mismatch, so they cannot be defaulted independently.
 
 ## Known limitations
 

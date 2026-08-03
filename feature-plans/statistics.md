@@ -33,7 +33,7 @@ Tracks rough edges and follow-up work for the user-wide statistics dashboard (`G
 
 ### Performance & query shape
 
-- **`YEAR(date_read)` cannot use an index.** Both `calculateBooksReadByYear` and `calculateTotalPagesReadByYear` will full-scan `read_instances` at scale. Same fix as `/feature-plans/read-history.md`: range queries (`date_read BETWEEN '$year-01-01' AND '$year-12-31'`) plus a `(user_id, date_read)` composite index. Coordinate the index migration with read-history so it lands once.
+- **`YEAR(date_read)` cannot use an index.** Both `calculateBooksReadByYear` and `calculateTotalPagesReadByYear` will full-scan `read_instances` at scale. The fix is range queries (`date_read BETWEEN '$year-01-01' AND '$year-12-31'`). The `(user_id, date_read)` composite index this needs **already exists** — `database/migrations/2024_01_21_044437_create_read_instances_table.php` creates it at table creation, so there is no migration to coordinate with `/feature-plans/read-history.md`; only the query rewrite is outstanding.
 - **`calculatePercentageOfBooksRead` re-runs both totals.** Two extra queries per request; trivial today but should reuse the already-computed values from `getUserStats`.
 - **`getUserStats` issues 6+ queries with no caching.** No Pinia store on the client, no server-side cache, no `If-None-Match`. Refetched on every mount of the dashboard. Memoize per-user with a short TTL once cardinality grows.
 - **The `versions` join in `calculateTotalPagesReadByYear` ignores `version_id` mismatches.** It joins on `read_instances.version_id = versions.version_id` without filtering by `book_id`, so any cross-book mismatched read instance (currently possible — see `/feature-plans/read-history.md`) silently contributes the wrong page count.
@@ -67,7 +67,7 @@ In rough priority order.
 1. **Add Feature tests** for `GET /api/statistics`: shape of every key, user scoping where it applies, behavior with zero books / zero reads / undated reads / re-reads, and explicit assertions on the catalog-wide vs. user-scoped split (so that boundary doesn't regress accidentally).
 2. **Add `api/StatisticsController.js`** with `getUserStatistics()` and route `StatisticsDashboard.vue` through it. Removes the direct axios import.
 3. **Loading + error states in `StatisticsDashboard`.** Reuse `PageLoadingIndicator` and `AlertBox` (the same pattern `LibraryView` uses).
-4. **Switch year filtering to range queries.** Replace `YEAR(date_read)` with `whereBetween` + a `(user_id, date_read)` index. Coordinate the migration with `/feature-plans/read-history.md` so the index lands once.
+4. **Switch year filtering to range queries.** Replace `YEAR(date_read)` with `whereBetween`. No migration needed — the `(user_id, date_read)` index already exists (see Performance above).
 5. **Reuse the totals inside `calculatePercentageOfBooksRead`.** Pass them in instead of re-running the queries.
 6. **Normalize the response casing and per-year shapes.** Pick camelCase end-to-end (or snake_case — but the SPA convention leans camel). Map `booksReadByYear` rows to `{ year: int, total: int }` to match `totalPagesByYear`.
 7. **Decide what "books read" means.** Either rename the existing metric to `readsByYear` and add `uniqueBooksReadByYear` as a separate count, or change the SQL to `COUNT(DISTINCT book_id)`. The dashboard label and the meaning of `totalReads` follow from this choice.

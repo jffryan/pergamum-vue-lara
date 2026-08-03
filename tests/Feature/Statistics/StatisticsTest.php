@@ -101,15 +101,13 @@ class StatisticsTest extends TestCase
             'book_id' => $read->book_id, 'version_id' => $version->version_id, 'date_read' => '2024-01-01',
         ]);
 
-        // ReadInstanceFactory::definition() eagerly creates a Version → Book even when overridden,
-        // so total_books reflects the true row count rather than the four we explicitly created.
-        $totalBooks = Book::count();
         $response = $this->getJson('/api/statistics')->assertOk();
 
-        $this->assertSame($totalBooks, $response->json('total_books'));
+        // Exactly the four books created above — the factory no longer persists
+        // a stray Version → Book behind the book_id / version_id overrides.
+        $this->assertSame(4, $response->json('total_books'));
         $this->assertSame(1, $response->json('total_books_read'));
-        $expectedPct = round((1 / $totalBooks) * 100, 2);
-        $this->assertEquals($expectedPct, $response->json('percentageOfBooksRead'));
+        $this->assertEquals(25.0, $response->json('percentageOfBooksRead'));
     }
 
     public function test_newest_books_returns_five_most_recent_globally(): void
