@@ -24,14 +24,10 @@ class UpdateReadInstancesTest extends TestCase
     private function payloadFor(Book $book, array $readInstances): array
     {
         return [
-            'request' => [
-                'formData' => [
-                    'book' => ['title' => $book->title],
-                    'authors' => [],
-                    'genres' => [],
-                    'readInstances' => $readInstances,
-                ],
-            ],
+            'book' => ['title' => $book->title],
+            'authors' => [],
+            'genres' => [],
+            'readInstances' => $readInstances,
         ];
     }
 

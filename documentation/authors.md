@@ -82,7 +82,7 @@ There is no direct API. Authors are created/attached by `POST /create-book` and 
 
 ## Related
 
-- Plan file: `/feature-plans/authors.md` — future improvements and known limitations (to be created alongside the rest of the documentation backfill; see `/feature-plans/documentation-backfill.md`).
+- Plan file: `/feature-plans/authors.md` — future improvements and known limitations.
 - `/documentation/books.md` — author attachment, update, and orphan-prune are owned by the book pipeline.
 - `/documentation/new-book-creation.md` — the multi-step creation flow that consumes `/create-authors` (or bypasses it).
 - `/documentation/genres.md`, `/documentation/formats.md` — sibling taxonomy docs.

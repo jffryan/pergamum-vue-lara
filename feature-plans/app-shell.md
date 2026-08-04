@@ -79,45 +79,44 @@ In rough priority order. Cheap wins are deliberately front-loaded; this surface 
 ### Discoverability
 
 8. **Route-driven sidebar.** Annotate each top-level route with `meta: { sidebar: { title, group, order } }` and have `SidebarNav` derive its menu from the route table. Removes the "added a route, forgot the link" failure mode permanently. Same shape as the proposed `AdminHome` rework in `/feature-plans/admin.md` — design once, apply to both.
-9. ~~**Decide what `/dashboard` is.**~~ Resolved by `/feature-plans/statistics-widgets.md`: it's a summary statistics surface, so the header CTA now lands somewhere useful. Adding last-read / lists-summary / quick-add blocks to it is a matter of extending the `userDashboard` surface config.
-10. **Breadcrumbs.** A small `<Breadcrumbs>` component above `<RouterView>` driven by `route.matched` + `meta.breadcrumb`. Skippable until the URL depth gets uncomfortable; useful immediately for the book/list deep paths.
-11. **Anonymous landing.** Either make `HomeView` a real marketing-style landing page for logged-out users (with a clear "Login" CTA distinct from the header button) or redirect anonymous `/` to `/login`. Today the home page does almost nothing.
+9. **Breadcrumbs.** A small `<Breadcrumbs>` component above `<RouterView>` driven by `route.matched` + `meta.breadcrumb`. Skippable until the URL depth gets uncomfortable; useful immediately for the book/list deep paths.
+10. **Anonymous landing.** Either make `HomeView` a real marketing-style landing page for logged-out users (with a clear "Login" CTA distinct from the header button) or redirect anonymous `/` to `/login`. Today the home page does almost nothing.
 
 ### Layout extensibility
 
-12. **Layout-component pattern.** Refactor so each route (or each view) declares its layout. `App.vue` becomes `<component :is="route.meta.layout ?? DefaultLayout">`. Right answer the first time a no-chrome surface is needed (print view, fullscreen reader, public marketing pages). Cheap when there's only one layout — the migration cost is low and the future cost of a one-off `v-if` in `App.vue` is high.
-13. **Global toast / notification queue.** A small `useToast` composable + a `<ToastViewport>` mounted once in `App.vue`. Cuts the per-view error-rendering boilerplate; lets cross-route success messages survive a navigation.
-14. **Global error boundary.** A wrapping component (or Vue's `errorCaptured`) at the layout level that renders a recover-or-reload panel on uncaught render errors.
-15. **Move inline routes out of `router/index.js`.** Genres, formats, completed, statistics all warrant their own per-domain route files (some already have docs that imply ownership). `index.js` becomes pure composition.
+11. **Layout-component pattern.** Refactor so each route (or each view) declares its layout. `App.vue` becomes `<component :is="route.meta.layout ?? DefaultLayout">`. Right answer the first time a no-chrome surface is needed (print view, fullscreen reader, public marketing pages). Cheap when there's only one layout — the migration cost is low and the future cost of a one-off `v-if` in `App.vue` is high.
+12. **Global toast / notification queue.** A small `useToast` composable + a `<ToastViewport>` mounted once in `App.vue`. Cuts the per-view error-rendering boilerplate; lets cross-route success messages survive a navigation.
+13. **Global error boundary.** A wrapping component (or Vue's `errorCaptured`) at the layout level that renders a recover-or-reload panel on uncaught render errors.
+14. **Move inline routes out of `router/index.js`.** Genres, formats, completed, statistics all warrant their own per-domain route files (some already have docs that imply ownership). `index.js` becomes pure composition.
 
 ### Mobile & responsive
 
-16. **Drawer focus trap, `aria-modal`, return-focus on close.** Standard modal behavior. Likely 30 lines including a small focus-trap helper.
-17. **Swipe-to-close on the mobile drawer.** Nice-to-have; gestures are easy to get wrong, so worth doing only if mobile usage justifies it.
-18. **Audit `HomeView` / `ErrorNotFoundView` `w-1/2` panels for narrow screens.** Switch to responsive widths (`w-full lg:w-1/2`).
+15. **Drawer focus trap, `aria-modal`, return-focus on close.** Standard modal behavior. Likely 30 lines including a small focus-trap helper.
+16. **Swipe-to-close on the mobile drawer.** Nice-to-have; gestures are easy to get wrong, so worth doing only if mobile usage justifies it.
+17. **Audit `HomeView` / `ErrorNotFoundView` `w-1/2` panels for narrow screens.** Switch to responsive widths (`w-full lg:w-1/2`).
 
 ### Accessibility
 
-19. **Skip-to-content link.** A visually-hidden link at the top of `App.vue` that jumps to `<main>` (which means giving `<RouterView>` a `<main id="content">` wrapper or similar).
-20. **Focus-visible styles.** A global `:focus-visible` rule for buttons / links on dark backgrounds. Trivial CSS, big win for keyboard users.
-21. **Color-contrast audit on `HeaderNav`.** `text-slate-400` on `text-slate-900` is borderline; bump to `text-slate-300` for inactive links.
-22. **Per-route landmarks.** Each view should render a `<main>` (or the layout should). Several views start with `<div>` only; no landmark = poor screen-reader navigation.
+18. **Skip-to-content link.** A visually-hidden link at the top of `App.vue` that jumps to `<main>` (which means giving `<RouterView>` a `<main id="content">` wrapper or similar).
+19. **Focus-visible styles.** A global `:focus-visible` rule for buttons / links on dark backgrounds. Trivial CSS, big win for keyboard users.
+20. **Color-contrast audit on `HeaderNav`.** `text-slate-400` on `text-slate-900` is borderline; bump to `text-slate-300` for inactive links.
+21. **Per-route landmarks.** Each view should render a `<main>` (or the layout should). Several views start with `<div>` only; no landmark = poor screen-reader navigation.
 
 ### Page metadata
 
-23. **Add favicon + 1× Apple touch icon.** Even a placeholder is better than the browser default.
-24. **Open Graph + Twitter card meta** if the app is ever shared. Skip until then.
+22. **Add favicon + 1× Apple touch icon.** Even a placeholder is better than the browser default.
+23. **Open Graph + Twitter card meta** if the app is ever shared. Skip until then.
 
 ### Static views
 
-25. **Flesh out `AboutView`** — version (sourced same as item 7), link to changelog, link to repo, brief credits.
-26. **Make `HomeView` useful for logged-in users.** "Your last read", "Jump back into list X", "What you completed this year." Likely after the dashboard decision in item 9 — these may belong on the dashboard instead.
+24. **Flesh out `AboutView`** — version (sourced same as item 7), link to changelog, link to repo, brief credits.
+25. **Make `HomeView` useful for logged-in users.** "Your last read", "Jump back into list X", "What you completed this year." Likely after the dashboard decision in item 9 — these may belong on the dashboard instead.
 
 ### Tests
 
-27. **SPA tests for the router guard** (public/private redirect logic, login → home redirect, deep-link redirect after login). Already partly covered by `/feature-plans/auth.md` item 2; the chrome side is asserting the conditional layout matches.
-28. **Test the catch-all** (item 1) renders `ErrorNotFoundView` on unknown paths.
-29. **Snapshot or render-test the layout in both auth states** so a regression that hides the sidebar (or shows it to anonymous users) trips a test.
+26. **SPA tests for the router guard** (public/private redirect logic, login → home redirect, deep-link redirect after login). Already partly covered by `/feature-plans/auth.md` item 2; the chrome side is asserting the conditional layout matches.
+27. **Test the catch-all** (item 1) renders `ErrorNotFoundView` on unknown paths.
+28. **Snapshot or render-test the layout in both auth states** so a regression that hides the sidebar (or shows it to anonymous users) trips a test.
 
 ## Open questions
 

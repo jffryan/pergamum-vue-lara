@@ -2,24 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CompleteBookCreationRequest;
+use App\Http\Requests\CreateBookTitleRequest;
 use App\Models\Author;
 use App\Models\Book;
-use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Support\BookCreator;
-use App\Support\RatingValidator;
 use App\Support\Slugger;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class NewBookController extends Controller
 {
     //
-    public function createOrGetBookByTitle(Request $request)
+    public function createOrGetBookByTitle(CreateBookTitleRequest $request)
     {
-        $title = $request['title'];
+        $title = $request->title();
 
         $slug = Slugger::for($title);
 
@@ -62,60 +62,45 @@ class NewBookController extends Controller
         })->all();
     }
 
-    private function handleGenres($genresData)
+    private function handleGenres($genreNames)
     {
-        return collect($genresData)->map(function ($genre) {
-            return Genre::firstOrCreate(['name' => $genre['name']]);
+        return collect($genreNames)->map(function ($name) {
+            return Genre::firstOrCreate(['name' => $name]);
         })->all();
     }
 
-    private function handleVersions($versionsData, $bookData)
+    /**
+     * Existing copies are looked up; new ones are created against the book.
+     *
+     * The request has already reduced each new row to the length fields its
+     * format carries, so an audiobook can't arrive here carrying a page count.
+     */
+    private function handleVersions(array $versions, Book $book)
     {
-        // For each version in versionsData, if it has a version_id that means it already exists and we can just add it to the array as-is
-        // If it doesn't have a version_id, we need to create a new version record
-        return collect($versionsData)->map(function ($version) use ($bookData) {
-            $book_id = $bookData['book_id'];
-            if (isset($version['version_id'])) {
-                return Version::find($version['version_id']);
-            }
+        $existing = Version::whereIn('version_id', $versions['existing'])->get()->all();
 
-            $format = Format::find($version['format']['format_id']);
-
-            if (! $format) {
-                throw new \Exception("Format not found for version (format_id: {$version['format']['format_id']}).");
-            }
-
-            $version['format_id'] = $format->format_id;
-            $version['book_id'] = $book_id;
-
-            return Version::create($version);
+        $created = collect($versions['new'])->map(function ($attributes) use ($book) {
+            return Version::create($attributes + ['book_id' => $book->book_id]);
         })->all();
+
+        return array_merge($existing, $created);
     }
 
-    private function handleReadInstances($readInstancesData, $bookData, $versionsData)
+    private function handleReadInstances($readInstancesData, Book $book, $versions)
     {
-        return collect($readInstancesData)->map(function ($readInstance) use ($bookData, $versionsData) {
-            if (array_key_exists('rating', $readInstance) && $readInstance['rating'] !== null && $readInstance['rating'] !== '') {
-                if (! RatingValidator::isValid($readInstance['rating'])) {
-                    throw new \Exception("rating '{$readInstance['rating']}' must be between 0.5 and 5 in 0.5 steps");
-                }
-            }
+        return collect($readInstancesData)->map(function ($readInstance) use ($book, $versions) {
+            // FOR NOW: a read with no version named is filed against the first
+            // copy. /feature-plans/new-book-creation.md item 11 tracks
+            // threading the chosen version through the SPA instead.
+            $version_id = $readInstance['version_id'] ?? ($versions[0]->version_id ?? null);
 
-            $book_id = $bookData['book_id'];
-            $version_id = null;
-
-            if (isset($readInstance['version_id'])) {
-                $version_id = $readInstance['version_id'];
-            } else {
-                // Return the first version (FOR NOW!!!)
-                $version_id = $versionsData[0]->version_id;
-            }
-
-            $readInstance['book_id'] = $book_id;
-            $readInstance['version_id'] = $version_id;
-            $readInstance['user_id'] = auth()->id();
-
-            return ReadInstance::create($readInstance);
+            return ReadInstance::create([
+                'book_id' => $book->book_id,
+                'version_id' => $version_id,
+                'date_read' => $readInstance['date_read'] ?? null,
+                'rating' => $readInstance['rating'] ?? null,
+                'user_id' => auth()->id(),
+            ]);
         })->all();
     }
 
@@ -134,19 +119,25 @@ class NewBookController extends Controller
         $book->versions()->saveMany($versions);
     }
 
-    public function completeBookCreation(Request $request)
+    /**
+     * Create a book and everything hanging off it, or nothing.
+     *
+     * A malformed payload is now a 422 from `CompleteBookCreationRequest`
+     * before this runs. What's left in the catch is genuinely unexpected, so
+     * it answers 500 rather than the 200-with-`success:false` this used to
+     * return — a failure the SPA had to inspect the body to notice.
+     */
+    public function completeBookCreation(CompleteBookCreationRequest $request)
     {
-        $bookData = $request['bookData'];
-
         DB::beginTransaction();
 
         try {
             // Create the main book record
-            $book = BookCreator::create($bookData['book']['title']);
-            $authors = $this->handleAuthors($bookData['authors']);
-            $genres = $this->handleGenres($bookData['genres']);
-            $versions = $this->handleVersions($bookData['versions'], $book);
-            $read_instances = $this->handleReadInstances($bookData['read_instances'], $book, $versions);
+            $book = BookCreator::create($request->title());
+            $authors = $this->handleAuthors($request->authors());
+            $genres = $this->handleGenres($request->genreNames());
+            $versions = $this->handleVersions($request->versions(), $book);
+            $read_instances = $this->handleReadInstances($request->readInstances(), $book, $versions);
 
             $this->attachModels($book, $authors, $genres, $versions);
 
@@ -165,11 +156,12 @@ class NewBookController extends Controller
         } catch (\Exception $e) {
             // If any operation fails, roll back the transaction
             DB::rollBack();
+            Log::error('Error creating book: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error occurred, creation aborted. '.$e->getMessage(),
-            ]);
+                'message' => 'Error occurred, creation aborted.',
+            ], 500);
         }
     }
 }

@@ -11,20 +11,17 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 
 ### Authorization & ownership
 
-- **No policy on read instances.** `addReadInstance` only requires `auth:sanctum`; the user_id is stamped from the session, but nothing prevents a user from passing an arbitrary `book_id` / `version_id` they don't otherwise interact with. Today every book is global, so this is moot — the moment book ownership exists (see `/feature-plans/books.md`), this becomes a leak.
+- **No policy on read instances.** `addReadInstance` stamps `user_id` from the session, so a user cannot write a read against someone else's history. Since the catalog is shared on purpose (see `/documentation/books.md`), passing an arbitrary `book_id` / `version_id` is not a leak — but a `ReadInstancePolicy` is still needed the moment edit / delete endpoints land, because those target rows that *do* belong to someone.
 - **No edit or delete endpoints for read instances.** There's `POST /add-read-instance` but no `PATCH /read-instances/{id}` or `DELETE /read-instances/{id}`. A misclicked rating, a wrong date, or a duplicate read entered twice cannot be corrected through the UI — only by editing the row in MySQL. The `ReadInstance` PK is `read_instance_id`; nothing in the SPA exposes it beyond the book edit form.
 
 ### Validation & request shape
 
-- **No `FormRequest`.** `addReadInstance` reaches into `$request['readInstance']`, then `$request['readInstance']['book_id']`, etc. Missing keys throw undefined-index 500s.
 - **Empty `rating` becomes `0`.** The frontend's `<select>` defaults to `""`; the mutator doubles `null !== '' === true` and `'' * 2` is `0` (PHP coerces). Explicit "no rating" should be `null`, not `0`. Either the form must send `null` for unselected, or the mutator must guard.
-- **Date format isn't normalized server-side.** The SPA sends `MM/DD/YYYY` strings; the `read_instances.date_read` column type accepts MySQL's permissive parsing today, but a non-MySQL backend or a stricter mode would reject this. Normalize to `Y-m-d` before insert.
 - **`getBooksByYear($year)` accepts any string.** Eloquent binds the parameter so it's safe, but `/api/completed/abc` returns `[]` instead of `422` / `404`. Add an `int` typehint or a `Rule::numeric` + reasonable range.
 
 ### Data integrity
 
 - **Reads without a date never appear in year-browse.** `whereYear('date_read', …)` filters out nulls. A book with only undated reads is "completed" on the detail page but invisible at `/completed`. Either render an "undated" tab, or reflect undated reads under the year they were *created* (`created_at`).
-- **`addReadInstance` writes two queries to set both FKs.** `$book->readInstances()->save(...)` performs an INSERT, then `$version->readInstances()->save(...)` performs an UPDATE. Cleaner: set `book_id` and `version_id` on the model directly and call `->save()` once.
 - **Optimistic store update before the API call.** `UpdateBookReadInstance` mutates `NewBookStore` and `BooksStore.allBooks[i]` *before* awaiting the axios POST. On failure the in-memory state diverges silently; the user sees a phantom read until reload.
 - **`BooksStore.allBooks[bookIndex] = NewBookStore.currentBookData` couples store shapes.** The component overwrites a `BooksStore` element wholesale with whatever `NewBookStore.currentBookData` is. Any divergence in shape between the two breaks list rendering for that book.
 
@@ -38,8 +35,7 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 ### Error handling
 
 - **`UpdateBookReadInstance` fails silently.** On non-200 it `console.log("ERROR: ", res)` and `return`; no toast, no inline error, no rollback of the optimistic state. The user sees a successful-looking submission that did nothing.
-- **`addReadInstance` doesn't catch.** Any DB exception becomes a 500 with whatever debug payload Laravel decides to surface (the stack trace, in dev). No transaction wraps the two saves — a failure on the second leaves the row half-populated (book_id set, version_id missing).
-- **Dead `if (!$book || !$version)` branch.** `findOrFail` already 404s, so the controller's manual not-found check never runs. Either remove `findOrFail` and add explicit handling, or remove the dead branch.
+- **`addReadInstance` doesn't catch.** A malformed payload is a 422 and the insert is transactional, but a DB exception still becomes a 500 with whatever debug payload Laravel surfaces.
 - **`AddReadHistoryView` mounted hook crashes when the slug 404s.** It logs the error but then unconditionally accesses `this.currentBook.versions.length`, which throws `Cannot read properties of undefined`.
 
 ### Frontend & UX
@@ -55,7 +51,7 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 
 ### Extensibility
 
-- **No tests for `addReadInstance`, `getAvailableYears`, or `getCompletedItemsForYear`.** None of the year-browse aggregation, the dual-FK save, the rating mutator, or the date-null behavior is covered.
+- **The year-browse aggregation is untested.** `getAvailableYears` and `getCompletedItemsForYear` have no coverage of year-filter accuracy, sort order, multi-year books or undated reads. (`addReadInstance` is covered by `AddReadInstanceTest` and `BookWriteValidationTest`.)
 - **No store for year-browse state.** `CompletedView` keeps `loggedYears` / `activeYear` / `activeBooks` in `data()`. A future "include in stats", "export year as CSV", or "compare two years" feature has nowhere to hang.
 - **MySQL-specific `YEAR()` and `whereYear`.** Locks the year-browse to MySQL. If the project ever moves to Postgres / SQLite the queries break.
 - **Read-history-related fields are spread across two store actions.** `addReadInstanceToNewBookVersion` (new-book flow, `NewBookStore`) and `addReadInstanceToExistingBookVersion` (post-create flow, same store). The split makes sense given the flow difference, but the store is named `NewBookStore` — see `/feature-plans/new-book-creation.md` for the rename.
@@ -64,20 +60,16 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 
 In rough priority order.
 
-1. **Add Feature tests** for `POST /add-read-instance` (success, mismatched book/version, missing keys, null `date_read`, empty rating), `GET /completed/years`, and `GET /completed/{year}` (year filter accuracy, sort order, multi-year books, undated reads). Necessary before any of the structural cleanup below.
-2. **Add `createReadInstance` to `api/BookController.js`** and route `UpdateBookReadInstance` through it. Removes the direct axios import and the layering violation.
-3. **Introduce a `StoreReadInstanceRequest` `FormRequest`** with rules for `book_id` (exists), `version_id` (exists, belongs to book_id — surface as a 422 here rather than relying on the model-side `\DomainException` safety net), `date_read` (nullable date, accepts both `Y-m-d` and `m/d/Y`), `rating` (nullable, between 0.5 and 5 in 0.5 steps).
-4. **Wrap `addReadInstance` in a transaction** and collapse the dual save into one (`new ReadInstance($data + ['user_id' => …])->save()` after setting both FKs). Removes the half-row failure window.
-5. **Switch year filtering to range queries.** Replace `whereYear('date_read', $year)` with `whereBetween('date_read', ["$year-01-01", "$year-12-31"])` and add a `(user_id, date_read)` index migration. Same change in `getAvailableYears` (or rewrite it as `DISTINCT EXTRACT(YEAR FROM date_read)` portably).
-6. **Push `getCompletedItemsForYear` sorting into SQL.** Order by `MIN(read_instances.date_read)` per book at the query level instead of `->sortBy` in PHP. Drops the in-memory hydration cost.
-7. **Fix the silent failure path in `UpdateBookReadInstance`.** On non-200, roll back the optimistic store update and surface a toast or inline error. Add the same to `addReadInstance` controller — return a structured error, not a 500.
-8. **Handle multi-version selection in `AddReadHistoryView`.** Add `@click="selectedVersion = version"` to each card. Show an inline "Select a version" hint when `selectedVersion` is null and the version count is > 1.
-9. **Make rating truly optional.** Add a "No rating" option that sends `null`; guard the mutator to leave `null` as `null` rather than coercing to 0.
-10. **Normalize `date_read` input to `Y-m-d` before submit.** Either client-side in `UpdateBookReadInstance` or server-side in the new `FormRequest`.
-11. **Build edit / delete endpoints for read instances.** `PATCH /read-instances/{id}` and `DELETE /read-instances/{id}`, both authorized via a new `ReadInstancePolicy` that checks `user_id`. Surface edit / delete affordances on the book detail page's read-history list.
-12. **URL-state the year tab** in `CompletedView` (`/completed?year=2024`). Restore on mount; back/forward navigates between tabs.
-13. **Add an empty state to `/completed`** with a CTA to log a read or visit the library.
-14. **Surface undated reads.** Either an "Undated" tab in `CompletedView` or fold them under their `created_at` year — pick the user-facing semantics that's least confusing and document it.
-15. **Cache `loggedYears` and recently fetched year payloads** in a Pinia `ReadHistoryStore`. Cheap UX win once `CompletedView` has a back button or a dashboard surface that also reads it.
-16. **Backfill `read_instances.book_id` consistency check.** New writes are blocked by the model-side `saving` listener, but pre-existing mismatched rows (if any predate the validator) won't surface until something tries to re-save them. Run a one-shot audit query (`select read_instances.* from read_instances join versions using (version_id) where read_instances.book_id <> versions.book_id`) and reconcile.
-17. **Coordinate with `/feature-plans/statistics.md`.** Aggregations across `ReadInstance` (totals, average rating per year, fastest read, etc.) live in the stats doc but share the same MySQL-specific year functions and the same user-scoping convention. Whatever index strategy lands here should be reused there.
+1. **Add `createReadInstance` to `api/BookController.js`** and route `UpdateBookReadInstance` through it. Removes the direct axios import and the layering violation.
+2. **Switch year filtering to range queries.** Replace `whereYear('date_read', $year)` with `whereBetween('date_read', ["$year-01-01", "$year-12-31"])` and add a `(user_id, date_read)` index migration. Same change in `getAvailableYears` (or rewrite it as `DISTINCT EXTRACT(YEAR FROM date_read)` portably).
+3. **Push `getCompletedItemsForYear` sorting into SQL.** Order by `MIN(read_instances.date_read)` per book at the query level instead of `->sortBy` in PHP. Drops the in-memory hydration cost.
+4. **Fix the silent failure path in `UpdateBookReadInstance`.** On non-200, roll back the optimistic store update and surface a toast or inline error. Add the same to `addReadInstance` controller — return a structured error, not a 500.
+5. **Handle multi-version selection in `AddReadHistoryView`.** Add `@click="selectedVersion = version"` to each card. Show an inline "Select a version" hint when `selectedVersion` is null and the version count is > 1.
+6. **Make rating truly optional.** Add a "No rating" option that sends `null`; guard the mutator to leave `null` as `null` rather than coercing to 0.
+7. **Build edit / delete endpoints for read instances.** `PATCH /read-instances/{id}` and `DELETE /read-instances/{id}`, both authorized via a new `ReadInstancePolicy` that checks `user_id`. Surface edit / delete affordances on the book detail page's read-history list.
+8. **URL-state the year tab** in `CompletedView` (`/completed?year=2024`). Restore on mount; back/forward navigates between tabs.
+9. **Add an empty state to `/completed`** with a CTA to log a read or visit the library.
+10. **Surface undated reads.** Either an "Undated" tab in `CompletedView` or fold them under their `created_at` year — pick the user-facing semantics that's least confusing and document it.
+11. **Cache `loggedYears` and recently fetched year payloads** in a Pinia `ReadHistoryStore`. Cheap UX win once `CompletedView` has a back button or a dashboard surface that also reads it.
+12. **Backfill `read_instances.book_id` consistency check.** New writes are blocked by the model-side `saving` listener, but pre-existing mismatched rows (if any predate the validator) won't surface until something tries to re-save them. Run a one-shot audit query (`select read_instances.* from read_instances join versions using (version_id) where read_instances.book_id <> versions.book_id`) and reconcile.
+13. **Coordinate with `/feature-plans/statistics-widgets.md`.** Aggregations across `ReadInstance` (totals, average rating per year, fastest read, etc.) live in the stats doc but share the same MySQL-specific year functions and the same user-scoping convention. Whatever index strategy lands here should be reused there.

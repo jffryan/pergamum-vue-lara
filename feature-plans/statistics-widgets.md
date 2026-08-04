@@ -7,19 +7,19 @@ status: living
 
 Shipped. The backend metric registry (`app/Statistics/`) and the frontend widget registry plus `StatisticsGrid` are described in `/documentation/statistics.md`; this file tracks what's left.
 
-This plan supersedes most of `/feature-plans/statistics.md` and items 4 and 16 of `/feature-plans/lists.md`.
+This plan supersedes the original statistics plan, and moved list statistics server-side out of `/feature-plans/lists.md`.
 
 ## Known limitations
 
 ### Query shape and performance
 
-- **`YEAR(date_read)` still can't use an index.** Every per-year metric groups by `YEAR(read_instances.date_read)` in `ReadInstanceQuery::groupedByYear()`. The `(user_id, date_read)` composite index exists and covers the user filter, but the grouping expression itself will scan. A range-bucketed rewrite is the fix; it now only has to happen in one method rather than in every metric. Carried over from `/feature-plans/statistics.md` item 4.
+- **`YEAR(date_read)` still can't use an index.** Every per-year metric groups by `YEAR(read_instances.date_read)` in `ReadInstanceQuery::groupedByYear()`. The `(user_id, date_read)` composite index exists and covers the user filter, but the grouping expression itself will scan. A range-bucketed rewrite is the fix; it now only has to happen in one method rather than in every metric.
 - **No server-side caching.** Deliberate — the client store covers bouncing between `/dashboard` and `/statistics`, which is the case that actually bit. Revisit a short-TTL per-user cache invalidated on `ReadInstance` write when a surface exceeds roughly 15 metrics, or when one metric's query time becomes visible.
 - **A full user surface issues one query per metric.** Twelve metrics is twelve round trips inside one request. Dependencies are computed once, but nothing batches independent metrics.
 
 ### Scope and semantics
 
-- **`totalBooks` and `newestBooks` ignore user scoping.** They declare it (`meta.catalogWide`) and `WidgetShell` footnotes it, but the numbers still cover every book in the database. Flipping them is a one-line change per metric once book ownership lands — the decision stays in `/feature-plans/books.md`. Note that `totalBooks` is the denominator of `percentageOfBooksRead`, so both metrics have to move together with the numerator's shelf axis.
+- **`totalBooks` and `newestBooks` are catalog-wide, and staying that way.** They declare it (`meta.catalogWide`) and `WidgetShell` footnotes it. This was tracked as pending on book ownership; ownership was decided against (see `/documentation/books.md`), so the catalog-wide reading is now correct rather than provisional — the library is shared, and "how many books do we own" is a shared number. Only the *read* half of `percentageOfBooksRead` is per-user, which is the intended asymmetry.
 - **`estimatedTotalPagesByYear` assumes one narration pace for everyone.** `config/statistics.php` holds a single `pagesPerAudioMinute` for all users and all books. A per-user setting, or a per-format one, would be more honest; the response already carries the factor, so a widget wouldn't change.
 - **Estimates only understand audio.** `footnotes.js` builds its sentence from `meta.estimated[...].converted` and phrases it as audio. A second kind of estimate would need the provenance to name its own units.
 
@@ -39,7 +39,7 @@ This plan supersedes most of `/feature-plans/statistics.md` and items 4 and 16 o
 
 In rough priority order.
 
-1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — `/feature-plans/authors.md` item 10, `/feature-plans/genres.md` item 12, `/feature-plans/formats.md` item 14. They are the payoff this plan was built for; do them before anything else here.
+1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — `/feature-plans/authors.md` item 10, `/feature-plans/genres.md` item 12, `/feature-plans/formats.md` item 11. They are the payoff this plan was built for; do them before anything else here.
 2. **Charts.** Pick a library, add `barChart` / `lineChart` to the widget registry, swap the `widget:` line in the surface configs that want them. `SeriesList` stays for dense surfaces.
 3. **Admin scope** — `/feature-plans/admin.md` item 21. Needs a scope-level authorization check (admin-only) that `ScopeResolver` can already accommodate; the shape is the same as the list scope's policy call.
 4. **Range-bucketed year queries** in `ReadInstanceQuery::groupedByYear()`, replacing `YEAR()`. One method, every per-year metric benefits.

@@ -2,25 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreListItemRequest;
 use App\Models\BookList;
 use App\Models\ListItem;
-use Illuminate\Http\Request;
 
 class ListItemController extends Controller
 {
-    public function store(Request $request, BookList $list)
+    public function store(StoreListItemRequest $request, BookList $list)
     {
         $this->authorize('update', $list);
-
-        $data = $request->validate([
-            'version_id' => 'required|integer|exists:versions,version_id',
-        ]);
 
         $maxOrdinal = $list->items()->max('ordinal');
         $ordinal = $maxOrdinal === null ? 0 : $maxOrdinal + 1;
 
         $item = $list->items()->create([
-            'version_id' => $data['version_id'],
+            'version_id' => $request->versionId(),
             'ordinal' => $ordinal,
         ]);
 

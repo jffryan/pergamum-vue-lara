@@ -306,15 +306,10 @@ export default {
                 }),
             );
 
-            const bookEdits = {
-                book_id,
-                formData: {
-                    ...this.bookData,
-                    versions: transformedVersions,
-                },
-            };
-
-            const res = await this.submitBookEdits(bookEdits);
+            const res = await this.submitBookEdits(book_id, {
+                ...this.bookData,
+                versions: transformedVersions,
+            });
 
             if (!(res instanceof Error)) {
                 this.BooksStore.updateBook(res.data);
@@ -325,9 +320,9 @@ export default {
                 });
             }
         },
-        async submitBookEdits(bookEdits) {
+        async submitBookEdits(book_id, formData) {
             try {
-                const res = await updateBook(bookEdits);
+                const res = await updateBook(book_id, formData);
                 if (!res.data || res.status !== 200) {
                     throw new Error("Failed to update book");
                 }

@@ -647,7 +647,15 @@ export default {
             const formattedBookForm =
                 this.validateAndFormatBook(bookFormRequest);
             if (formattedBookForm) {
-                const res = await updateBook(formattedBookForm);
+                // Unreachable: isEditMode needs "edit" in the path and the
+                // only route mounting this form is /add-books. It also sends
+                // the *create* payload shape, so it would 422 if it ever ran.
+                // Tracked for deletion in /feature-plans/new-book-creation.md
+                // item 14; EditBookView is the real edit path.
+                const res = await updateBook(
+                    formattedBookForm.book?.book_id,
+                    formattedBookForm,
+                );
 
                 this.BooksStore.updateBook(res.data.book);
 

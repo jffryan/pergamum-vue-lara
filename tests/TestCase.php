@@ -18,7 +18,6 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
-
     protected function actingAsUser(?User $user = null): User
     {
         $user ??= User::factory()->create();

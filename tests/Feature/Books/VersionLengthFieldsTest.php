@@ -112,21 +112,17 @@ class VersionLengthFieldsTest extends TestCase
         ]);
 
         $this->putJson("/api/books/{$book->book_id}", [
-            'request' => [
-                'formData' => [
-                    'book' => ['title' => $book->title],
-                    'authors' => [],
-                    'genres' => [],
-                    'readInstances' => [],
-                    'versions' => [[
-                        'version_id' => $version->version_id,
-                        'format' => $print->format_id,
-                        'nickname' => null,
-                        'page_count' => 320,
-                        'audio_runtime' => 540,
-                    ]],
-                ],
-            ],
+            'book' => ['title' => $book->title],
+            'authors' => [],
+            'genres' => [],
+            'readInstances' => [],
+            'versions' => [[
+                'version_id' => $version->version_id,
+                'format' => $print->format_id,
+                'nickname' => null,
+                'page_count' => 320,
+                'audio_runtime' => 540,
+            ]],
         ])->assertOk();
 
         $version->refresh();
@@ -134,5 +130,61 @@ class VersionLengthFieldsTest extends TestCase
         $this->assertSame($print->format_id, $version->format_id);
         $this->assertSame(320, $version->page_count);
         $this->assertNull($version->audio_runtime, 'the runtime must not survive the format change');
+    }
+
+    /**
+     * `POST /versions` — adding a copy to a book that already exists.
+     *
+     * This path passed `page_count` and `audio_runtime` straight through to
+     * `Version::create()`, so it was the one write endpoint that could still
+     * file a page count against an audiobook. The rule now lives in
+     * `Format::lengthFieldsFrom()` and every path goes through it.
+     */
+    public function test_adding_a_version_drops_the_field_its_format_does_not_carry(): void
+    {
+        $this->actingAsUser();
+        $audio = Format::factory()->audio()->create(['name' => 'Audiobook']);
+        $book = Book::factory()->create();
+
+        $this->postJson('/api/versions', [
+            'version' => [
+                'book_id' => $book->book_id,
+                'format' => ['format_id' => $audio->format_id],
+                'page_count' => 420,
+                'audio_runtime' => 610,
+            ],
+        ])->assertCreated();
+
+        $version = $book->versions()->sole();
+        $this->assertSame(610, $version->audio_runtime);
+        $this->assertNull($version->page_count, 'an audiobook must not carry a page count');
+    }
+
+    /**
+     * The multi-step create flow's version handler had the same gap.
+     */
+    public function test_completing_a_new_book_drops_the_field_its_format_does_not_carry(): void
+    {
+        $this->actingAsUser();
+        $audio = Format::factory()->audio()->create(['name' => 'Audiobook']);
+
+        $this->postJson('/api/create-book', [
+            'bookData' => [
+                'book' => ['title' => 'Listened Only'],
+                'authors' => [['first_name' => 'A', 'last_name' => 'Narrator']],
+                'genres' => [],
+                'versions' => [[
+                    'format' => ['format_id' => $audio->format_id],
+                    'page_count' => 300,
+                    'audio_runtime' => 480,
+                    'nickname' => null,
+                ]],
+                'read_instances' => [],
+            ],
+        ])->assertOk();
+
+        $version = Book::where('slug', 'listened-only')->firstOrFail()->versions()->sole();
+        $this->assertSame(480, $version->audio_runtime);
+        $this->assertNull($version->page_count, 'an audiobook must not carry a page count');
     }
 }

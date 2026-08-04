@@ -97,7 +97,7 @@ There is no direct API. Genres are created/attached by `POST /create-book` (new-
 
 ## Related
 
-- Plan file: `/feature-plans/genres.md` — future improvements and known limitations (to be created alongside this doc; see `/feature-plans/documentation-backfill.md`).
+- Plan file: `/feature-plans/genres.md` — future improvements and known limitations.
 - `/documentation/books.md` — genre attachment, update, and the comma-separated form input are owned by the book pipeline.
 - `/documentation/new-book-creation.md` — the wizard step that consumes `GenreTagInput` and ships `[{name, genre_id}]` to `POST /create-book`.
 - `/documentation/authors.md` — sibling taxonomy doc; many of the same gotchas (custom PK, no unique constraint, dead resource stubs) apply here too, with the slug/ID divergence as the main shape difference.

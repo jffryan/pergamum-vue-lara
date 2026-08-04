@@ -9,11 +9,8 @@ Tracks rough edges and follow-up work for the backend test suite. Descriptive co
 
 ## Future improvements
 
-### Factory hygiene
-
-- ~~**`ReadInstanceFactory::definition()` leaks `Book` rows.**~~ Fixed as prework for `/feature-plans/statistics-widgets.md`. `book_id` / `version_id` are now lazy closures that derive one from the other, so an override no longer persists a stray `Version` → `Book`. The literal-count assertion in `tests/Feature/Statistics/StatisticsTest.php::test_percentage_of_books_read_uses_global_book_count` is restored and is what guards the fix.
-
-  Two constraints to preserve if that factory is edited again: `version_id` must stay declared **before** `book_id` (`expandAttributes()` resolves closures in array order, and the `version_id` callback distinguishes "caller supplied a book" from "caller supplied nothing" by testing whether `$attributes['book_id']` is still an unexpanded `Closure`), and the two values must always agree — `ReadInstance::booted()` throws a `DomainException` on a book/version mismatch, so they cannot be defaulted independently.
+- **Depth per domain.** Most controllers have a happy path and a failure path; few have boundary sweeps. The known thin spot is the year-browse aggregation — see `/feature-plans/read-history.md`.
+- **Wire CI.** The suite runs in one command but nothing runs it on push.
 
 ## Known limitations
 

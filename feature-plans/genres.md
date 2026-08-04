@@ -13,7 +13,7 @@ Like `Authors`, most of the gnarly behavior here is owned by the book pipeline (
 
 ### Authorization & ownership
 
-- **No per-user ownership.** Genres are global — any authenticated user can cause a genre row to be created (via book create/update). Two users adding the same genre at the same time will collide on the `firstOrCreate` lookup; whichever insert lands first wins, and the loser silently joins it. Tracked under the broader multi-tenant gap in `/feature-plans/books.md` item 3.
+- **Genres are global, by design** (see `/documentation/books.md`). Two users adding the same genre concurrently collide on the `firstOrCreate` lookup and the loser silently joins the winner's row, which is the intended outcome for a shared taxonomy.
 - **No `GenrePolicy`.** The four `Route::resource`-style stub methods on `GenreController` (`store`, `update`, `destroy`, plus `create`/`edit`) are unreachable, so this hasn't mattered yet. The moment any of them gets implemented — especially `destroy` — a policy needs to land with it.
 
 ### Validation & request shape
@@ -74,7 +74,7 @@ In rough priority order — earlier items unblock later ones.
 9. **Drop the redundant `read_instances` join and groupBy in `GenreController::show`.** The query only needs `MIN(authors.last_name)` for sort — keep the `book_author` / `authors` join, drop the `read_instances` join, and let the eager-load do the rest. Measure before/after on the largest genre.
 10. **Add server-side search to `GET /genres`.** `?q=` filter against `name`, paginated. Wire `GenresView`'s search box to it instead of the in-memory regex; keeps the index scalable as the genre count grows.
 11. **Auto-prune empty genres** when their last book is deleted (or, alternatively, soft-delete with a `deleted_at` and a periodic prune job). Today the row sticks around forever. Pair with item 13 (soft delete) so a misclick is recoverable.
-12. **Surface genre-level stats on the detail page.** Total books, total reads in the genre, average rating, top authors. Reuses the same aggregation logic that `StatisticsService` will end up with — coordinate with `/feature-plans/documentation-backfill.md` tier 3 (statistics) and `/feature-plans/authors.md` item 12.
+12. **Surface genre-level stats on the detail page.** Total books, total reads in the genre, average rating, top authors. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
 13. **Soft-delete genres** once item 11 lands, so an automatic prune is recoverable. Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10 and `/feature-plans/authors.md` item 9.
 14. **Invalidate `GenreStore.allGenres` after book create/update.** Either bust the cache from `BookCreateEditForm.submitCreateForm` / `submitEditForm` on success, or bump a version counter the store can watch. Removes the long-session staleness footgun in `GenreTagInput`.
 15. **Loosen `GenreTagInput` thresholds.** Drop the minimum-character gate from 3 to 1, raise the result cap from 3 to ~10, and consider fuzzy match (e.g. matching "scifi" against "science fiction"). Tiny UX win for almost no code.

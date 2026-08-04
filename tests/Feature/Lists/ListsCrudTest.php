@@ -9,6 +9,7 @@ use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ListItem;
 use App\Models\ReadInstance;
+use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,7 +43,7 @@ class ListsCrudTest extends TestCase
     public function test_show_loads_deep_relations_and_scopes_read_instances_to_user(): void
     {
         $owner = $this->actingAsUser();
-        $otherUser = \App\Models\User::factory()->create();
+        $otherUser = User::factory()->create();
 
         $list = BookList::factory()->forUser($owner)->create();
 

@@ -48,7 +48,7 @@ Tracks rough edges and follow-up work for the auth surface (`User`, `UserControl
 - **No profile / settings view.** A user has no UI to see or change their name, email, or password.
 - **`UserDashboard.vue` is a stub.** "Welcome to your Dashboard. This is a placeholder view. You're logged in!" The default redirect target after login is `/dashboard`, so every successful login lands here. Either fold the stats dashboard into it, build something useful, or change the default redirect to `/library` (or wherever the user actually wants to go).
 - **`AuthStore.fetchUser` swallows all errors as "logged out."** A 500 or a network timeout on the auth probe sends the user to `/login` with no diagnostic. Distinguish 401 (genuinely unauthenticated) from other failures and surface a recoverable error UI for the latter.
-- **Direct `axios` import in `AuthStore` and `UserLoginForm`.** Same layering violation called out in `/feature-plans/read-history.md` and `/feature-plans/statistics.md`. Add `api/AuthController.js` with `login`, `register`, `logout`, `fetchUser`, `csrfCookie`.
+- **Direct `axios` import in `AuthStore` and `UserLoginForm`.** Same layering violation called out in `/feature-plans/read-history.md`. Add `api/AuthController.js` with `login`, `register`, `logout`, `fetchUser`, `csrfCookie`.
 - **Login form has no loading state.** Click "Login" and the button stays clickable; a slow network produces double-submits.
 - **No redirect-back support after register.** `register` doesn't honor a `?redirect=` query param the way `login` does.
 - **No "redirect after logout" affordance.** `AuthStore.logout` always pushes to `home` and that's the only path.
@@ -61,7 +61,6 @@ Tracks rough edges and follow-up work for the auth surface (`User`, `UserControl
 
 ### Extensibility
 
-- **No tests for any auth path.** Login (success / wrong password / missing fields), register (success / duplicate email / weak password / missing confirm), logout (success / unauthenticated), `/api/user` (authenticated / unauthenticated). Necessary before any structural work.
 - **`HasApiTokens` is on `User` but unused.** If token-based auth is a future need (mobile app, third-party integrations), the trait is ready. Currently dead surface.
 - **No multi-tenancy primitives.** Single-user-per-account today; no household / family sharing of a library. The `lists` relation is per-user, but the catalog (`books`, `authors`, `genres`, `formats`) is global. Splitting "my library" from "the catalog" is a much bigger change than just auth — flagged here because any work on it starts at the user model.
 - **No SSO / OAuth.** No "Sign in with Google / Apple / GitHub." Likely never needed for a personal-library app, but worth noting if friends/family adoption ever becomes a goal.
@@ -81,14 +80,12 @@ In rough priority order.
 8. **Build the registration UI.** `RegisterView.vue` + `UserRegisterForm.vue` + a `/register` route entry + a link from `LoginView`. Endpoint already exists.
 9. **Fix the logout failure path.** Even on a 401 from `/logout`, clear local `AuthStore` state and redirect — the server already thinks the user is gone.
 10. **Add a loading state to the login button** and disable double-submits while a login is in flight.
-11. ~~**Decide what `/dashboard` should be.**~~ Resolved by `/feature-plans/statistics-widgets.md`: `/dashboard` is a summary statistics surface (`userDashboard`), sharing widgets and a cached scope with the fuller `/statistics` page. The placeholder is gone.
-12. **Fold `password.confirm` into sensitive endpoints.** Wire the middleware up; require it for any future "change email" / "delete account" / "rotate password" surface.
-13. **Add password-strength rules.** Switch register validation to `Password::min(8)->mixedCase()->uncompromised()`. Likely uncontroversial.
-14. **Wire up email verification.** Apply `MustVerifyEmail` to `User`, register the verification routes, send the verification mail on register, gate write-paths behind `verified`. The `email_verified_at` column is already there.
-15. **Wire up password reset.** Standard Laravel `Password::routes()` plus minimal SPA views (`ForgotPasswordView`, `ResetPasswordView`).
-16. **Build a profile/settings view.** Read + update name and email; change password (with current-password confirm); delete account (with `password.confirm`).
-17. **Add a `BelongsToCurrentUser` global scope (or trait)** for `ReadInstance` and `BookList`. Removes the inline `auth()->id()` predicate from every query and makes cross-user queries an explicit opt-out (`withoutGlobalScopes`). Coordinate with `/feature-plans/read-history.md`, `/feature-plans/statistics.md`, `/feature-plans/lists.md`.
-18. **Add "remember me"** to login (second arg to `Auth::attempt`).
-19. **Add `personal_access_tokens` use or remove the migration.** If a mobile / CLI / integration use case is on the roadmap, design the token issuance flow; otherwise drop the unused surface.
-20. **Coordinate with future book ownership** (see `/feature-plans/books.md`). When books become user-owned, `auth()->id()` scoping has to extend to `Book::count()` and `Book::latest()` in `StatisticsService` (see `/feature-plans/statistics.md` item 13). The decision lives there; the user-model changes (a `User::books()` relation, a `books.user_id` column) live here.
-21. **Name the auth routes in `routes/web.php`** — `->name('login')`, `->name('register')`, `->name('logout')`. Cheap; lets tests and any future server-rendered redirects use `route('login')` instead of the hardcoded path. The `auth` middleware already redirects unauthenticated requests to a route named `login` if it's defined, so naming it also future-proofs that fallback.
+11. **Fold `password.confirm` into sensitive endpoints.** Wire the middleware up; require it for any future "change email" / "delete account" / "rotate password" surface.
+12. **Add password-strength rules.** Switch register validation to `Password::min(8)->mixedCase()->uncompromised()`. Likely uncontroversial.
+13. **Wire up email verification.** Apply `MustVerifyEmail` to `User`, register the verification routes, send the verification mail on register, gate write-paths behind `verified`. The `email_verified_at` column is already there.
+14. **Wire up password reset.** Standard Laravel `Password::routes()` plus minimal SPA views (`ForgotPasswordView`, `ResetPasswordView`).
+15. **Build a profile/settings view.** Read + update name and email; change password (with current-password confirm); delete account (with `password.confirm`).
+16. **Add a `BelongsToCurrentUser` global scope (or trait)** for `ReadInstance` and `BookList`. Removes the inline `auth()->id()` predicate from every query and makes cross-user queries an explicit opt-out (`withoutGlobalScopes`). Coordinate with `/feature-plans/read-history.md`, `/feature-plans/statistics-widgets.md`, `/feature-plans/lists.md`. This is now the highest-value item in this file: with book ownership decided against, inline `auth()->id()` is the *only* thing separating the two accounts, and `AuthorService::getAuthorWithRelations` and `GenreController::show` already forget it.
+17. **Add "remember me"** to login (second arg to `Auth::attempt`).
+18. **Add `personal_access_tokens` use or remove the migration.** If a mobile / CLI / integration use case is on the roadmap, design the token issuance flow; otherwise drop the unused surface.
+19. **Name the auth routes in `routes/web.php`** — `->name('login')`, `->name('register')`, `->name('logout')`. Cheap; lets tests and any future server-rendered redirects use `route('login')` instead of the hardcoded path. The `auth` middleware already redirects unauthenticated requests to a route named `login` if it's defined, so naming it also future-proofs that fallback.

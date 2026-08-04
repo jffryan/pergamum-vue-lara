@@ -98,4 +98,4 @@ The format `<select>` is bound to either the full format object (new-book wizard
 - Plan file: `/feature-plans/formats.md` — future improvements and known limitations.
 - `/documentation/books.md` — version creation, the `prepareVersions` audio-runtime branching, and the `Book::formats()` through-versions convenience relation.
 - `/documentation/authors.md`, `/documentation/genres.md` — sibling taxonomy docs. Formats differ in that they are *not* created as a side effect of book creation, *do* have a derived slug on the create path, and *are* admin-managed (loosely) rather than user-supplied.
-- `/feature-plans/documentation-backfill.md` — the backfill plan that schedules this doc; the admin surface (tier 4 admin.md) will cover the `meta.component` dispatch pattern in more depth once a second admin action exists.
+- `/feature-plans/admin.md` — the admin surface, including the `meta.component` dispatch that the format-management screens hang off.

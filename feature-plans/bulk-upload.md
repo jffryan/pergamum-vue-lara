@@ -15,7 +15,7 @@ Everything previously designed here has shipped — the CSV contract and per-row
 
 ### Authorization & ownership
 
-- **No per-user ownership of bulk-uploaded books.** Same multi-tenant gap as the rest of the book domain (see `/feature-plans/books.md`). Read instances are user-scoped via `auth()->id()` at insert time, but the books and authors are global.
+- **Books and authors from an import are global; read instances are not.** Rows land in the shared catalog while `read_instances.user_id` comes from the session — which is the intended split (see `/documentation/books.md`), but worth knowing before one account imports a 500-row backlog into the other's library view.
 - **No role gate.** Any authenticated user can bulk-upload. There's no admin-only restriction even though the surface is the closest thing the app has to a destructive batch operation. (It's not actually destructive — only inserts and find-or-create — but it can dramatically reshape the catalog.)
 - **No rate limit.** A user can repeatedly POST large CSVs and saturate DB / PHP-FPM. Default Laravel throttling does not apply to this route.
 

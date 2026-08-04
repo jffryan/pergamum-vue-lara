@@ -5,7 +5,6 @@ namespace Tests\Feature\Books;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
-use App\Models\Genre;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;

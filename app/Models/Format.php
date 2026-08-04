@@ -40,6 +40,29 @@ class Format extends Model
         return $this->expectedLengthFields()[$field] ?? false;
     }
 
+    /**
+     * Reduce a version payload to the length fields this format actually carries.
+     *
+     * A field the format doesn't expect is nulled rather than trusted, so
+     * re-formatting an audiobook as paper can't leave a stale runtime behind;
+     * a field it does expect is coalesced, so a payload that omits it stores
+     * null instead of throwing an undefined-key error.
+     *
+     * Every write path goes through here — book create, book edit, and
+     * `POST /versions` — so "what length does this medium have" is answered
+     * once, from data on the format row.
+     */
+    public function lengthFieldsFrom(array $versionData): array
+    {
+        $fields = [];
+
+        foreach ($this->expectedLengthFields() as $field => $expected) {
+            $fields[$field] = $expected ? ($versionData[$field] ?? null) : null;
+        }
+
+        return $fields;
+    }
+
     public function versions(): HasMany
     {
         return $this->hasMany(Version::class, 'format_id');

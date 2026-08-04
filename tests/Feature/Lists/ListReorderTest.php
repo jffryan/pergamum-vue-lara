@@ -5,6 +5,7 @@ namespace Tests\Feature\Lists;
 use App\Models\Book;
 use App\Models\BookList;
 use App\Models\ListItem;
+use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -135,5 +136,68 @@ class ListReorderTest extends TestCase
         $this->actingAsUser();
 
         $this->patchJson('/api/lists/9999999/reorder', ['items' => []])->assertNotFound();
+    }
+
+    /**
+     * The membership check moved into `ReorderListRequest`, so the response
+     * now says *which* ids were wrong instead of only that some were. The
+     * leading message is unchanged — callers key on it.
+     */
+    public function test_reorder_names_the_offending_ids(): void
+    {
+        [$list, $items] = $this->listWithItems(3);
+
+        $response = $this->patchJson("/api/lists/{$list->list_id}/reorder", [
+            'items' => [$items[0]->list_item_id, 999_999],
+        ]);
+
+        $response->assertStatus(422)->assertJson(['message' => 'Invalid item IDs for this list.']);
+
+        $errors = implode(' ', $response->json('errors.items'));
+        $this->assertStringContainsString('999999', $errors, 'the id that is not ours should be named');
+        $this->assertStringContainsString((string) $items[1]->list_item_id, $errors, 'the ids left out should be named');
+        $this->assertStringContainsString((string) $items[2]->list_item_id, $errors);
+    }
+
+    /**
+     * A repeated id used to pass the count-based membership check, write one
+     * item's ordinal twice and leave another's untouched — and with the
+     * (list_id, ordinal) unique index dropped, nothing rejected the collision.
+     */
+    public function test_reorder_rejects_a_repeated_item_id(): void
+    {
+        [$list, $items] = $this->listWithItems(3);
+
+        $this->patchJson("/api/lists/{$list->list_id}/reorder", [
+            'items' => [
+                $items[0]->list_item_id,
+                $items[0]->list_item_id,
+                $items[1]->list_item_id,
+                $items[2]->list_item_id,
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors('items.0');
+
+        foreach ($items as $i => $item) {
+            $this->assertDatabaseHas('list_items', [
+                'list_item_id' => $item->list_item_id,
+                'ordinal' => $i,
+            ]);
+        }
+    }
+
+    /**
+     * Ownership is checked before membership. Otherwise reordering someone
+     * else's list would answer "those ids aren't in it" — which is itself an
+     * answer about a list you can't see.
+     */
+    public function test_reorder_of_a_foreign_list_is_a_403_not_a_422(): void
+    {
+        [$list] = $this->listWithItems(2);
+
+        $intruder = User::factory()->create();
+        $this->actingAs($intruder, 'sanctum');
+
+        $this->patchJson("/api/lists/{$list->list_id}/reorder", ['items' => [1, 2]])
+            ->assertForbidden();
     }
 }

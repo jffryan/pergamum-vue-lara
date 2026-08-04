@@ -5,6 +5,7 @@ namespace Tests\Feature\Books;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
+use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,7 +20,7 @@ class NewBookFlowTest extends TestCase
         $book = Book::factory()->create(['title' => 'The Stand', 'slug' => 'the-stand']);
         Version::factory()->for($book, 'book')->withReadInstances(2, ['user_id' => $user->user_id])->create();
 
-        $otherUser = \App\Models\User::factory()->create();
+        $otherUser = User::factory()->create();
         Version::factory()->for($book, 'book')->withReadInstances(3, ['user_id' => $otherUser->user_id])->create();
 
         $response = $this->postJson('/api/create-book/title', ['title' => 'The Stand']);
@@ -113,16 +114,11 @@ class NewBookFlowTest extends TestCase
 
         $response = $this->postJson('/api/create-book', $payload);
 
-        // Either a 422 with validation errors or a 200 with success:false + a rating-related reason.
-        // Bulk-upload rejects rating>5 with reason_code rating_out_of_range; this endpoint should too.
-        $status = $response->status();
-        if ($status === 422) {
-            $this->assertTrue(true);
-        } else {
-            $response->assertStatus(200)->assertJsonPath('success', false);
-            $body = json_encode($response->json());
-            $this->assertMatchesRegularExpression('/rating/i', $body, 'response should mention rating as the failure reason');
-        }
+        // Matches how bulk upload reports the same rejection.
+        $response->assertStatus(422)
+            ->assertJsonPath('reason_code', 'rating_out_of_range')
+            ->assertJsonValidationErrors('bookData.read_instances.0.rating');
+
         $this->assertDatabaseMissing('books', ['slug' => 'out-of-range']);
     }
 
@@ -181,7 +177,13 @@ class NewBookFlowTest extends TestCase
         $this->assertTrue($book->authors->contains('author_id', $existing->author_id));
     }
 
-    public function test_complete_book_creation_rolls_back_on_failure(): void
+    /**
+     * A format id that names nothing is a bad request, and is now rejected
+     * before the transaction opens. It used to throw inside the try, roll
+     * back, and report the failure as a 200 with `success: false` — which the
+     * SPA had to read the body to notice.
+     */
+    public function test_complete_book_creation_rejects_an_unknown_format_and_writes_nothing(): void
     {
         $this->actingAsUser();
 
@@ -202,10 +204,8 @@ class NewBookFlowTest extends TestCase
 
         $response = $this->postJson('/api/create-book', $payload);
 
-        $response->assertStatus(200)->assertJsonPath('success', false);
-        // Don't assert a 4xx — the controller emits 200-on-failure today; we're not dictating
-        // the new contract here, just blocking the trace leak from being silently accepted.
-        $response->assertJsonMissing(['trace']);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('bookData.versions.0.format.format_id');
         $this->assertArrayNotHasKey('trace', $response->json());
         $this->assertDatabaseMissing('books', ['slug' => 'will-not-persist']);
         $this->assertDatabaseMissing('authors', ['first_name' => 'Some', 'last_name' => 'One']);

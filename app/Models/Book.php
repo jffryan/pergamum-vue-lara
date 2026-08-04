@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +14,7 @@ class Book extends Model
 
     protected $primaryKey = 'book_id';
 
-    protected $fillable = ['title', 'slug', 'date_completed'];
+    protected $fillable = ['title', 'slug'];
 
     /**
      * Books still on the shelf.
@@ -61,11 +60,6 @@ class Book extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(Version::class, 'book_id');
-    }
-
-    public function getDateCompletedAttribute($date)
-    {
-        return $date ? Carbon::parse($date)->format('m/d/Y') : null;
     }
 
     public function formats(): BelongsToMany

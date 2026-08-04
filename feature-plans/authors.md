@@ -13,7 +13,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 
 ### Authorization & ownership
 
-- **No per-user ownership.** Authors are global — any authenticated user can cause an author row to be created (via book create) or pruned (via the orphan-cascade in `BookController::destroy`). Two users adding the same author at the same time will collide on whichever one's slug-normalizer ran first. Tracked under the broader multi-tenant gap in `/feature-plans/books.md` item 3.
+- **Authors are global, by design** (see `/documentation/books.md`). The live risk is not visibility but the orphan-cascade in `BookController::destroy`, which lets either account silently delete an author row the other still cares about — see Future improvements.
 - **No `AuthorPolicy`.** The five `Route::resource`-style stub methods on `AuthorController` (`index`, `create`, `store`, `edit`, `update`, `destroy`) are unreachable, so this hasn't mattered yet. The moment any of them gets implemented, a policy needs to land with it.
 
 ### Validation & request shape
@@ -32,7 +32,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 ### Performance & query shape
 
 - **`AuthorService::getAuthorWithRelations` is one big eager-load with no pagination.** A prolific author with hundreds of books pulls every book, every version, every read instance, every genre, every author of every related book in a single query tree. Fine today; will not be fine at scale.
-- **`books.readInstances` is not user-scoped on the author page** (called out in `authors.md`). Multi-tenant deployment would leak read history across users. In the single-tenant case it's "merely" pulling other-user reads that the UI ignores, which is wasted bandwidth.
+- **`books.readInstances` is not user-scoped on the author page.** With a second account this leaks one user's read history into the other's author view — the catalog is shared on purpose, the read history is not. Would leak read history across users. In the single-tenant case it's "merely" pulling other-user reads that the UI ignores, which is wasted bandwidth.
 
 ### API surface
 
@@ -70,7 +70,7 @@ In rough priority order — earlier items unblock later ones.
 7. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10. The orphan prune should mark, not delete.
 8. **User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.** Mirror the `auth()->id()` filter that `BookController::index` and `BookService::getBookWithRelations` apply. Required before any multi-tenant work.
 9. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
-10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. Reuses the same `ReadInstance` aggregation logic that `StatisticsService` will end up with — coordinate with `/feature-plans/documentation-backfill.md` tier 3 (statistics).
+10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
 11. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.
 12. **Introduce a "primary author" concept.** A flag on `book_author` (`is_primary`) or a dedicated column on `books` (`primary_author_id`). Removes the dependence on insert-order for the index sort and makes the "primary author" link in book rows meaningful.
 13. **Stabilize the `AuthorView` error message.** Currently says "Unable to load books at this time" on any failure (copy-pasted from a book view); should reference the author.

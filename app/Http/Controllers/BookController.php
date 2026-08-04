@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreBookRequest;
+use App\Http\Requests\StoreReadInstanceRequest;
+use App\Http\Requests\UpdateBookRequest;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
@@ -10,9 +13,7 @@ use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\BookService;
 use App\Support\BookCreator;
-use App\Support\RatingValidator;
 use App\Support\Slugger;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -142,25 +143,20 @@ class BookController extends Controller
      *
      * @return Response
      */
-    public function store(Request $request)
+    public function store(StoreBookRequest $request)
     {
-        $bookForm = $request->book;
+        $book = BookCreator::create($request->title());
 
-        $book = BookCreator::create($bookForm['book']['title']);
-
-        $new_authors = $this->handleAuthors($bookForm['authors']);
-        $new_versions = $this->prepareVersions($bookForm['versions']);
-        $new_genres = $this->handleGenres($bookForm['book']['genres']['parsed']);
+        $new_authors = $this->handleAuthors($request->authors());
+        $new_versions = $this->prepareVersions($request->versions());
+        $new_genres = $this->handleGenres($request->genreNames());
 
         $this->attachModels($book, $new_authors, $new_versions, $new_genres);
 
         $new_read_instances = [];
+        $readInstancesData = $request->readInstances();
 
-        if (isset($bookForm['readInstances'])) {
-            $readInstancesData = array_filter($bookForm['readInstances'], function ($instance) {
-                return ! empty($instance['date_read']);
-            });
-
+        if ($readInstancesData !== []) {
             $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
         }
 
@@ -190,15 +186,13 @@ class BookController extends Controller
     /**
      * Helper functions for update
      */
-    private function updateBook($existing_book, $patch_book)
+    private function updateBook($existing_book, string $title)
     {
         try {
-            $slug = Slugger::for($patch_book['title']);
-
             // Update book properties
             $existing_book->fill([
-                'title' => $patch_book['title'],
-                'slug' => $slug,
+                'title' => $title,
+                'slug' => Slugger::for($title),
             ])->save();
 
             // Return a successful response
@@ -244,16 +238,12 @@ class BookController extends Controller
                 $existing_version = $existing_versions->firstWhere('version_id', $patch_version['version_id']);
 
                 if ($existing_version) {
-                    $format = Format::find($patch_version['format']);
-
-                    if (! $format) {
-                        continue;
-                    }
+                    $format = Format::findOrFail($patch_version['format']);
 
                     $existing_version->fill([
-                        'format_id' => $patch_version['format'],
-                        'nickname' => $patch_version['nickname'],
-                    ] + $this->lengthFieldsFor($format, $patch_version))->save();
+                        'format_id' => $format->format_id,
+                        'nickname' => $patch_version['nickname'] ?? null,
+                    ] + $format->lengthFieldsFrom($patch_version))->save();
                 }
             } else {
                 // Prepare and save the new version as part of the update process
@@ -321,13 +311,15 @@ class BookController extends Controller
 
         try {
             foreach ($readInstancesData as $instanceData) {
+                // Dates arrive normalized to Y-m-d by the FormRequest — see
+                // the NormalizesReadDates concern — so no parsing here.
                 if (isset($instanceData['read_instance_id']) && $instanceData['read_instance_id'] != null) {
                     // Update existing read instance (scoped to current user)
                     $existing_read_instance = ReadInstance::where('user_id', auth()->id())
                         ->findOrFail($instanceData['read_instance_id']);
                     $existing_read_instance->update([
-                        'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
-                        'rating' => $instanceData['rating'],
+                        'date_read' => $instanceData['date_read'] ?? null,
+                        'rating' => $instanceData['rating'] ?? null,
                     ]);
                     $updated_read_instances[] = $existing_read_instance;
                 } else {
@@ -335,8 +327,8 @@ class BookController extends Controller
                     $new_read_instance = new ReadInstance([
                         'user_id' => auth()->id(),
                         'book_id' => $existing_book->book_id,
-                        'date_read' => Carbon::createFromFormat('Y-m-d', $instanceData['date_read']),
-                        'rating' => $instanceData['rating'],
+                        'date_read' => $instanceData['date_read'] ?? null,
+                        'rating' => $instanceData['rating'] ?? null,
                     ]);
                     $existing_book->readInstances()->save($new_read_instance);
                     $updated_read_instances[] = $new_read_instance;
@@ -356,37 +348,32 @@ class BookController extends Controller
      * @param  Book  $book
      * @return Response
      */
-    public function update(Request $request, $id)
+    public function update(UpdateBookRequest $request, $id)
     {
         DB::beginTransaction();
         try {
             $existing_book = Book::findOrFail($id);
-            $request_data = $request->all();
-            $data = $request_data['request']['formData'];
 
             // Update book details
-            $bookUpdateResponse = $this->updateBook($existing_book, $data['book']);
+            $bookUpdateResponse = $this->updateBook($existing_book, $request->title());
             if (isset($bookUpdateResponse['error'])) {
                 throw new \Exception($bookUpdateResponse['error']);
             }
 
             // Update authors
-            if (! empty($data['authors'])) {
-                $this->updateAuthors($existing_book, $data['authors']);
+            if ($request->authors() !== []) {
+                $this->updateAuthors($existing_book, $request->authors());
             }
 
             // Update genres
-            $genresUpdateResponse = $this->updateGenres($existing_book, $data['genres']);
+            $genresUpdateResponse = $this->updateGenres($existing_book, $request->genres());
             if (isset($genresUpdateResponse['error'])) {
                 throw new \Exception($genresUpdateResponse['error']);
             }
 
             // Update read instances (existing ones only — no UI to add new instances from edit view)
-            $existingInstances = array_values(array_filter(
-                $data['readInstances'] ?? [],
-                fn ($ri) => ! empty($ri['read_instance_id'])
-            ));
-            if (! empty($existingInstances)) {
+            $existingInstances = $request->existingReadInstances();
+            if ($existingInstances !== []) {
                 $readInstancesResponse = $this->updateReadInstances($existing_book, $existingInstances);
                 if (isset($readInstancesResponse['error'])) {
                     throw new \Exception($readInstancesResponse['error']);
@@ -394,8 +381,8 @@ class BookController extends Controller
             }
 
             // Update versions
-            if (! empty($data['versions'])) {
-                $this->updateVersions($existing_book, $data['versions']);
+            if ($request->versions() !== []) {
+                $this->updateVersions($existing_book, $request->versions());
             }
 
             DB::commit();
@@ -405,7 +392,9 @@ class BookController extends Controller
             DB::rollBack();
             Log::error('Error updating book: '.$e->getMessage());
 
-            return response()->json(['error' => $e->getMessage()], 500);
+            // The message is logged above, not returned — a raw exception
+            // string is an information leak and was never actionable.
+            return response()->json(['error' => 'An error occurred while updating the book.'], 500);
         }
     }
 
@@ -458,43 +447,24 @@ class BookController extends Controller
         return response()->json($books);
     }
 
-    public function addReadInstance(Request $request)
+    /**
+     * Log a read of a copy the user owns.
+     *
+     * Every precondition this used to check by hand — the book and version
+     * exist, the version is a copy of that book, the rating is on the 0.5
+     * scale — is now `StoreReadInstanceRequest`, which reports them together
+     * as one 422 instead of one at a time.
+     */
+    public function addReadInstance(StoreReadInstanceRequest $request)
     {
-        $read_instance_data = $request['readInstance'];
-        $book_id = $read_instance_data['book_id'];
-        $version_id = $read_instance_data['version_id'];
-
-        $book = Book::findOrFail($book_id);
-        $version = Version::findOrFail($version_id);
-
-        if (array_key_exists('rating', $read_instance_data) && $read_instance_data['rating'] !== null && $read_instance_data['rating'] !== '') {
-            if (! RatingValidator::isValid($read_instance_data['rating'])) {
-                return response()->json([
-                    'message' => "rating '{$read_instance_data['rating']}' must be between 0.5 and 5 in 0.5 steps",
-                    'reason_code' => 'rating_out_of_range',
-                ], 422);
-            }
-        }
-
-        if (! $book || ! $version) {
-            return response()->json(['message' => 'Book or version not found'], 404);
-        }
-
-        if ((int) $version->book_id !== (int) $book->book_id) {
-            return response()->json([
-                'message' => "version_id {$version->version_id} does not belong to book_id {$book->book_id}",
-                'reason_code' => 'version_book_mismatch',
-            ], 422);
-        }
-
-        $read_instance = new ReadInstance($read_instance_data);
-        $read_instance->user_id = auth()->id();
-
-        // Attach the read instance to the book and version
-        $book->readInstances()->save($read_instance);
-        $version->readInstances()->save($read_instance);
-
-        $book->save();
+        $read_instance = DB::transaction(function () use ($request) {
+            // One save, not two. Saving through both relations wrote the same
+            // row twice (Eloquent deduped the second into an update), which
+            // left a window where the first had landed and the second hadn't.
+            return ReadInstance::create($request->readInstance() + [
+                'user_id' => auth()->id(),
+            ]);
+        });
 
         return response()->json($read_instance);
     }
@@ -518,18 +488,15 @@ class BookController extends Controller
         $new_versions = [];
 
         foreach ($versions_data as $version_data) {
+            // The format is validated to exist before we get here; a missing
+            // one used to be skipped silently, producing a copy-less book.
+            $format = Format::findOrFail($version_data['format']);
+
             $new_version = new Version;
-            $format = Format::find($version_data['format']);
+            $new_version['format_id'] = $format->format_id;
+            $new_version['nickname'] = $version_data['nickname'] ?? null;
 
-            if (! $format) {
-                // Handle error here
-                continue;
-            }
-
-            $new_version['format_id'] = $version_data['format'];
-            $new_version['nickname'] = $version_data['nickname'];
-
-            foreach ($this->lengthFieldsFor($format, $version_data) as $field => $value) {
+            foreach ($format->lengthFieldsFrom($version_data) as $field => $value) {
                 $new_version[$field] = $value;
             }
 
@@ -538,25 +505,6 @@ class BookController extends Controller
         }
 
         return $new_versions;
-    }
-
-    /**
-     * Reduce a version payload to the length fields its format actually carries.
-     *
-     * A field the format doesn't expect is nulled rather than trusted, so
-     * re-formatting an audiobook as paper can't leave a stale runtime behind;
-     * a field it does expect is coalesced, so a payload that omits it stores
-     * null instead of throwing an undefined-key 500.
-     */
-    private function lengthFieldsFor(Format $format, array $version_data): array
-    {
-        $fields = [];
-
-        foreach ($format->expectedLengthFields() as $field => $expected) {
-            $fields[$field] = $expected ? ($version_data[$field] ?? null) : null;
-        }
-
-        return $fields;
     }
 
     private function handleGenres($genresData)

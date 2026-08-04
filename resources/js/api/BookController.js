@@ -35,11 +35,11 @@ const createBook = async (book) =>
     makeRequest("post", buildUrl("books"), { book });
 
 // UPDATE
-const updateBook = async (request) => {
-    return makeRequest("patch", buildUrl("books", request.book_id), {
-        request,
-    });
-};
+// The payload is flat: book, authors, genres, versions, readInstances at the
+// top level. It used to be wrapped as { request: { formData } }, an envelope
+// that only ever named a variable in the edit view.
+const updateBook = async (book_id, formData) =>
+    makeRequest("patch", buildUrl("books", book_id), formData);
 
 // DELETE
 const deleteBook = async (book_id) =>

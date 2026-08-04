@@ -13,15 +13,12 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Authorization & ownership
 
-- **No per-user ownership of created books.** `completeBookCreation` only requires `auth:sanctum`; the resulting `Book` has no `user_id` and is visible to every authenticated user. Tracked under the multi-tenant gap in `/feature-plans/books.md`.
 - **No rate limiting.** `POST /create-book/title` and `POST /create-book` are unthrottled. A loop on either is the cheapest way for an authenticated user to spam taxonomy rows or fill the book table.
 
 ### Validation & request shape
 
-- **No `FormRequest` classes.** Both controller methods reach into `$request['title']` and `$request['bookData']` directly; missing keys throw undefined-index 500s. `bookData['book']`, `bookData['authors']`, `bookData['genres']`, `bookData['versions']`, `bookData['read_instances']` are all required-by-implication and unvalidated.
-- **No length / character validation on title.** Whitespace-only or empty titles slug to empty strings (the `Str::limit(50)` is the only cap). Frontend `validateString` blocks empty submissions but the backend doesn't enforce it.
-- **Author last-name is the only required field client-side, fully optional server-side.** `validateString` runs on `last_name` only. The backend accepts an entirely empty author and computes `slug = ""` for it, which then becomes a real `Author` row via `firstOrCreate`.
-- **Genre input has no shape validation server-side.** `handleGenres` calls `Genre::firstOrCreate(['name' => $genre['name']])`. Empty / whitespace / duplicate names within one request all create separate rows.
+- **A whitespace-only title still slugs to an empty string.** `required|string|max:255` rejects an empty title but not `'   '`. Trim in `prepareForValidation` (and everywhere else a name is slugified — same gap on authors and genres).
+- **Genre names are not normalized.** `name` is now required and a string, but whitespace and casing variants within one request still create separate rows — `handleGenres` calls `Genre::firstOrCreate` on the raw value. Owned by `/feature-plans/genres.md`.
 
 ### Data integrity
 
@@ -33,7 +30,6 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Error handling
 
-- **Failures return HTTP 200 with `success: false`.** `completeBookCreation`'s catch block sets no status code. Any caller checking HTTP status will treat failures as successes.
 - **The submit UI swallows failures.** `NewBookSubmitControls::submitBook` only navigates on `success === true`. On failure: no toast, no console error, no retry — the user sees nothing happen. They have no way to recover their entered data short of cancelling and starting over.
 - **Network failures crash the title step silently.** `beginBookCreation` doesn't catch `createOrGetBookByTitle`. If the request 500s or times out, the promise rejects, the title step's `await` throws, and the user sees nothing change. No error path.
 
@@ -54,7 +50,6 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Extensibility
 
-- **No tests for the create flow end-to-end.** `NewBookStore.test.js` covers store transitions but there's no Feature test for `completeBookCreation` — the transactional create, the slug regeneration, the author/genre `firstOrCreate` paths, and the read-instance fallback are all uncovered.
 - **The store name lies.** `NewBookStore` is also "the current-book-being-mutated store" used by `AddReadHistoryView`, `AddVersionView`, and `UpdateBookReadInstance`. Anyone reading the name expects it to scope to the create flow only. Renaming requires touching those callers.
 - **Step transitions are stringly-typed.** `setStep([...])` takes component name strings that `NewBookView` resolves through its locally registered components. Typos compile fine, render nothing, and emit no warning. A small registry mapping step keys to components would catch this and document the state machine in one place.
 - **No pluggable step ordering.** The flow is hardcoded title → authors → genres → versions → (read?) → submit. Reordering or skipping a step (e.g., a "quick add" without genres) requires editing both the store and the component dispatch in `NewBookView`. A first-class step machine would let the order be data.
@@ -63,18 +58,15 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 In rough priority order.
 
-1. **Add Feature tests** for `createOrGetBookByTitle` (hit and miss), `completeBookCreation` (happy path, transaction rollback on each `handle*` failure, the version-less read-instance fallback), and `generateUniqueSlug`. Necessary before any of the structural cleanup below.
-2. **Introduce `FormRequest` classes** — `CreateBookTitleRequest` and `CompleteBookCreationRequest` — with explicit rules for title, author shape, genre shape, version shape (including conditional `audio_runtime` required-when-format-is-Audiobook), and read-instance shape. Replaces the current `$request['…']` array reaches.
-3. **Stop returning HTTP 200 on failure and stop leaking traces.** Set `response()->json([...], 422)` (or 500 for unexpected) and drop the `trace` field. Update `NewBookSubmitControls` to surface a toast / inline error when `success: false`.
-5. **Extract a single slug helper** for books and authors — companion to items in `/feature-plans/books.md` and `/feature-plans/authors.md`. Replace the inline `Str::of(...)->lower()->replaceMatches(...)` in `createOrGetBookByTitle`, `createBook`, and `handleAuthors` with calls into it.
-6. **Trim the `createOrGetBookByTitle` hit response.** The duplicate-title screen needs only `book_id`, `title`, `slug`. Drop the eager-load of authors/genres/versions/format/readInstances, or make it opt-in via a query param.
-7. **Persist in-progress new-book state to `localStorage`.** Hydrate `currentBookData` and `currentStep` on `NewBookView.created()` if a draft exists, prompt the user to resume or discard. Cheap UX win.
-8. **Add a "back" affordance to the state machine.** Maintain a step-history stack in `NewBookStore` and add a `goBack()` action; render a Back button in `NewBookProgressForm` (or in each step component).
-9. **Replace stringly-typed step transitions with a registry.** A `steps.js` map of `{ key: Component }` consumed by both `setStep` and `NewBookView`'s component resolution. Typos become import errors, the state machine becomes greppable.
-10. **Rename `NewBookStore` to `BookEditorStore` (or split it).** It's used for create *and* for adding versions / read instances to existing books. Either rename to reflect that, or split into a pure-create store + a current-book store consumed by `AddVersionView` / `AddReadHistoryView` / `UpdateBookReadInstance`. The split is cleaner but touches more callers.
-11. **Fix the read-instance version-routing in `handleReadInstances`.** Drop the `versions[0]` fallback; require `version_id` on every read instance and validate it. Update the SPA to thread the chosen version through `addReadInstanceToNewBookVersion`. Removes the `// FOR NOW!!!`.
-12. **Reword the duplicate-title confirmation.** Either make "Create New Book" much more explicit ("Two distinct books can share a title — create a separate record?") or drop the option entirely and force the user into "add version to existing" / "cancel".
-13. **Delete or wire the dead `existingBook`/`bookId` props on `NewVersionsInput`.** If `AddVersionView` should use this component, route it. If not, remove the prop branch and the `BooksStore.addVersionToBook` call inside the submit handler.
-14. **Delete `/add-books` (`AddBooksView`).** Nothing links to it; it's a parallel single-form code path that does the same job worse. Keeping it forces every reader to reverse-engineer which path is canonical. If the form is worth keeping for some reason, repurpose `BookCreateEditForm` for edit-only and rename it.
-15. **Surface book-create errors with a toast / banner.** Wire a top-level notification slot so failed submits don't silently no-op.
-16. **Add an "import from external source" branch.** Today every field is hand-typed. Even a thin "look up by ISBN" call (Open Library, Google Books) would dramatically speed up entry — most of the multi-step pain is data entry, not state machine complexity. Coordinate with `/feature-plans/enrichment-microservices.md`.
+1. **Extract a single slug helper** for books and authors — companion to items in `/feature-plans/books.md` and `/feature-plans/authors.md`. Replace the inline `Str::of(...)->lower()->replaceMatches(...)` in `createOrGetBookByTitle`, `createBook`, and `handleAuthors` with calls into it.
+2. **Trim the `createOrGetBookByTitle` hit response.** The duplicate-title screen needs only `book_id`, `title`, `slug`. Drop the eager-load of authors/genres/versions/format/readInstances, or make it opt-in via a query param.
+3. **Persist in-progress new-book state to `localStorage`.** Hydrate `currentBookData` and `currentStep` on `NewBookView.created()` if a draft exists, prompt the user to resume or discard. Cheap UX win.
+4. **Add a "back" affordance to the state machine.** Maintain a step-history stack in `NewBookStore` and add a `goBack()` action; render a Back button in `NewBookProgressForm` (or in each step component).
+5. **Replace stringly-typed step transitions with a registry.** A `steps.js` map of `{ key: Component }` consumed by both `setStep` and `NewBookView`'s component resolution. Typos become import errors, the state machine becomes greppable.
+6. **Rename `NewBookStore` to `BookEditorStore` (or split it).** It's used for create *and* for adding versions / read instances to existing books. Either rename to reflect that, or split into a pure-create store + a current-book store consumed by `AddVersionView` / `AddReadHistoryView` / `UpdateBookReadInstance`. The split is cleaner but touches more callers.
+7. **Fix the read-instance version-routing in `handleReadInstances`.** Drop the `versions[0]` fallback; require `version_id` on every read instance and validate it. Update the SPA to thread the chosen version through `addReadInstanceToNewBookVersion`. Removes the `// FOR NOW!!!`.
+8. **Reword the duplicate-title confirmation.** Either make "Create New Book" much more explicit ("Two distinct books can share a title — create a separate record?") or drop the option entirely and force the user into "add version to existing" / "cancel".
+9. **Delete or wire the dead `existingBook`/`bookId` props on `NewVersionsInput`.** If `AddVersionView` should use this component, route it. If not, remove the prop branch and the `BooksStore.addVersionToBook` call inside the submit handler.
+10. **Delete `/add-books` (`AddBooksView`).** Nothing links to it; it's a parallel single-form code path that does the same job worse. Keeping it forces every reader to reverse-engineer which path is canonical. If the form is worth keeping for some reason, repurpose `BookCreateEditForm` for edit-only and rename it.
+11. **Surface book-create errors with a toast / banner.** Wire a top-level notification slot so failed submits don't silently no-op.
+12. **Add an "import from external source" branch.** Today every field is hand-typed. Even a thin "look up by ISBN" call (Open Library, Google Books) would dramatically speed up entry — most of the multi-step pain is data entry, not state machine complexity. Coordinate with `/feature-plans/enrichment-microservices.md`.

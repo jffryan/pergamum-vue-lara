@@ -134,7 +134,16 @@ A dedicated `pergamum_testing` database (or `DB_DATABASE` override in `phpunit.x
 
 Refer to `FormatFactory` for the canonical-set pattern (random pick from a known list with a slug suffix). Refer to `BookFactory` for the with-relations pattern.
 
-When a factory leaks rows that callers can't override (a known case is documented in Future improvements below), the workaround is to assert against `Model::count()` rather than literal counts, and to log the leak in the plan file. Do not change the factory's `definition()` to fix it as part of an unrelated test PR — that's a code change, governed by the cardinal rules above.
+When a factory leaks rows that callers can't override, the workaround is to assert against `Model::count()` rather than literal counts, and to log the leak in the plan file. Do not change the factory's `definition()` to fix it as part of an unrelated test PR — that's a code change, governed by the cardinal rules above.
+
+### `ReadInstanceFactory` has two constraints that are easy to break
+
+`book_id` and `version_id` are lazy closures that derive one from the other, so overriding either no longer persists a stray `Version` → `Book`. If you edit that factory, preserve both of these or the leak comes back silently:
+
+- **`version_id` must stay declared *before* `book_id`.** `expandAttributes()` resolves closures in array order, and the `version_id` callback distinguishes "caller supplied a book" from "caller supplied nothing" by testing whether `$attributes['book_id']` is still an unexpanded `Closure`.
+- **The two values must always agree.** `ReadInstance::booted()` throws a `\DomainException` on a book/version mismatch, so they cannot be defaulted independently.
+
+`StatisticsTest::test_percentage_of_books_read_uses_global_book_count` asserts a literal count and is what guards this.
 
 ## Unit tests
 

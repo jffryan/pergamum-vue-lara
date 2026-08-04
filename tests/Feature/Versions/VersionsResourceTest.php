@@ -15,7 +15,10 @@ class VersionsResourceTest extends TestCase
     {
         $this->actingAsUser();
         $book = Book::factory()->create();
-        $format = Format::factory()->create();
+        // Pinned to a format that carries a page count: the endpoint now
+        // drops length fields the format doesn't expect, and the unstated
+        // factory picks a name at random — including 'Audiobook'.
+        $format = Format::factory()->print()->create();
 
         $payload = [
             'version' => [

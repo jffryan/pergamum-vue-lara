@@ -25,15 +25,7 @@ Multi-read history, multi-version books, multi-author rows, and audio runtimes a
 
 ## Footguns the fresh DB will expose
 
-### 1 & 2. ~~Hardcoded `format_id === 2` and format-name string matching~~ — resolved
-
-Both are gone. `formats` now carries `expects_page_count` / `expects_audio_runtime`, and every consumer — `BookController` (create *and* edit), `BulkImportService`, and all four book forms via `resources/js/utils/formats.js` — reads those instead of an id or a name. A fresh database may assign whatever `format_id` values it likes, and a format may be renamed, without changing any behavior in the import or the forms. See `/documentation/formats.md`.
-
-The seeder that these sections asked for exists: `database/seeders/FormatSeeder.php`, wired into `DatabaseSeeder`, so `php artisan migrate:fresh --seed` produces a database the importer can immediately write to. It seeds Physical / Audiobook / Pirated / Ebook / Graphic Novel with their capability flags and their slugs, in the order matching the current ids.
-
-**One correction to what this plan assumed:** there is no format named `'Paper'`. It is `'Physical'`. `BookController::prepareVersions`' `'Paper'` branch had therefore never matched anything, and a seeder built to this plan's spec would have created a sixth, spurious format. The other footguns below still stand.
-
-### 3. `formats.slug` must be populated, not just `name`
+### 1. `formats.slug` must be populated, not just `name`
 
 Frontend routes link to `/formats/:slug` using `bookFormat.slug` from `BookTableRow`. The seeder must set `slug` explicitly (e.g. `Str::slug($name)`) — `formats.slug` is nullable in the migration and there is no auto-derive on `Format::create`. Without slugs, the browse route silently shows nothing.
 
@@ -92,13 +84,9 @@ The SPA caches formats. Anyone with the app open during the reset will see an em
    - Re-reads are represented as separate rows with the same `(title, format, version_nickname)` and different `date_read`.
 3. **Dry-run the import** before committing: `POST /api/bulk-upload` with `dry_run=1` to surface per-row failures without touching the DB. Iterate on the CSV until the dry-run summary is clean.
 
-### Step 2 — ~~Build the format seeder~~ (done)
+### Step 2 — Review the seeder's format list
 
-`database/seeders/FormatSeeder.php` exists and is called from `DatabaseSeeder::run()`, so `migrate:fresh --seed` is enough. It seeds Physical / Audiobook / Pirated / Ebook / Graphic Novel with their slugs and capability flags.
-
-It does **not** pin `format_id` explicitly, and doesn't need to — nothing keys off the id any more (§1). It `updateOrCreate`s on name rather than raw-inserting, so re-running it against a populated database repairs flags instead of colliding.
-
-Review the list before the reset: it is the set that exists today, which is not the set this plan originally assumed. If any of those formats are ones you don't want carried into the fresh database, drop them from the seeder first — and make sure the CSV doesn't reference them, because an unmatched format fails the row.
+`database/seeders/FormatSeeder.php` is wired into `DatabaseSeeder`, so `migrate:fresh --seed` is enough. Before the reset, check the set it seeds (Physical / Audiobook / Pirated / Ebook / Graphic Novel) is the set you want carried forward — drop any you don't, and make sure the CSV doesn't reference them, because an unmatched format fails the row.
 
 ### Step 3 — Reset and reseed
 
@@ -106,7 +94,7 @@ Review the list before the reset: it is the set that exists today, which is not 
 docker compose exec php php artisan migrate:fresh --seed
 ```
 
-Confirm: `formats` has three rows with stable IDs; everything else is empty.
+Confirm: `formats` holds the seeded set; everything else is empty.
 
 ### Step 4 — Register a user, then import
 
@@ -133,7 +121,6 @@ Lists are gone. Recreate the canonical ones via the SPA. Document the list of li
 ## Future improvements
 
 - Build a real export endpoint that produces a CSV the importer can roundtrip without loss (lists in particular are still gone). Removes the data-loss surface from any future reset.
-- ~~Capability flags on `formats`~~ — shipped, and with them the seeder. The reset itself is now the only outstanding work in this plan.
 
 ## Known limitations
 
