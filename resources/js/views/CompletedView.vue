@@ -61,7 +61,8 @@ export default {
         const res = await getCompletedYears();
         this.loggedYears = res.data;
         if (this.loggedYears.length > 0) {
-            this.activeYear = this.loggedYears[0];
+            const [mostRecentYear] = this.loggedYears;
+            this.activeYear = mostRecentYear;
         }
     },
 };

@@ -53,7 +53,7 @@ Genre CRUD + merge behind `/admin/genres` has shipped — its own follow-up work
 - **Sort options on `GenresView` are name and popularity only.** No "recently added", no "most read" (which would need user-scoped reads anyway), no first-letter jump nav.
 - **`GenreTagInput` autocomplete requires ≥3 characters and caps at 3 results.** Both numbers are hardcoded. A user typing "ya" (Young Adult) gets nothing. The cap of 3 means longer prefixes silently hide matches.
 - **`GenreTagInput` doesn't normalize on commit beyond lowercasing.** Trailing punctuation, double spaces, and Unicode look-alikes pass straight through to `firstOrCreate`. Pair with the missing name validation above.
-- **`BookTableRow` shows only the first three genres.** Books with more genres surface only the first three; there's no "+N more" affordance and no link to the full list.
+- **`BookTableRow` shows only the first two genres.** There's no "+N more" affordance and no link to the full list. Note that `primaryGenres` slices `(0, 2)` while its own comment says "first 3 genres" — whichever is intended, one of them is wrong.
 - **`GenreView` error message is copy-pasted from book views.** "Unable to load books at this time" — should reference the genre. Same drift as `AuthorView`.
 - **Renaming is admin-only and out of the way.** `/admin/genres` is the only place to fix a typo; there's no affordance from `GenreView` or from a book's edit form, so noticing a bad genre and fixing it are two separate journeys.
 - **No genre detail header beyond the name.** `GenreView` shows `{{ genre.name }}` and a paginated bookshelf. No description, no count, no top authors, no average rating across the genre — same bookshelf-only critique as `AuthorView`.

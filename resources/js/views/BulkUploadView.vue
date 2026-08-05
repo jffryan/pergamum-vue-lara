@@ -75,19 +75,36 @@
         <div v-if="summary" class="mt-6">
             <p class="font-medium mb-2">
                 {{ summary.succeeded }} succeeded,
-                {{ summary.skipped }} skipped,
-                {{ summary.failed }} failed
-                ({{ summary.total }} total rows)
+                {{ summary.skipped }} skipped, {{ summary.failed }} failed ({{
+                    summary.total
+                }}
+                total rows)
             </p>
 
             <div class="overflow-auto max-h-96">
                 <table class="w-full text-sm border-collapse">
                     <thead>
                         <tr class="bg-zinc-400">
-                            <th class="border border-zinc-500 px-2 py-1 text-left">Row</th>
-                            <th class="border border-zinc-500 px-2 py-1 text-left">Title</th>
-                            <th class="border border-zinc-500 px-2 py-1 text-left">Status</th>
-                            <th class="border border-zinc-500 px-2 py-1 text-left">Reason</th>
+                            <th
+                                class="border border-zinc-500 px-2 py-1 text-left"
+                            >
+                                Row
+                            </th>
+                            <th
+                                class="border border-zinc-500 px-2 py-1 text-left"
+                            >
+                                Title
+                            </th>
+                            <th
+                                class="border border-zinc-500 px-2 py-1 text-left"
+                            >
+                                Status
+                            </th>
+                            <th
+                                class="border border-zinc-500 px-2 py-1 text-left"
+                            >
+                                Reason
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -96,10 +113,20 @@
                             :key="result.row"
                             :class="rowClass(result.status)"
                         >
-                            <td class="border border-zinc-400 px-2 py-1">{{ result.row }}</td>
-                            <td class="border border-zinc-400 px-2 py-1">{{ result.title }}</td>
-                            <td class="border border-zinc-400 px-2 py-1 capitalize">{{ result.status }}</td>
-                            <td class="border border-zinc-400 px-2 py-1">{{ result.reason || "" }}</td>
+                            <td class="border border-zinc-400 px-2 py-1">
+                                {{ result.row }}
+                            </td>
+                            <td class="border border-zinc-400 px-2 py-1">
+                                {{ result.title }}
+                            </td>
+                            <td
+                                class="border border-zinc-400 px-2 py-1 capitalize"
+                            >
+                                {{ result.status }}
+                            </td>
+                            <td class="border border-zinc-400 px-2 py-1">
+                                {{ result.reason || "" }}
+                            </td>
                         </tr>
                     </tbody>
                 </table>

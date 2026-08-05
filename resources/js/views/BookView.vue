@@ -105,7 +105,7 @@
                         >
                             <p>
                                 <span class="text-zinc-600">Date read: </span
-                                >{{ readInstance.date_read ?? 'Date unknown' }}
+                                >{{ readInstance.date_read ?? "Date unknown" }}
                             </p>
                             <p>
                                 <span class="text-zinc-600">Version: </span
@@ -271,7 +271,8 @@ export default {
             return formattedReadInstances;
         },
         authorRelatedBooks() {
-            if (!this.currentBook || !this.currentBook.authorRelatedBooks) return [];
+            if (!this.currentBook || !this.currentBook.authorRelatedBooks)
+                return [];
             return this.currentBook.authorRelatedBooks;
         },
         listsContainingBook() {

@@ -1,9 +1,5 @@
 <template>
-    <div
-        class="relative"
-        @focusin="focused = true"
-        @focusout="focused = false"
-    >
+    <div class="relative" @focusin="focused = true" @focusout="focused = false">
         <div
             class="bg-white flex flex-wrap gap-1.5 border-b border-zinc-400 p-2 cursor-text min-h-[2.5rem]"
             @click="focusInput"
@@ -18,7 +14,9 @@
                     type="button"
                     @click.stop="removeGenre(idx)"
                     class="text-zinc-500 hover:text-zinc-800 leading-none"
-                >×</button>
+                >
+                    ×
+                </button>
             </span>
             <input
                 ref="input"
@@ -141,12 +139,12 @@ export default {
         moveDown() {
             if (!this.suggestions.length) return;
             if (this.activeIndex < this.suggestions.length - 1) {
-                this.activeIndex++;
+                this.activeIndex += 1;
             }
         },
         moveUp() {
             if (this.activeIndex > 0) {
-                this.activeIndex--;
+                this.activeIndex -= 1;
             } else {
                 this.activeIndex = -1;
             }

@@ -4,7 +4,10 @@
         <div class="sm:hidden p-3">
             <div class="font-medium">
                 <router-link
-                    :to="{ name: 'books.show', params: { slug: bookData.slug } }"
+                    :to="{
+                        name: 'books.show',
+                        params: { slug: bookData.slug },
+                    }"
                 >
                     {{ bookData.title }}
                 </router-link>
@@ -20,14 +23,9 @@
             </div>
             <div class="text-sm flex justify-between mt-0.5">
                 <span class="capitalize text-slate-500">
-                    <span
-                        v-for="(genre, idx) in primaryGenres"
-                        :key="genre.id"
-                    >
+                    <span v-for="(genre, idx) in primaryGenres" :key="genre.id">
                         {{ genre.name
-                        }}<span v-if="idx < primaryGenres.length - 1"
-                            >,
-                        </span>
+                        }}<span v-if="idx < primaryGenres.length - 1">, </span>
                     </span>
                 </span>
                 <span class="text-slate-500 shrink-0 ml-2">
@@ -43,7 +41,10 @@
         <div class="hidden sm:grid grid-cols-12">
             <div class="col-span-3 p-2">
                 <router-link
-                    :to="{ name: 'books.show', params: { slug: bookData.slug } }"
+                    :to="{
+                        name: 'books.show',
+                        params: { slug: bookData.slug },
+                    }"
                     class="block h-full w-full"
                 >
                     {{ bookData.title }}

@@ -57,6 +57,7 @@ The `lists` column is also what makes lists survive a database reset; the ordina
 - **`ListView.vue::searchForBook` paginates books at 20 per page** (the books index default) but only ever shows the first page. Searching a common word truncates results silently.
 - **No optimistic updates** on add/remove. UI waits for the round trip; the "✓ Added" badge can lag visibly.
 - **Rename and delete have no loading state.** Double-clicks on Save can fire two PATCHes; double-clicks on the delete confirm can fire two DELETEs (the second 404s, harmless but noisy in the console).
+- **List delete confirms with a native `window.confirm`.** `ListView::confirmDelete` blocks the main thread on a browser dialog that can't state the impact ("this list holds 40 items"), can't be styled, and is suppressed by "prevent this page from creating additional dialogs". The lint rules that flag it (`no-alert`, `no-restricted-globals`) are disabled inline at that one call site with a pointer here.
 
 ## Future improvements
 
@@ -64,13 +65,14 @@ In rough priority order — earlier items unblock later ones.
 
 1. **Decide what to do with the slug column.** Either route by `/lists/{user}/{slug}` (and surface a slug-conflict UX) or drop the column and its unique index. Right now it's a 500-waiting-to-happen with no upside.
 2. **Soft-delete lists** (`SoftDeletes` trait + `deleted_at`). The hard cascade-on-delete is the most user-hostile behavior in the lists flow.
-3. **Optimistic updates in `ListsStore`** for add/remove/reorder. Move item-level state out of view-local `this.list.items` into the store at the same time, so two views can share it.
-4. **Drag-and-drop reorder UI** in `ListItemsTable.vue`. The endpoint exists; this is purely frontend work (Vue Draggable or similar).
-5. **Paginate the `show` endpoint's items** (and stream them into the store). Stats need the full set, but the list-detail view can render the first page eagerly and the rest lazily.
-6. **Collapse `reorder` into a single SQL `CASE WHEN` update.** Or accept the per-item cost and document it.
-7. **Catch the `(list_id, version_id)` unique violation in `addItemToList`** and return 409 instead of 500. Frontend can then disable the button rather than guessing from the visible items list.
-8. **Add a "list type" enum and a `ListTypeHandler` registry** keyed by type slug, each defining what fields apply, what stats to compute, and what default ordering to use. This is the seam CLAUDE.md asks for. Don't build it until the second type is on the roadmap, but plan for it.
-9. **Batch add endpoint** — `POST /lists/{id}/items/bulk` with `{ version_ids: [...] }`. Wraps the duplicate check and the ordinal assignment in one transaction.
-10. **"Duplicate list" and "merge lists" endpoints**, once the type system above is in place.
-11. **Normalize the item response shape** between `POST /lists/{id}/items` and the item objects inside `GET /lists/{id}`. One eager-load definition, used by both.
-12. **Loading/disabled state on rename and delete** in `ListView.vue` to prevent double-submits.
+3. **Replace the native `confirm()` on list delete with `components/globals/ConfirmAction.vue`.** The component already exists — genre delete and genre merge are its consumers — and takes a concrete `impact` string, so this confirm could finally say how many items are about to go. Removes the two inline eslint suppressions in `ListView.vue`.
+4. **Optimistic updates in `ListsStore`** for add/remove/reorder. Move item-level state out of view-local `this.list.items` into the store at the same time, so two views can share it.
+5. **Drag-and-drop reorder UI** in `ListItemsTable.vue`. The endpoint exists; this is purely frontend work (Vue Draggable or similar).
+6. **Paginate the `show` endpoint's items** (and stream them into the store). Stats need the full set, but the list-detail view can render the first page eagerly and the rest lazily.
+7. **Collapse `reorder` into a single SQL `CASE WHEN` update.** Or accept the per-item cost and document it.
+8. **Catch the `(list_id, version_id)` unique violation in `addItemToList`** and return 409 instead of 500. Frontend can then disable the button rather than guessing from the visible items list.
+9. **Add a "list type" enum and a `ListTypeHandler` registry** keyed by type slug, each defining what fields apply, what stats to compute, and what default ordering to use. This is the seam CLAUDE.md asks for. Don't build it until the second type is on the roadmap, but plan for it.
+10. **Batch add endpoint** — `POST /lists/{id}/items/bulk` with `{ version_ids: [...] }`. Wraps the duplicate check and the ordinal assignment in one transaction.
+11. **"Duplicate list" and "merge lists" endpoints**, once the type system above is in place.
+12. **Normalize the item response shape** between `POST /lists/{id}/items` and the item objects inside `GET /lists/{id}`. One eager-load definition, used by both.
+13. **Loading/disabled state on rename and delete** in `ListView.vue` to prevent double-submits.

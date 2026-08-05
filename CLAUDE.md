@@ -36,7 +36,7 @@ If running PHP locally instead: `php artisan serve`, `npm run dev`, `npm run bui
 - **PHP format:** `vendor/bin/pint` (PSR-12, 4-space indent).
 - **JS lint:** `npx eslint --ext .js,.vue resources/js` (`--fix` to auto-fix). ESLint extends `airbnb-base` + `vue3-essential` + `prettier`; double quotes enforced; `camelcase` and `no-console` are off.
 - **JS tooling runs *inside* the `vite` container** — `node_modules` is a named volume, not on the host. Prefix with `docker compose exec vite sh -lc '…'`. Run bare on the host and `npx` silently fetches a newer eslint that then fails on `.eslintrc.js`, which looks like a config problem but isn't.
-- **Without `--ext .js,.vue`, eslint checks only `.js`.** `.vue` files then appear clean because they were never read. They currently carry ~600 unfixed prettier violations, so lint `.vue` files you touch individually rather than the whole tree.
+- **Without `--ext .js,.vue`, eslint checks only `.js`.** `.vue` files then appear clean because they were never read — always pass the flag. The tree is currently clean under it; keep it that way.
 - **Line endings:** CRLF for JS/Vue (prettier enforces it), LF for PHP. `.editorconfig` says CRLF; write files however and let `--fix` / `pint` settle it.
 
 ## Aliases & Vite

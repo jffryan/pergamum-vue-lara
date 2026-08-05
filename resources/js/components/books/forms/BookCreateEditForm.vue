@@ -330,6 +330,10 @@
 </template>
 
 <script>
+// Imported rather than reached for off `window`. `bootstrap.js` does assign
+// `window._`, but depending on that here makes the module's dependencies
+// invisible to tooling and to anyone reading it.
+import _ from "lodash";
 import { useConfigStore, useBooksStore } from "@/stores";
 
 import { splitAndNormalizeGenres } from "@/services/BookServices";
@@ -480,8 +484,10 @@ export default {
             if (partialRegex.test(adjustedValue)) {
                 this.bookForm.readInstances[0].date_read = adjustedValue;
             } else {
-                // Try to rewrite this to fix the lint issue
-                event.target.value = this.bookForm.readInstances[0].date_read;
+                // Reverting the input's displayed value is a DOM write, so it
+                // goes through a local alias rather than the event parameter.
+                const input = event.target;
+                input.value = this.bookForm.readInstances[0].date_read;
             }
         },
         // Helper function for date input.

@@ -247,6 +247,11 @@ export default {
             }
         },
         async confirmDelete() {
+            // Suppressed rather than fixed: the real fix is to route this
+            // through `components/globals/ConfirmAction.vue` like the genre
+            // admin deletes do, which is a UI change rather than a lint one.
+            // Tracked in `/feature-plans/lists.md`.
+            // eslint-disable-next-line no-alert, no-restricted-globals
             if (!confirm(`Delete "${this.list.name}"? This cannot be undone.`))
                 return;
             try {

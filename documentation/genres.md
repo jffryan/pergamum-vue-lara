@@ -38,7 +38,7 @@ The admin surface exists because loose data entry produces near-duplicates — `
 - **Service**: none. Genre mutations live on the store rather than in a `services/GenreServices.js`: per the data-flow convention a service layer is for orchestration across multiple stores/controllers, and this is one domain and one API surface. The string-to-array helper `splitAndNormalizeGenres` lives in `services/BookServices.js` and is used only by the book create/edit form, not by genre views.
 - **Routes** (`router/index.js`, no per-feature route file): `/genres` (`genres.index`) and `/genres/:id` (`genres.show`). Routing is by numeric ID — there is no slug column. The admin surface is `/admin/genres` (`admin.genres`), declared in `router/admin-routes.js`; see `admin.md`.
 - **Views**: `views/GenresView.vue` (index — search box, sort by name or popularity, client-side pagination at 25/page) and `views/GenreView.vue` (detail — server-paginated bookshelf via `BookshelfTable`).
-- **Components**: `components/newBook/NewGenresInput.vue` (step in the new-book wizard) wraps `components/newBook/GenreTagInput.vue` (chip-style autocomplete that warm-loads `GenreStore.allGenres` once on mount). `BookTableRow` renders the first three genres of each book with links to `genres.show`.
+- **Components**: `components/newBook/NewGenresInput.vue` (step in the new-book wizard) wraps `components/newBook/GenreTagInput.vue` (chip-style autocomplete that warm-loads `GenreStore.allGenres` once on mount). `BookTableRow` renders the first **two** genres of each book with links to `genres.show` — its `primaryGenres` computed slices `(0, 2)`, though its own comment says three.
 - **Admin components** (`components/admin/genres/`): `GenresIndex.vue` (the action root — search box, table, create form), `GenresTable.vue` / `GenreRow.vue` (name with click-to-rename inline, `books_count`, merge-selection checkbox, delete), `CreateGenre.vue`, and `MergeGenresBar.vue` (appears once ≥2 rows are checked). Destructive steps route through `components/globals/ConfirmAction.vue`.
 
 ## Non-obvious decisions and gotchas
@@ -100,7 +100,7 @@ Ordered alphabetically with numeric-prefixed names sorted last. The SPA caches t
 }
 ```
 
-Books are sorted by primary author's last name (`MIN(authors.last_name)` per book). Default page size is 20; pass `?limit=` to override. The SPA links into this view via `{ name: 'genres.show', params: { id: genre_id } }` (note: ID, not slug); `BookTableRow` already does this for each book's first three genres.
+Books are sorted by primary author's last name (`MIN(authors.last_name)` per book). Default page size is 20; pass `?limit=` to override. The SPA links into this view via `{ name: 'genres.show', params: { id: genre_id } }` (note: ID, not slug); `BookTableRow` already does this for each book's first two genres.
 
 ### Creating, updating, and deleting genres
 

@@ -4,35 +4,48 @@
             <!-- Library -->
             <div class="mb-2">
                 <li>
-                    <router-link :to="{ name: 'library.index' }">Library</router-link>
+                    <router-link :to="{ name: 'library.index' }"
+                        >Library</router-link
+                    >
                 </li>
                 <li>
-                    <router-link :to="{ name: 'genres.index' }">Genres</router-link>
+                    <router-link :to="{ name: 'genres.index' }"
+                        >Genres</router-link
+                    >
                 </li>
             </div>
             <!-- Actions -->
             <div class="mb-2">
                 <li>
-                    <router-link :to="{ name: 'books.new' }">New book</router-link>
+                    <router-link :to="{ name: 'books.new' }"
+                        >New book</router-link
+                    >
                 </li>
                 <li>
-                    <router-link :to="{ name: 'books.bulk-upload' }">Bulk upload</router-link>
+                    <router-link :to="{ name: 'books.bulk-upload' }"
+                        >Bulk upload</router-link
+                    >
                 </li>
             </div>
             <div class="mb-2">
                 <li>
-                    <router-link :to="{ name: 'completed.home' }">Completed</router-link>
+                    <router-link :to="{ name: 'completed.home' }"
+                        >Completed</router-link
+                    >
                 </li>
                 <li>
-                    <router-link :to="{ name: 'statistics' }">Statistics</router-link>
+                    <router-link :to="{ name: 'statistics' }"
+                        >Statistics</router-link
+                    >
                 </li>
             </div>
             <div class="mb-2">
                 <li>
-                    <router-link :to="{ name: 'lists.index' }">Lists</router-link>
+                    <router-link :to="{ name: 'lists.index' }"
+                        >Lists</router-link
+                    >
                 </li>
             </div>
-
         </ul>
     </nav>
 </template>

@@ -8,7 +8,10 @@
             <AlertBox :message="error" alert-type="danger" />
         </div>
         <div v-else>
-            <form @submit.prevent="createNewList" class="flex flex-col sm:flex-row gap-2 mb-6">
+            <form
+                @submit.prevent="createNewList"
+                class="flex flex-col sm:flex-row gap-2 mb-6"
+            >
                 <input
                     v-model="newListName"
                     type="text"
@@ -27,13 +30,16 @@
             <div v-if="allLists.length === 0" class="text-gray-500">
                 No lists yet. Create one above.
             </div>
-            <ul v-else class="divide-y divide-gray-200 border border-gray-200 rounded">
-                <li
-                    v-for="list in allLists"
-                    :key="list.list_id"
-                >
+            <ul
+                v-else
+                class="divide-y divide-gray-200 border border-gray-200 rounded"
+            >
+                <li v-for="list in allLists" :key="list.list_id">
                     <router-link
-                        :to="{ name: 'lists.show', params: { id: list.list_id } }"
+                        :to="{
+                            name: 'lists.show',
+                            params: { id: list.list_id },
+                        }"
                         class="block px-4 py-3 hover:bg-slate-50 hover:underline"
                     >
                         {{ list.name }}
@@ -74,7 +80,7 @@ export default {
     computed: {
         allLists() {
             return [...this.ListsStore.allLists].sort((a, b) =>
-                a.name.localeCompare(b.name)
+                a.name.localeCompare(b.name),
             );
         },
     },
@@ -102,7 +108,8 @@ export default {
         } catch (error) {
             console.error("Error fetching lists:", error);
             this.showErrorMessage = true;
-            this.error = "Unable to load lists at this time. Please try again later.";
+            this.error =
+                "Unable to load lists at this time. Please try again later.";
         } finally {
             this.isLoading = false;
         }

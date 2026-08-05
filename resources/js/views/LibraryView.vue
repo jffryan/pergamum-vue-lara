@@ -23,17 +23,31 @@
         <div v-else>
             <div class="mb-4">
                 <div class="mb-4 flex items-baseline">
-                    <input type="text" placeholder="Search books..."
-                        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 mb-2 mr-4" v-model="searchTerm" />
-                    <button class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 btn btn-primary"
-                        @click="searchForBookByTitle">
+                    <input
+                        type="text"
+                        placeholder="Search books..."
+                        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 mb-2 mr-4"
+                        v-model="searchTerm"
+                    />
+                    <button
+                        class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 btn btn-primary"
+                        @click="searchForBookByTitle"
+                    >
                         Search
                     </button>
                 </div>
             </div>
             <BookshelfTable :books="allBooks" class="mb-4" />
-            <div v-for="page in pagination" :key="page.label" class="inline mr-2">
-                <router-link v-if="page.url" :to="page.url" :class="page.active ? 'font-bold underline' : ''">
+            <div
+                v-for="page in pagination"
+                :key="page.label"
+                class="inline mr-2"
+            >
+                <router-link
+                    v-if="page.url"
+                    :to="page.url"
+                    :class="page.active ? 'font-bold underline' : ''"
+                >
                     {{ page.label }}
                 </router-link>
             </div>

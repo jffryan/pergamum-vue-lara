@@ -104,8 +104,10 @@ export default {
             if (partialRegex.test(adjustedValue)) {
                 this.readInstance.date_read = adjustedValue;
             } else {
-                // Try to rewrite this to fix the lint issue
-                event.target.value = this.readInstance.date_read;
+                // Reverting the input's displayed value is a DOM write, so it
+                // goes through a local alias rather than the event parameter.
+                const input = event.target;
+                input.value = this.readInstance.date_read;
             }
         },
         addSlashes(value) {

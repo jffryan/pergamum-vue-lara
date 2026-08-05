@@ -25,7 +25,11 @@
                         class="mb-2"
                     >
                         <div class="flex gap-x-4 items-center">
-                            <input type="text" v-model="author.first_name" placeholder="First" />
+                            <input
+                                type="text"
+                                v-model="author.first_name"
+                                placeholder="First"
+                            />
                             <input
                                 type="text"
                                 v-model="author.last_name"
@@ -39,7 +43,10 @@
                                 >Remove</span
                             >
                         </div>
-                        <p v-if="!isValidAuthors[idx]" class="text-sm text-red-500">
+                        <p
+                            v-if="!isValidAuthors[idx]"
+                            class="text-sm text-red-500"
+                        >
                             Last name is required.
                         </p>
                     </div>
@@ -70,35 +77,66 @@
                         class="p-4 mb-4 bg-zinc-100 border rounded-md border-zinc-400 shadow-md"
                     >
                         <div class="mb-4">
-                            <label class="block mb-2 font-bold text-zinc-600">Format</label>
-                            <select v-model="version.format_id" class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none">
-                                <option value="" disabled>Select a format</option>
+                            <label class="block mb-2 font-bold text-zinc-600"
+                                >Format</label
+                            >
+                            <select
+                                v-model="version.format_id"
+                                class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none"
+                            >
+                                <option value="" disabled>
+                                    Select a format
+                                </option>
                                 <option
                                     v-for="format in formats"
                                     :key="format.format_id"
                                     :value="format.format_id"
-                                >{{ format.name }}</option>
+                                >
+                                    {{ format.name }}
+                                </option>
                             </select>
                         </div>
                         <div v-if="expectsPageCount(version)" class="mb-4">
-                            <label class="block mb-2 font-bold text-zinc-600">Page Count</label>
+                            <label class="block mb-2 font-bold text-zinc-600"
+                                >Page Count</label
+                            >
                             <input
                                 type="text"
                                 v-model="version.page_count"
-                                @input="version.page_count = $event.target.value.replace(/[^0-9]/g, '')"
+                                @input="
+                                    version.page_count =
+                                        $event.target.value.replace(
+                                            /[^0-9]/g,
+                                            '',
+                                        )
+                                "
                             />
                         </div>
                         <div v-if="expectsAudioRuntime(version)" class="mb-4">
-                            <label class="block mb-2 font-bold text-zinc-600">Audio Runtime (minutes)</label>
+                            <label class="block mb-2 font-bold text-zinc-600"
+                                >Audio Runtime (minutes)</label
+                            >
                             <input
                                 type="text"
                                 v-model="version.audio_runtime"
-                                @input="version.audio_runtime = $event.target.value.replace(/[^0-9]/g, '')"
+                                @input="
+                                    version.audio_runtime =
+                                        $event.target.value.replace(
+                                            /[^0-9]/g,
+                                            '',
+                                        )
+                                "
                             />
                         </div>
                         <div class="mb-4">
-                            <label class="block mb-2 font-bold text-zinc-600">Nickname</label>
-                            <input type="text" v-model="version.nickname" placeholder="e.g. Hardcover" />
+                            <label class="block mb-2 font-bold text-zinc-600"
+                                >Nickname</label
+                            >
+                            <input
+                                type="text"
+                                v-model="version.nickname"
+                                placeholder="e.g. Hardcover"
+                            />
                         </div>
                     </div>
                 </div>
@@ -237,7 +275,8 @@ export default {
         },
         canAddMoreAuthors() {
             if (!this.bookData) return false;
-            const lastAuthor = this.bookData.authors[this.bookData.authors.length - 1];
+            const lastAuthor =
+                this.bookData.authors[this.bookData.authors.length - 1];
             return lastAuthor.first_name !== "" || lastAuthor.last_name !== "";
         },
         formats() {
@@ -290,7 +329,7 @@ export default {
             if (!this.validateAuthors()) {
                 return;
             }
-            const book_id = this.bookData.book.book_id;
+            const { book_id } = this.bookData.book;
 
             const transformedVersions = this.bookData.versions.map(
                 (version) => ({
