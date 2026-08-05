@@ -7,6 +7,7 @@ use App\Models\Book;
 use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ReadInstance;
+use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\User;
 use App\Models\Version;
 use App\Support\BookCreator;
@@ -570,8 +571,16 @@ class BulkUploadTest extends TestCase
         $this->postJson('/api/bulk-upload', ['csv_file' => $file2])->assertOk();
 
         $this->assertSame(1, Book::count());
-        $this->assertSame(1, ReadInstance::where('user_id', $userA->user_id)->count());
-        $this->assertSame(1, ReadInstance::where('user_id', $userB->user_id)->count());
+
+        // Asserting across both accounts is the one thing BelongsToCurrentUser
+        // won't do implicitly — the session is userB by now, so the scope has
+        // to come off by name for userA's row to be visible at all.
+        $reads = fn (int $userId) => ReadInstance::withoutGlobalScope(BelongsToCurrentUser::class)
+            ->where('user_id', $userId)
+            ->count();
+
+        $this->assertSame(1, $reads($userA->user_id));
+        $this->assertSame(1, $reads($userB->user_id));
     }
 
     // ---------- Dry run ----------

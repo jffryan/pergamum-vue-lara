@@ -26,3 +26,15 @@ export const bulkUpload = async (
         headers: { "Content-Type": "multipart/form-data" },
     });
 };
+
+/**
+ * The inverse of bulkUpload: the whole catalog plus this user's reading state,
+ * as a CSV the importer reads back without translation.
+ *
+ * Fetched as a blob rather than linked directly because the endpoint is behind
+ * `auth:sanctum` — a plain <a href> would send the session cookie but bypass
+ * the axios config the rest of the app relies on, and gives nowhere to surface
+ * a failure.
+ */
+export const exportCatalog = async () =>
+    axios.get("/api/export", { responseType: "blob" });

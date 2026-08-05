@@ -24,13 +24,11 @@ class ListController extends Controller
 
     public function show(BookList $list)
     {
-        $userId = auth()->id();
         $list->load([
             'items.version.book.authors',
             'items.version.book.genres:genre_id,name',
-            'items.version.book.readInstances' => function ($query) use ($userId) {
-                $query->where('user_id', $userId)
-                    ->select(['read_instance_id', 'book_id', 'rating']);
+            'items.version.book.readInstances' => function ($query) {
+                $query->select(['read_instance_id', 'book_id', 'rating']);
             },
             'items.version.format',
         ]);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Scopes\BelongsToCurrentUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -19,6 +20,11 @@ class ReadInstance extends Model
 
     protected static function booted(): void
     {
+        // A read instance is the one row in the domain that belongs to a
+        // person rather than to the catalog, so ownership is the default
+        // rather than a predicate each reader remembers.
+        static::addGlobalScope(new BelongsToCurrentUser);
+
         static::saving(function (self $instance): void {
             if ($instance->version_id === null || $instance->book_id === null) {
                 return;

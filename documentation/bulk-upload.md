@@ -56,6 +56,12 @@ The "Column required" figure below is about the header only.
 | `genres`          | no       | `;`-separated list. Lookup is case-insensitive and trims whitespace; `Fantasy`, `fantasy`, ` Fantasy ` all dedupe to the existing genre. |
 | `date_read`       | no       | Accepts `Y-m-d`, `n/j/Y`, `m/d/Y`. Blank means "no read instance for this row." |
 | `rating`          | no       | Decimal 0.5–5 in 0.5 steps. The `ReadInstance` mutator doubles the value on insert (a CSV value of `4.5` is stored as `9`). |
+| `is_discarded`    | no       | Boolean: `1` / `true` / `yes` / `y`, or blank / `0` / `false` / `no` / `n`. Case-insensitive. Anything else fails the row (`is_discarded_invalid`). Applied on version *create* only. |
+| `discarded_at`    | no       | Same date formats as `date_read`. Only meaningful with `is_discarded` set — a date without the flag fails the row (`discarded_at_without_flag`). Blank with the flag set is the "discarded, date unknown" case. |
+| `lists`           | no       | `;`-separated list of `Name` or `Name\|ordinal` entries. Files the row's version onto each named list, owned by the importing user. A non-numeric ordinal or a name that slugs to nothing fails the row (`list_entry_malformed`). |
+
+The column vocabulary lives in `App\Support\CsvContract` and is shared by the
+reader and the writer, so the importer and the exporter cannot drift apart.
 
 ### Encoding choices
 
@@ -69,8 +75,9 @@ Each row describes one (book, version, optional read instance). Rows are de-dupe
 1. **Book**: find-or-create by `slug = Slugger::for(title)`. Title on existing books is left alone.
 2. **Authors**: each entry → find-or-create by `Slugger::for(trim($first.' '.$last))`. Attached if not already attached. Co-author ordinal continues from the book's current max.
 3. **Genres**: each entry → find by `LOWER(TRIM(name))` first; if none, create with the trimmed (case-preserved) value. Attached if not already attached.
-4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime` and `page_count` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits).
+4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime`, `page_count`, `is_discarded` and `discarded_at` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits, and an older file can't resurrect a copy you got rid of after writing it).
 5. **Read instance**: if `date_read` is non-blank, always create a new `ReadInstance` against the resolved version with `user_id = auth()->id()`. Multiple rows with the same (title, format, nickname) but different dates produce multiple read instances — re-reads roundtrip cleanly.
+6. **List membership**: each `lists` entry → find-or-create a `BookList` by `(user_id, Str::slug(name))`, then append the resolved version if `(list_id, version_id)` isn't already taken. An ordinal in the entry is used verbatim; without one the item appends at `max(ordinal) + 1`. Nothing is written under `dry_run`.
 
 This single-row shape covers every restore scenario:
 
@@ -133,6 +140,9 @@ Note this endpoint returns **two different 422 shapes**. Whole-file rejections r
 | `rating_out_of_range`       | `rating` was outside 0.5–5 or not a half-step. |
 | `rating_not_numeric`        | `rating` was non-numeric. |
 | `author_entry_malformed`    | An entry in `authors` lacked a `\|` or had both halves blank. |
+| `is_discarded_invalid`      | `is_discarded` was not one of the recognized boolean spellings. |
+| `discarded_at_without_flag` | `discarded_at` carried a date while `is_discarded` was blank or false. |
+| `list_entry_malformed`      | An entry in `lists` had a non-numeric ordinal, or a name that slugs to nothing. |
 | `internal_error`            | An unexpected exception fired inside the row's transaction. The exception is logged via `Log::error`; the response carries a generic message. |
 
 Whole-file codes are returned at 422 and never appear in the per-row `results` array.
@@ -166,7 +176,11 @@ Rules, all deliberate:
 
 `list_id` is `null` when the list was requested but never created — a dry run, or an import with no successful rows. The block stays present-but-null-id rather than collapsing to `null` so a caller can tell "not requested" from "requested, nothing landed."
 
-This writes lists **one-way only**: a CSV still cannot express "this row belongs to list X", so lists remain outside the importer's contract and outside the restore path in `/feature-plans/reset-database.md`.
+`list_name` is distinct from the per-row `lists` column. `list_name` files a
+whole import into one **brand-new** list and rejects a name already taken;
+`lists` restores membership a file already describes, so an existing list of the
+same name is the target rather than a collision. Both can be sent at once — a
+row then lands on the lists it names *and* on the new one.
 
 ## Dry run
 
@@ -195,10 +209,37 @@ The header-invalid 422 path is unaffected by `dry_run`.
 - **No file size or row count limit at the app layer.** Inherits PHP's `upload_max_filesize` / `post_max_size`. Tracked as a future improvement.
 - **No async / job queue.** The request runs synchronously and blocks until the whole file is processed. Tracked as a future improvement.
 
+## Export
+
+`GET /api/export` (`auth:sanctum`) is the inverse of the importer and emits
+**exactly** the contract above — every column in `CsvContract::COLUMNS`, in that
+order — so an export is a valid upload with no translation step.
+
+- **Route / controller**: `routes/api.php` → `ExportController::download`, which streams the file via `response()->streamDownload` and `fputcsv`. Filename is `pergamum-export-<Y-m-d>.csv`.
+- **Service**: `app/Services/CatalogExportService.php`. `rows(int $userId): Generator` yields the header then one row per (version, read) pair, iterating books with `lazyById(200)` — not `cursor()`, which resolves each eager load per record and trades the memory saving for an N+1. Row order follows `book_id`.
+- **Frontend**: `exportCatalog()` in `resources/js/api/BulkUploadApi.js` (blob response), surfaced as a "Download export" button in the Export section of `BulkUploadView`.
+
+What it emits:
+
+- **The whole catalog**, not just the caller's: books, authors, genres, versions, and each version's discard state are shared, so they all cross.
+- **The caller's reading state only**: read instances come out user-scoped (`BelongsToCurrentUser` on the model), and `lists` carries only lists the caller owns. Exporting from account B never reveals account A's reads.
+- **One row per (version, read).** A version read three times yields three rows differing only in `date_read` / `rating`; a version never read yields one row with both blank, so an owned-but-unread copy survives.
+- **List membership on the first row of each version only.** It is a property of the version, not of any one read of it — repeating it on every row would state the same claim three times.
+- **`rating` halved back to the 0–5 display scale.** `ReadInstance::setRatingAttribute` doubles on write and nothing halves on read, so without this a roundtrip would double the rating on every pass.
+
+### Round trip
+
+`tests/Feature/Export/CatalogRoundtripTest` is the guarantee: it builds a catalog
+exercising every column, exports it, deletes everything but formats and users,
+re-imports, and asserts the result is equal to what it started with. A field that
+stops surviving a reset fails that test rather than being discovered during one.
+
+The runbook that uses this is `/documentation/database-reset.md`.
+
 ## Related
 
 - Plan file: `/feature-plans/bulk-upload.md` — remaining limitations and future improvements (auth/role, rate limit, async, frontend template/preview/undo, performance batching).
-- `/feature-plans/reset-database.md` — uses this importer as the primary restore path.
+- `/documentation/database-reset.md` — the reset procedure this pair exists to make safe.
 - `/documentation/books.md` — `Book` / `Version` / `ReadInstance` schema, custom PKs, rating mutator, slug rules.
 - `/documentation/new-book-creation.md` — the interactive creation flow this surface bypasses entirely.
 - `/documentation/authors.md`, `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached / matched per row.

@@ -3,9 +3,16 @@ path: /feature-plans/
 status: living
 ---
 
-# Bulk upload
+# Bulk upload & export
 
-Tracks rough edges and follow-up work for the CSV bulk-import surface. Descriptive content lives in `/documentation/bulk-upload.md`.
+Tracks rough edges and follow-up work for the CSV bulk-import surface and its
+inverse, `GET /api/export`. Descriptive content lives in
+`/documentation/bulk-upload.md`; the reset procedure the pair exists to make
+safe is `/documentation/database-reset.md`.
+
+This file absorbed what was left of the old `/feature-plans/reset-database.md`
+when the export closed it out. That plan is deleted: the runbook is now
+documentation, and the CSV contract is the only thing a reset depends on.
 
 This is the lowest-traffic creation path in the app — fast to break, easy to ignore. Items below assume bulk upload remains a power-user / data-migration tool rather than a core daily flow.
 
@@ -53,7 +60,15 @@ Everything previously designed here has shipped — the CSV contract and per-row
 - **No warning when an imported version is already on some *other* list.**
 - **Failed rows are silently absent from the list.** The user reconciles against the results table.
 - **A name collision rejects the whole upload after the file has been sent** but before any work. Cheap in server terms, but the user re-uploads the file.
-- **Lists are written one-way only.** A CSV cannot express "this row belongs to list X", so lists stay outside the importer's contract and outside the restore path in `/feature-plans/reset-database.md`.
+- **`list_name` and the per-row `lists` column are two mechanisms for one idea.** `list_name` creates one brand-new list and rejects a taken name; `lists` find-or-creates per row and treats an existing list as the target. Both are right for what they do — restore wants idempotence, "file this import together" wants a fresh list — but a reader meets two answers to "how do I get an import onto a list", and `ListCollector` exists only to serve the first. Worth collapsing if a third list-writing path ever appears.
+
+### Export
+
+- **The export is a full dump with no filters.** No date range, no "just this list", no per-scope export. Fine as a backup; not a sharing or reporting surface.
+- **Users don't roundtrip and won't.** Deliberate — the alternative is password hashes in a file people email around. Documented in `/documentation/database-reset.md`.
+- **A re-import onto a populated database is a merge, not a replace.** Every layer is find-or-create and matched versions keep their existing field values, so an export cannot be used to push corrections back in.
+- **The export is not rate limited or role gated**, same as the import. It is the cheapest way for an authenticated user to pull the whole catalog in one request.
+- **`GET /api/export` streams but still runs one query per book's relations.** `cursor()` keeps memory flat; the query count is proportional to the catalog. Nothing batches.
 
 ### Frontend & UX
 
@@ -77,5 +92,5 @@ In rough priority order.
 7. **Rate limit the route** (e.g. one bulk upload in flight per user, plus a per-day cap).
 8. **Coordinate normalization with the rest of the domain.** Genre name normalization (`/feature-plans/genres.md`) and the `FormatHandler` registry (`/feature-plans/books.md` item 6) are still pending; bulk upload must be named in both cutovers.
 9. **Finer-grained idempotency reporting.** A re-import currently reports each row as `succeeded` even when zero new rows were written. A `noop` status — or a per-row breakdown of "books / versions / read instances created" — would let a caller verify a re-import didn't silently no-op.
-10. **Build a real export endpoint that produces a CSV the importer can roundtrip without loss.** Removes the data-loss surface from any future reset (lists are still not in the importer's contract — see `/feature-plans/reset-database.md`).
+10. **Add filters to the export.** `?list=`, `?year=`, `?discarded=` — the same axes the library already browses by. The full dump is the backup case and is done; a filtered export is the sharing case and isn't.
 11. **Make summary totals balance.** Today blank rows inflate `summary.total` but are not counted as `succeeded`, `failed`, or `skipped`, so `succeeded + failed + skipped != total` for any file with blank rows. Either count blank rows as `skipped` (preferred — matches the field name) or exclude them from `total`. Pinned by `tests/Feature/BulkUpload/BulkUploadTest.php::test_blank_rows_inflate_total_but_are_not_counted_as_skipped`.

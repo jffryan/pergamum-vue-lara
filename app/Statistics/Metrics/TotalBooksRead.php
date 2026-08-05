@@ -3,6 +3,7 @@
 namespace App\Statistics\Metrics;
 
 use App\Models\Book;
+use App\Models\Scopes\BelongsToCurrentUser;
 use App\Statistics\AbstractMetric;
 use App\Statistics\MetricResults;
 use App\Statistics\Scope;
@@ -21,8 +22,11 @@ class TotalBooksRead extends AbstractMetric
 
     public function compute(Scope $scope, MetricResults $results): int
     {
+        // Same reasoning as ReadInstanceQuery::forScope: the scope's subject
+        // decides whose reads count, not the session.
         return Book::whereHas('readInstances', function ($query) use ($scope) {
-            $query->where('user_id', $scope->userId);
+            $query->withoutGlobalScope(BelongsToCurrentUser::class)
+                ->where('read_instances.user_id', $scope->userId);
         })->count();
     }
 }

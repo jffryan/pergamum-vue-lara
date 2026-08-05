@@ -32,7 +32,7 @@ Like `Authors`, most of the gnarly behavior here is owned by the book pipeline (
 ### Performance & query shape
 
 - **`GenreController::show` does a redundant join + groupBy.** The query left-joins `read_instances` and groups by `books.book_id` even though nothing aggregates over read instances — only `MIN(authors.last_name)` is used. Copy-paste from `BookController::index`. The redundant join makes large genres slower than they need to be and the groupBy interacts badly with eager loads on duplicated rows.
-- **`books.readInstances` is not user-scoped on the genre detail page** (called out in `genres.md`). Multi-tenant deployment would leak read history across users. Single-tenant: wasted bandwidth.
+- ~~**`books.readInstances` is not user-scoped on the genre detail page.**~~ Fixed by `App\Models\Scopes\BelongsToCurrentUser` on `ReadInstance`, which scopes the eager load in `GenreController::show`. Pinned by `tests/Feature/UserScoping/TaxonomyScopingTest`. The `read_instances` **join** in the same query is still unscoped — a global scope doesn't reach a raw join — but it only inflates the grouped row count; see item 9.
 - **`GenresView` loads the full genre list and paginates client-side at 25/page.** Fine for a few hundred genres; will not be fine at scale. There's no server-side search or pagination on the index endpoint.
 - **`GenreStore.allGenres` is loaded once per session and never invalidated.** Creating a new genre via book creation does not refresh the cached list — `GenreTagInput` will miss it for the rest of the session. Long sessions accumulate staleness.
 
@@ -70,7 +70,7 @@ In rough priority order — earlier items unblock later ones.
 5. **Build a genre merge tool** — `POST /genres/{keep_id}/merge/{remove_id}` that re-points `book_genre` rows from `remove_id` to `keep_id`, deletes the loser, and returns the merged record. Admin-only; needed before the unique-index migration in item 3 can land cleanly.
 6. **Introduce `FormRequest` classes** for `GenreController::show` (cap `limit` at e.g. 100) and any future genre-edit endpoint. Same pattern as the books / authors flow.
 7. **Build a genre edit endpoint and view.** `PATCH /genres/{id}` with a real `update` method on `GenreController`, a `GenrePolicy`, and a small edit form. Removes the "edit every book to fix a typo" workaround. Probably also a good moment to delete the unreachable resource stubs (`create`, `edit`, plus `store` / `destroy` if not implementing them yet).
-8. **User-scope `books.readInstances` in `GenreController::show`.** Mirror the `auth()->id()` filter that `BookController::index` and `BookService::getBookWithRelations` apply. Required before any multi-tenant work.
+8. ~~**User-scope `books.readInstances` in `GenreController::show`.**~~ Shipped — see the Known limitations entry above.
 9. **Drop the redundant `read_instances` join and groupBy in `GenreController::show`.** The query only needs `MIN(authors.last_name)` for sort — keep the `book_author` / `authors` join, drop the `read_instances` join, and let the eager-load do the rest. Measure before/after on the largest genre.
 10. **Add server-side search to `GET /genres`.** `?q=` filter against `name`, paginated. Wire `GenresView`'s search box to it instead of the in-memory regex; keeps the index scalable as the genre count grows.
 11. **Auto-prune empty genres** when their last book is deleted (or, alternatively, soft-delete with a `deleted_at` and a periodic prune job). Today the row sticks around forever. Pair with item 13 (soft delete) so a misclick is recoverable.

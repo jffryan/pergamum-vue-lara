@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthorController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\BulkUploadController;
 use App\Http\Controllers\ConfigController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\FormatController;
 use App\Http\Controllers\GenreController;
 use App\Http\Controllers\ListController;
@@ -53,6 +54,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/formats', [FormatController::class, 'store']);
 
     Route::post('/bulk-upload', [BulkUploadController::class, 'upload']);
+    // The inverse of bulk-upload, and deliberately its exact CSV shape — see
+    // App\Support\CsvContract.
+    Route::get('/export', [ExportController::class, 'download']);
 
     Route::resource('/lists', ListController::class);
     Route::patch('/lists/{list}/reorder', [ListController::class, 'reorder']);

@@ -7,7 +7,9 @@ status: living
 
 Tracks rough edges and follow-up work for the Lists domain (BookList / ListItem). Descriptive content lives in `/documentation/lists.md`.
 
-**Second writer:** bulk upload's `list_name` option creates a `BookList` and appends `ListItem`s directly from `BulkImportService` (via `App\Services\BulkImport\ListCollector`), bypassing `ListController` / `ListItemController`. It relies on the `(user_id, slug)` and `(list_id, version_id)` unique indexes and on `Str::slug($name)` matching `ListController::store`. Any change to list creation rules, slug derivation, or the item-append contract has to land there too — see `/documentation/bulk-upload.md`.
+**Second writer:** bulk upload creates `BookList`s and appends `ListItem`s directly from `BulkImportService`, bypassing `ListController` / `ListItemController`, by two routes: the file-level `list_name` option (via `App\Services\BulkImport\ListCollector`, which creates one brand-new list) and the per-row `lists` column (via `BulkImportService::fileIntoNamedLists`, which find-or-creates by slug and can carry an explicit ordinal). Both rely on the `(user_id, slug)` and `(list_id, version_id)` unique indexes and on `Str::slug($name)` matching `ListController::store`. Any change to list creation rules, slug derivation, or the item-append contract has to land in both — see `/documentation/bulk-upload.md`.
+
+The `lists` column is also what makes lists survive a database reset; the ordinal rides in the CSV because row order can't carry it (a version on two lists sits at a different position in each). See `/documentation/database-reset.md`.
 
 ## Known limitations
 

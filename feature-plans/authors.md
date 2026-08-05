@@ -32,7 +32,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 ### Performance & query shape
 
 - **`AuthorService::getAuthorWithRelations` is one big eager-load with no pagination.** A prolific author with hundreds of books pulls every book, every version, every read instance, every genre, every author of every related book in a single query tree. Fine today; will not be fine at scale.
-- **`books.readInstances` is not user-scoped on the author page.** With a second account this leaks one user's read history into the other's author view — the catalog is shared on purpose, the read history is not. Would leak read history across users. In the single-tenant case it's "merely" pulling other-user reads that the UI ignores, which is wasted bandwidth.
+- ~~**`books.readInstances` is not user-scoped on the author page.**~~ Fixed. `App\Models\Scopes\BelongsToCurrentUser` on `ReadInstance` scopes the eager load, so `AuthorService::getAuthorWithRelations` no longer needs (or carries) an explicit predicate. Pinned by `tests/Feature/UserScoping/TaxonomyScopingTest`.
 
 ### API surface
 
@@ -68,7 +68,7 @@ In rough priority order — earlier items unblock later ones.
 5. **Add `bio` (and probably `photo_url`, `birth_year`, `death_year`) to the `authors` table.** `AuthorService` is already returning `bio`; make it real. Then build a minimal author edit form (also unblocks item 7).
 6. **Build an author edit endpoint and view.** `PATCH /authors/{id}` with a real `update` method on `AuthorController`, an `AuthorPolicy`, and a small edit form on the detail page. Removes the "edit every book to fix a typo" workaround.
 7. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10. The orphan prune should mark, not delete.
-8. **User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.** Mirror the `auth()->id()` filter that `BookController::index` and `BookService::getBookWithRelations` apply. Required before any multi-tenant work.
+8. ~~**User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.**~~ Shipped — see the Known limitations entry above. Solved model-side rather than call-site-side, so a future author surface cannot reintroduce it.
 9. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
 10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
 11. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.

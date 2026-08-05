@@ -9,10 +9,9 @@ class BookService
 {
     public function getBookWithRelations($identifier, $type = 'id')
     {
-        $userId = auth()->id();
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
-            $q->where('user_id', $userId);
-        }]);
+        // `readInstances` needs no user predicate — BelongsToCurrentUser is on
+        // the model, so the eager load is already the requesting user's.
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances']);
 
         if ($type === 'slug') {
             $book = $query->where('slug', $identifier)->firstOrFail();
@@ -64,7 +63,6 @@ class BookService
     public function getAvailableYears(): array
     {
         return ReadInstance::selectRaw('YEAR(date_read) as year')
-            ->where('user_id', auth()->id())
             ->whereNotNull('date_read')
             ->distinct()
             ->orderBy('year', 'desc')
@@ -75,19 +73,16 @@ class BookService
 
     public function getCompletedItemsForYear($year)
     {
-        $userId = auth()->id();
-
         return Book::with(['authors', 'versions.format', 'genres',
-            'versions.readInstances' => function ($query) use ($year, $userId) {
-                $query->where('user_id', $userId)
-                    ->whereYear('date_read', $year)
+            'versions.readInstances' => function ($query) use ($year) {
+                $query->whereYear('date_read', $year)
                     ->orderBy('date_read', 'asc');
             },
-            'readInstances' => function ($query) use ($year, $userId) {
-                $query->where('user_id', $userId)->whereYear('date_read', $year);
+            'readInstances' => function ($query) use ($year) {
+                $query->whereYear('date_read', $year);
             },
-        ])->whereHas('versions.readInstances', function ($query) use ($year, $userId) {
-            $query->where('user_id', $userId)->whereYear('date_read', $year);
+        ])->whereHas('versions.readInstances', function ($query) use ($year) {
+            $query->whereYear('date_read', $year);
         })->get()
             ->map(fn ($book) => $this->transformCompletedBook($book))
             ->sortBy(fn ($item) => $item['readInstances']->first()->date_read ?? null)

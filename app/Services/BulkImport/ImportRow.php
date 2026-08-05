@@ -8,14 +8,15 @@ use Carbon\Carbon;
 /**
  * One CSV row that has passed every validation gate, ready to persist. Produced by
  * BulkImportService::validateRow and consumed by its persist step — the only reason
- * this type exists is to carry those nine values across that boundary with names and
- * types instead of a nine-key associative array.
+ * this type exists is to carry those values across that boundary with names and
+ * types instead of a wide associative array.
  */
 readonly class ImportRow
 {
     /**
      * @param  array<int, array{first: string, last: string, slug: string}>  $authors
      * @param  array<int, string>  $genres
+     * @param  array<int, array{name: string, ordinal: ?int}>  $lists
      */
     public function __construct(
         public string $title,
@@ -27,5 +28,8 @@ readonly class ImportRow
         public array $genres,
         public ?Carbon $dateRead,
         public ?float $rating,
+        public bool $isDiscarded = false,
+        public ?Carbon $discardedAt = null,
+        public array $lists = [],
     ) {}
 }

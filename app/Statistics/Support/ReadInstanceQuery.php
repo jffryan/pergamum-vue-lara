@@ -3,6 +3,7 @@
 namespace App\Statistics\Support;
 
 use App\Models\ReadInstance;
+use App\Models\Scopes\BelongsToCurrentUser;
 use App\Statistics\Scope;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -23,7 +24,13 @@ class ReadInstanceQuery
 
     public static function forScope(Scope $scope): self
     {
-        $query = ReadInstance::query()->where('read_instances.user_id', $scope->userId);
+        // Deliberately outside BelongsToCurrentUser. Statistics answer for the
+        // scope's subject, which is the session user today but need not stay
+        // that way — an admin scope reporting on another account would meet
+        // `user_id = subject AND user_id = viewer` and return nothing. The
+        // predicate below is the one that decides whose reads these are.
+        $query = ReadInstance::withoutGlobalScope(BelongsToCurrentUser::class)
+            ->where('read_instances.user_id', $scope->userId);
 
         // Narrowing by scope happens here rather than in each metric: a list's
         // average rating is the user's rating of *any* copy of a listed book,

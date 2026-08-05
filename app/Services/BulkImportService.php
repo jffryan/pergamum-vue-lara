@@ -7,6 +7,7 @@ use App\Models\Book;
 use App\Models\BookList;
 use App\Models\Format;
 use App\Models\Genre;
+use App\Models\ListItem;
 use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\BulkImport\ImportRow;
@@ -14,6 +15,7 @@ use App\Services\BulkImport\ListCollector;
 use App\Services\Exceptions\BulkImportHeaderException;
 use App\Services\Exceptions\BulkImportListNameException;
 use App\Services\Exceptions\BulkImportRowException;
+use App\Support\CsvContract;
 use App\Support\RatingValidator;
 use App\Support\Slugger;
 use Carbon\Carbon;
@@ -25,27 +27,25 @@ use Throwable;
 
 class BulkImportService
 {
-    /** Every column name the importer recognizes. Anything else fails the file. */
-    private const KNOWN_COLUMNS = [
-        'title',
-        'authors',
-        'format',
-        'page_count',
-        'audio_runtime',
-        'version_nickname',
-        'genres',
-        'date_read',
-        'rating',
-    ];
+    /**
+     * Every column name the importer recognizes. Anything else fails the file.
+     * Shared with the exporter so the two cannot drift — see {@see CsvContract}.
+     */
+    private const KNOWN_COLUMNS = CsvContract::COLUMNS;
 
     /**
      * Columns that must be present in the header. This is about column presence only —
      * whether a *value* is required is a per-row question (page_count vs audio_runtime
      * depends on the row's format), answered by the gates in validateRow.
      */
-    private const REQUIRED_COLUMNS = ['title', 'authors', 'format'];
+    private const REQUIRED_COLUMNS = CsvContract::REQUIRED_COLUMNS;
 
-    private const DATE_FORMATS = ['Y-m-d', 'n/j/Y', 'm/d/Y'];
+    private const DATE_FORMATS = CsvContract::DATE_FORMATS;
+
+    /** Accepted spellings of the `is_discarded` flag, lowercased. */
+    private const TRUTHY = ['1', 'true', 'yes', 'y'];
+
+    private const FALSEY = ['', '0', 'false', 'no', 'n'];
 
     public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array
     {
@@ -262,6 +262,31 @@ class BulkImportService
             }
         }
 
+        $isDiscarded = $this->parseFlag($cells['is_discarded'] ?? '');
+        if ($isDiscarded === null) {
+            throw new BulkImportRowException("is_discarded '{$cells['is_discarded']}' is not a boolean", 'is_discarded_invalid');
+        }
+
+        $discardedAtRaw = $cells['discarded_at'] ?? '';
+        $discardedAt = null;
+        if ($discardedAtRaw !== '') {
+            // A discard date on a copy the row says you still own is a
+            // contradiction, and guessing which half is right would quietly
+            // change what the file says.
+            if (! $isDiscarded) {
+                throw new BulkImportRowException('discarded_at is set but is_discarded is not', 'discarded_at_without_flag');
+            }
+            $discardedAt = $this->parseDate($discardedAtRaw);
+            if ($discardedAt === null) {
+                throw new BulkImportRowException("discarded_at '{$discardedAtRaw}' did not match Y-m-d, n/j/Y, or m/d/Y", 'date_parse_failed');
+            }
+        }
+
+        $lists = $this->parseLists($cells['lists'] ?? '');
+        if ($lists === null) {
+            throw new BulkImportRowException('one or more lists entries are malformed (expected Name or Name|ordinal)', 'list_entry_malformed');
+        }
+
         return new ImportRow(
             title: $title,
             authors: $authors,
@@ -275,7 +300,72 @@ class BulkImportService
             genres: $this->parseList($genresRaw),
             dateRead: $dateRead,
             rating: $rating,
+            isDiscarded: $isDiscarded,
+            discardedAt: $discardedAt,
+            lists: $lists,
         );
+    }
+
+    /** @return bool|null null when the cell is not a recognized boolean */
+    private function parseFlag(string $raw): ?bool
+    {
+        $value = strtolower(trim($raw));
+
+        if (in_array($value, self::TRUTHY, true)) {
+            return true;
+        }
+
+        if (in_array($value, self::FALSEY, true)) {
+            return false;
+        }
+
+        return null;
+    }
+
+    /**
+     * `Name` or `Name|ordinal`, `;`-separated — the same sub-delimiter the
+     * `authors` column uses. The ordinal is what row order cannot carry: a
+     * version on two lists sits at a different position in each.
+     *
+     * @return array<int, array{name: string, ordinal: ?int}>|null null when malformed
+     */
+    private function parseLists(string $raw): ?array
+    {
+        if ($raw === '') {
+            return [];
+        }
+
+        $lists = [];
+        foreach (explode(';', $raw) as $entry) {
+            $entry = trim($entry);
+            if ($entry === '') {
+                continue;
+            }
+
+            $ordinal = null;
+            if (str_contains($entry, '|')) {
+                [$entry, $ordinalRaw] = explode('|', $entry, 2);
+                $entry = trim($entry);
+                $ordinalRaw = trim($ordinalRaw);
+                if ($ordinalRaw !== '') {
+                    if (! ctype_digit($ordinalRaw)) {
+                        return null;
+                    }
+                    $ordinal = (int) $ordinalRaw;
+                }
+            }
+
+            // Slug, not raw name, is the identity — it is what ListController
+            // uniquely indexes, so a name that slugs to nothing has no list to
+            // belong to.
+            if ($entry === '' || Str::slug($entry) === '') {
+                return null;
+            }
+
+            $lists[] = ['name' => $entry, 'ordinal' => $ordinal];
+        }
+
+        return $lists;
     }
 
     private function persistRow(ImportRow $row, int $rowNumber, int $userId, bool $dryRun, ?ListCollector $collector): array
@@ -287,7 +377,11 @@ class BulkImportService
             $book = $this->resolveBook($row->title);
             $this->attachAuthors($book, $row->authors);
             $this->attachGenres($book, $row->genres);
-            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime);
+            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime, $row->isDiscarded, $row->discardedAt);
+
+            if (! $dryRun) {
+                $this->fileIntoNamedLists($version, $row->lists, $userId);
+            }
 
             if ($row->dateRead !== null) {
                 ReadInstance::create([
@@ -468,8 +562,15 @@ class BulkImportService
         }
     }
 
-    private function resolveVersion(Book $book, Format $format, ?string $nickname, ?int $pageCount, ?int $audioRuntime): Version
-    {
+    private function resolveVersion(
+        Book $book,
+        Format $format,
+        ?string $nickname,
+        ?int $pageCount,
+        ?int $audioRuntime,
+        bool $isDiscarded = false,
+        ?Carbon $discardedAt = null,
+    ): Version {
         $query = Version::where('book_id', $book->book_id)
             ->where('format_id', $format->format_id);
 
@@ -481,6 +582,10 @@ class BulkImportService
 
         $version = $query->first();
         if ($version) {
+            // Existing fields are left alone on a match, discard state included:
+            // a re-import shouldn't un-discard a copy you got rid of after the
+            // file was written. Same rule as page_count — see
+            // /documentation/bulk-upload.md.
             return $version;
         }
 
@@ -490,6 +595,51 @@ class BulkImportService
             'nickname' => $nickname,
             'page_count' => $pageCount,
             'audio_runtime' => $audioRuntime,
+            'is_discarded' => $isDiscarded,
+            'discarded_at' => $discardedAt,
         ]);
+    }
+
+    /**
+     * Append a version to each list the row names, creating lists as needed.
+     *
+     * Distinct from the file-level `list_name` option, which files a whole
+     * import into one *brand-new* list and rejects a name already taken. This
+     * one restores membership a file already describes, so an existing list of
+     * the same name is the target rather than a collision, and a version
+     * already on it is a no-op — several re-read rows of one paperback name
+     * the same list, and `(list_id, version_id)` is uniquely indexed.
+     *
+     * @param  array<int, array{name: string, ordinal: ?int}>  $lists
+     */
+    private function fileIntoNamedLists(Version $version, array $lists, int $userId): void
+    {
+        foreach ($lists as $entry) {
+            $slug = Str::slug($entry['name']);
+
+            $list = BookList::firstOrCreate(
+                ['user_id' => $userId, 'slug' => $slug],
+                ['name' => $entry['name']],
+            );
+
+            $exists = ListItem::where('list_id', $list->list_id)
+                ->where('version_id', $version->version_id)
+                ->exists();
+
+            if ($exists) {
+                continue;
+            }
+
+            // A file that carries ordinals reproduces the order it recorded; one
+            // that doesn't appends. Both beat inferring position from row order,
+            // which only works for a version on exactly one list.
+            $ordinal = $entry['ordinal'] ?? 1 + (int) ListItem::where('list_id', $list->list_id)->max('ordinal');
+
+            ListItem::create([
+                'list_id' => $list->list_id,
+                'version_id' => $version->version_id,
+                'ordinal' => $ordinal,
+            ]);
+        }
     }
 }

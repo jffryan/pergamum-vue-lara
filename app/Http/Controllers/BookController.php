@@ -10,6 +10,7 @@ use App\Models\Book;
 use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ReadInstance;
+use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\Version;
 use App\Services\BookService;
 use App\Support\BookCreator;
@@ -39,13 +40,15 @@ class BookController extends Controller
             return $this->searchBooks($request);
         }
 
-        $userId = auth()->id();
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
-            $q->where('user_id', $userId);
-        }])
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances'])
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
+            // NB: this join is *not* user-scoped, and BelongsToCurrentUser does
+            // not reach it — a global scope constrains the model's own queries,
+            // not a raw join against its table. It inflates the grouped row
+            // count only; the returned read history comes from the eager load
+            // above, which is scoped. Tracked in /feature-plans/books.md.
             ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
             ->groupBy('books.book_id', 'books.title', 'books.slug');
 
@@ -314,9 +317,9 @@ class BookController extends Controller
                 // Dates arrive normalized to Y-m-d by the FormRequest — see
                 // the NormalizesReadDates concern — so no parsing here.
                 if (isset($instanceData['read_instance_id']) && $instanceData['read_instance_id'] != null) {
-                    // Update existing read instance (scoped to current user)
-                    $existing_read_instance = ReadInstance::where('user_id', auth()->id())
-                        ->findOrFail($instanceData['read_instance_id']);
+                    // Scoped to the current user by BelongsToCurrentUser, so
+                    // another account's read_instance_id is a 404 here.
+                    $existing_read_instance = ReadInstance::findOrFail($instanceData['read_instance_id']);
                     $existing_read_instance->update([
                         'date_read' => $instanceData['date_read'] ?? null,
                         'rating' => $instanceData['rating'] ?? null,
@@ -412,7 +415,12 @@ class BookController extends Controller
 
             $authors = $existingBook->authors;
 
-            ReadInstance::where('book_id', $book_id)->delete();
+            // Every account's reads, not just the deleter's. Deleting a book
+            // is a catalog operation; leaving the other account's rows behind
+            // would orphan them against a book_id that no longer exists.
+            ReadInstance::withoutGlobalScope(BelongsToCurrentUser::class)
+                ->where('book_id', $book_id)
+                ->delete();
             Version::where('book_id', $book_id)->delete();
 
             $existingBook->delete();
@@ -546,10 +554,7 @@ class BookController extends Controller
     {
         $search = $request->search;
 
-        $userId = auth()->id();
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances' => function ($q) use ($userId) {
-            $q->where('user_id', $userId);
-        }])
+        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances'])
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
             ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
             ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')

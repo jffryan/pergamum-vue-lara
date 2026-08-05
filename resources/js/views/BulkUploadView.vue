@@ -2,6 +2,26 @@
     <div class="lg:w-2/3 px-6 py-8">
         <h1>Bulk Upload</h1>
 
+        <section class="mb-8 border-b border-zinc-300 pb-6">
+            <h2 class="font-medium mb-1">Export</h2>
+            <p class="mb-2 text-sm text-zinc-600">
+                Downloads the whole catalog plus your reading history, lists and
+                discarded copies as a CSV this page can read back.
+            </p>
+            <button
+                :disabled="exporting"
+                @click="downloadExport"
+                class="btn bg-zinc-700 text-white disabled:opacity-50"
+            >
+                {{ exporting ? "Exporting..." : "Download export" }}
+            </button>
+            <p v-if="exportError" class="mt-2 text-red-700">
+                {{ exportError }}
+            </p>
+        </section>
+
+        <h2 class="font-medium mb-2">Import</h2>
+
         <div class="mb-4">
             <label class="block mb-1 font-medium">CSV File</label>
             <input
@@ -91,7 +111,7 @@
 </template>
 
 <script>
-import { bulkUpload } from "@/api/BulkUploadApi";
+import { bulkUpload, exportCatalog } from "@/api/BulkUploadApi";
 
 export default {
     name: "BulkUploadView",
@@ -105,6 +125,8 @@ export default {
             addToList: false,
             listName: "",
             error: null,
+            exporting: false,
+            exportError: null,
         };
     },
     computed: {
@@ -144,6 +166,28 @@ export default {
                     "An error occurred during upload.";
             } finally {
                 this.loading = false;
+            }
+        },
+        async downloadExport() {
+            if (this.exporting) return;
+            this.exporting = true;
+            this.exportError = null;
+            try {
+                const response = await exportCatalog();
+                const url = URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `pergamum-export-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                this.exportError =
+                    err.response?.data?.message ||
+                    "Could not export the catalog.";
+            } finally {
+                this.exporting = false;
             }
         },
         rowClass(status) {

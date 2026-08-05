@@ -1,7 +1,7 @@
 // eslint-disable-next-line
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
-import { bulkUpload } from "@/api/BulkUploadApi";
+import { bulkUpload, exportCatalog } from "@/api/BulkUploadApi";
 
 vi.mock("axios");
 
@@ -80,5 +80,29 @@ describe("bulkUpload", () => {
         const response = await bulkUpload(file);
 
         expect(response.data).toEqual({ summary: {}, results: [] });
+    });
+});
+
+describe("exportCatalog", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        axios.get.mockResolvedValue({ data: new Blob(["title,authors\n"]) });
+    });
+
+    it("gets the export endpoint as a blob", async () => {
+        await exportCatalog();
+
+        expect(axios.get).toHaveBeenCalledTimes(1);
+        const [url, config] = axios.get.mock.calls[0];
+        expect(url).toBe("/api/export");
+        // Without this the CSV arrives parsed as a string and a download
+        // built from it can corrupt anything non-ASCII in a title.
+        expect(config.responseType).toBe("blob");
+    });
+
+    it("returns the axios response", async () => {
+        const response = await exportCatalog();
+
+        expect(response.data).toBeInstanceOf(Blob);
     });
 });
