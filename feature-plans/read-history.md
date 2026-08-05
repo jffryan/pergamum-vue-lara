@@ -48,6 +48,7 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 - **No empty state on `/completed`.** A user with zero reads sees an empty `<ul>` of tabs and an empty `BookshelfTable`. No "log your first read" CTA.
 - **`BookshelfTable` rendering of year-browse data has subtle issues.** Books with multiple reads in the year show all reads as separate-looking rows in some configurations because `versions.readInstances` and `readInstances` are both populated and the table iterates one of them.
 - **Direct `axios` import in `UpdateBookReadInstance`.** Violates the layering rule from `CLAUDE.md` (`views → services/stores → api → axios`). Add a `createReadInstance` wrapper to `api/BookController.js` and route through it.
+- **`BookView::readHistory` returns a string on one path and an array on the other.** `if (!this.bookHasBeenCompleted) return "";`, otherwise an array of formatted read instances. It renders correctly today only by luck: the `v-for` consuming it sits behind `v-if="bookHasBeenCompleted"`, the same condition that produces the `""`, so the string path is never iterated. Vue 3's `v-for` iterates a string by character, so moving or loosening that guard would render one `<div>` per character. Its own siblings in the same file (`authorRelatedBooks`, `listsContainingBook`) correctly `return []`, so this is an outlier rather than a house style. Same class of defect as the `"Unknown"` fallbacks logged under `/feature-plans/books.md` Frontend — a fallback whose type doesn't match what the template does with it.
 
 ### Extensibility
 

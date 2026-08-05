@@ -26,7 +26,7 @@ Vitest 3, Pinia 2, Vue 3, axios, lodash, papaparse, sortablejs are installed. Th
 
 ### Aliases
 
-`CLAUDE.md` flags this and it bites here too: `@` resolves to `resources/js` for ESLint and (apparently) for Vitest, but **not** in `vite.config.js`. The existing tests import via `@/stores/BooksStore` and work — Vitest must be picking up the alias from somewhere (likely jsconfig / fallback). Before adding more tests, make this explicit by adding `resolve.alias` to `vite.config.js` (or to a new `vitest.config.js` that extends it) so every consumer — Vite build, Vite dev, Vitest, ESLint — agrees. Do this before writing component tests; mounting components pulls in deeper import chains where misalignment surfaces fast.
+Resolved — `vite.config.js` now declares `resolve.alias` for `@`, and Vitest inherits it from there, so the build, the dev server, Vitest and ESLint all agree. This was an open hazard while the alias worked by accident; it no longer does. Component tests can import `@/components/...` without further setup. (There is still no `vitest.config.js`; Vitest reads `vite.config.js` directly. If one is ever added it must extend rather than replace it, or the alias silently goes away again.)
 
 ### Test environment & DB strategy equivalent
 

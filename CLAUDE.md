@@ -41,7 +41,7 @@ If running PHP locally instead: `php artisan serve`, `npm run dev`, `npm run bui
 
 ## Aliases & Vite
 
-The `@` alias maps to `resources/js`. It's configured in the ESLint resolver but **not** in `vite.config.js`, yet `@/views/...` imports work in `router/index.js`. If adding new `@/...` imports, verify Vite picks them up; add a `resolve.alias` to `vite.config.js` if not.
+The `@` alias maps to `resources/js`. It is declared in `vite.config.js` (`resolve.alias`) and in the ESLint resolver, and Vitest inherits the Vite one — so `@/...` imports resolve the same way in the build, the dev server, the linter, and the test suite.
 
 ## Workflow
 
