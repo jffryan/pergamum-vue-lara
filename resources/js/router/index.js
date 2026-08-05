@@ -6,9 +6,8 @@ import authorRoutes from "./author-routes";
 import bookRoutes from "./book-routes";
 import listRoutes from "./list-routes";
 
-
 const router = createRouter({
-    history: createWebHistory('/'),
+    history: createWebHistory("/"),
     scrollBehavior() {
         return { top: 0 };
     },
@@ -90,6 +89,11 @@ router.beforeEach(async (to) => {
     if (to.name === "login" && authStore.isLoggedIn) {
         return { name: "home" };
     }
+
+    // Explicit rather than an implicit `undefined`. vue-router treats both as
+    // "proceed", but returning the same type on every path is what lets the
+    // redirect branches above stand out as the exceptions.
+    return true;
 });
 
 export default router;

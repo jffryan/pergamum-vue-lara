@@ -16,7 +16,9 @@ const useListsStore = defineStore("ListsStore", {
             this.allLists.push(list);
         },
         updateList(list) {
-            const index = this.allLists.findIndex((l) => l.list_id === list.list_id);
+            const index = this.allLists.findIndex(
+                (l) => l.list_id === list.list_id,
+            );
             if (index !== -1) this.allLists[index] = list;
             if (this.currentList?.list_id === list.list_id) {
                 this.currentList = { ...this.currentList, ...list };

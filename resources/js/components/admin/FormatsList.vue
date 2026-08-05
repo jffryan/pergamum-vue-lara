@@ -10,9 +10,9 @@ const formats = computed(() => configStore.books.formats);
 
 <template>
     <ul v-if="formats?.length">
-        <li v-for="format in formats" :key="format.id">
+        <li v-for="format in formats" :key="format.format_id">
             {{ format.name }}
         </li>
     </ul>
-        <p v-else>No formats found.</p>
+    <p v-else>No formats found.</p>
 </template>

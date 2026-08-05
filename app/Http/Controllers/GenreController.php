@@ -2,19 +2,32 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\MergeGenresRequest;
+use App\Http\Requests\StoreGenreRequest;
+use App\Http\Requests\UpdateGenreRequest;
 use App\Models\Book;
 use App\Models\Genre;
 use App\Services\BookService;
+use App\Services\Exceptions\GenreInUseException;
+use App\Services\Exceptions\GenreNameConflictException;
+use App\Services\GenreService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 
 class GenreController extends Controller
 {
     protected $bookService;
 
-    public function __construct(BookService $bookService)
+    protected GenreService $genreService;
+
+    public function __construct(BookService $bookService, GenreService $genreService)
     {
         $this->bookService = $bookService;
+        $this->genreService = $genreService;
+
+        $this->authorizeResource(Genre::class, 'genre');
     }
 
     /**
@@ -32,34 +45,25 @@ class GenreController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
-     *
-     * @return Response
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
      * Store a newly created resource in storage.
-     *
-     * @return Response
      */
-    public function store(Request $request)
+    public function store(StoreGenreRequest $request): JsonResponse
     {
-        //
+        try {
+            $genre = $this->genreService->create($request->name());
+        } catch (GenreNameConflictException $e) {
+            return $this->conflictResponse($e);
+        }
+
+        return response()->json($genre->loadCount('books'), 201);
     }
 
     /**
      * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return Response
      */
-    public function show(Request $request, $genre_id)
+    public function show(Request $request, Genre $genre): JsonResponse
     {
-        $genre = Genre::findOrFail($genre_id);
+        $genre_id = $genre->genre_id;
 
         $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances')
             ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
@@ -101,35 +105,63 @@ class GenreController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return Response
+     * Rename the specified resource.
      */
-    public function edit($id)
+    public function update(UpdateGenreRequest $request, Genre $genre): JsonResponse
     {
-        //
-    }
+        try {
+            $genre = $this->genreService->rename($genre, $request->name());
+        } catch (GenreNameConflictException $e) {
+            return $this->conflictResponse($e);
+        }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  int  $id
-     * @return Response
-     */
-    public function update(Request $request, $id)
-    {
-        //
+        return response()->json($genre->loadCount('books'));
     }
 
     /**
      * Remove the specified resource from storage.
      *
-     * @param  int  $id
-     * @return Response
+     * `?force=true` is the acknowledgement that this detaches the genre from
+     * every book still using it. Without it, a genre with books is a 409.
      */
-    public function destroy($id)
+    public function destroy(Request $request, Genre $genre): JsonResponse
     {
-        //
+        try {
+            $this->genreService->delete($genre, $request->boolean('force'));
+        } catch (GenreInUseException $e) {
+            return response()->json([
+                'reason_code' => $e->reasonCode,
+                'reason' => $e->getMessage(),
+                'books_count' => $e->booksCount,
+            ], 409);
+        }
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /**
+     * Fold `source_ids` into `{genre}`, the winner.
+     *
+     * `merge` isn't one of the seven verbs `authorizeResource()` maps, so the
+     * gate is explicit.
+     */
+    public function merge(MergeGenresRequest $request, Genre $genre): JsonResponse
+    {
+        Gate::authorize('merge', $genre);
+
+        return response()->json($this->genreService->merge($genre, $request->sourceIds()));
+    }
+
+    /**
+     * The conflicting genre travels in the body so the SPA can offer "merge
+     * into it instead" without going back to the server for its id.
+     */
+    private function conflictResponse(GenreNameConflictException $e): JsonResponse
+    {
+        return response()->json([
+            'reason_code' => $e->reasonCode,
+            'reason' => $e->getMessage(),
+            'conflict' => $e->conflict->loadCount('books'),
+        ], 409);
     }
 }

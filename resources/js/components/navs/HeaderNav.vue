@@ -1,7 +1,18 @@
 <script setup>
+import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores";
+
+const router = useRouter();
 const authStore = useAuthStore();
 const emit = defineEmits(["hamburger-click"]);
+
+// The store clears the session; navigating away from it is this component's
+// job. Without the redirect the user stays on whatever protected page they
+// were on until their next navigation, which the guard would then bounce.
+async function logout() {
+    await authStore.logout();
+    router.push({ name: "home" });
+}
 </script>
 
 <template>
@@ -9,7 +20,6 @@ const emit = defineEmits(["hamburger-click"]);
         <div class="max-w-8xl mx-auto">
             <div class="py-3 px-4 sm:px-6 md:px-8">
                 <div class="flex items-center justify-between">
-
                     <!-- Left: hamburger + logo -->
                     <div class="flex items-center gap-3">
                         <button
@@ -45,7 +55,7 @@ const emit = defineEmits(["hamburger-click"]);
                         </router-link>
                         <button
                             v-if="authStore.isLoggedIn"
-                            @click="authStore.logout"
+                            @click="logout"
                             class="text-sm text-slate-400 hover:text-white transition-colors"
                         >
                             Logout
@@ -65,7 +75,6 @@ const emit = defineEmits(["hamburger-click"]);
                             Dashboard
                         </router-link>
                     </div>
-
                 </div>
             </div>
         </div>

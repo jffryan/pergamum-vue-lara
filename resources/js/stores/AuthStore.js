@@ -1,7 +1,10 @@
 import { defineStore } from "pinia";
 import axios from "axios";
-import router from "@/router";
 
+// Deliberately does not import the router. `@/router` imports `@/stores` for
+// its navigation guard, so a store reaching back for the router singleton
+// closes a cycle (router → stores → AuthStore → router). Navigation is the
+// caller's job — components have `useRouter()` for it.
 const useAuthStore = defineStore("AuthStore", {
     state: () => ({
         user: null,
@@ -25,7 +28,6 @@ const useAuthStore = defineStore("AuthStore", {
             await axios.post("/logout");
             this.authChecked = false;
             this.user = null;
-            router.push({ name: "home" });
         },
     },
 });

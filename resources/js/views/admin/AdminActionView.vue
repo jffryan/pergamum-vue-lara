@@ -1,12 +1,19 @@
 <script setup>
-import {computed} from "vue";
+import { computed, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
-import FormatsIndex from "@/components/admin/FormatsIndex.vue";
 
 const route = useRoute();
 
+// `defineAsyncComponent` rather than static imports: every entry in this map
+// used to be bundled into the admin route chunk regardless of which action the
+// user opened. Each action now loads its own chunk.
 const components = {
-    FormatsIndex,
+    FormatsIndex: defineAsyncComponent(
+        () => import("@/components/admin/FormatsIndex.vue"),
+    ),
+    GenresIndex: defineAsyncComponent(
+        () => import("@/components/admin/genres/GenresIndex.vue"),
+    ),
 };
 
 const currentComponent = computed(() => components[route.meta.component]);

@@ -34,8 +34,10 @@ If running PHP locally instead: `php artisan serve`, `npm run dev`, `npm run bui
 - **PHP tests:** `php artisan test`, `vendor/bin/phpunit`, or for a single file/method: `vendor/bin/phpunit tests/Feature/SomeTest.php` / `vendor/bin/phpunit --filter testMethodName`. Tests live in `tests/Feature` and `tests/Unit`. Read `documentation/backend-tests.md` for more instructions on how to write PHP tests.
 - **JS tests:** `npm test` (Vitest). Specs live in `resources/js/tests/{api,services,stores}`. Single file: `npx vitest resources/js/tests/stores/BooksStore.test.js`.
 - **PHP format:** `vendor/bin/pint` (PSR-12, 4-space indent).
-- **JS lint:** `npx eslint resources/js` (`--fix` to auto-fix). ESLint extends `airbnb-base` + `vue3-essential` + `prettier`; double quotes enforced; `camelcase` and `no-console` are off.
-- **Line endings:** CRLF (set in `.editorconfig`).
+- **JS lint:** `npx eslint --ext .js,.vue resources/js` (`--fix` to auto-fix). ESLint extends `airbnb-base` + `vue3-essential` + `prettier`; double quotes enforced; `camelcase` and `no-console` are off.
+- **JS tooling runs *inside* the `vite` container** — `node_modules` is a named volume, not on the host. Prefix with `docker compose exec vite sh -lc '…'`. Run bare on the host and `npx` silently fetches a newer eslint that then fails on `.eslintrc.js`, which looks like a config problem but isn't.
+- **Without `--ext .js,.vue`, eslint checks only `.js`.** `.vue` files then appear clean because they were never read. They currently carry ~600 unfixed prettier violations, so lint `.vue` files you touch individually rather than the whole tree.
+- **Line endings:** CRLF for JS/Vue (prettier enforces it), LF for PHP. `.editorconfig` says CRLF; write files however and let `--fix` / `pint` settle it.
 
 ## Aliases & Vite
 

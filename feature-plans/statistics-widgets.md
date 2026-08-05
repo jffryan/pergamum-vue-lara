@@ -39,9 +39,9 @@ This plan supersedes the original statistics plan, and moved list statistics ser
 
 In rough priority order.
 
-1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — `/feature-plans/authors.md` item 10, `/feature-plans/genres.md` item 12, `/feature-plans/formats.md` item 11. They are the payoff this plan was built for; do them before anything else here.
+1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — `/feature-plans/authors.md` item 10, `/feature-plans/genres.md` item 9, `/feature-plans/formats.md` item 11. They are the payoff this plan was built for; do them before anything else here.
 2. **Charts.** Pick a library, add `barChart` / `lineChart` to the widget registry, swap the `widget:` line in the surface configs that want them. `SeriesList` stays for dense surfaces.
-3. **Admin scope** — `/feature-plans/admin.md` item 21. Needs a scope-level authorization check (admin-only) that `ScopeResolver` can already accommodate; the shape is the same as the list scope's policy call.
+3. **Admin scope** — `/feature-plans/admin.md` item 19. Needs a scope-level authorization check (admin-only) that `ScopeResolver` can already accommodate; the shape is the same as the list scope's policy call.
 4. **Range-bucketed year queries** in `ReadInstanceQuery::groupedByYear()`, replacing `YEAR()`. One method, every per-year metric benefits.
 5. **Widget component tests** once `@vue/test-utils` lands.
 6. **Batch independent metrics** into fewer queries — a single pass over `read_instances` could serve `readsByYear`, `uniqueBooksReadByYear`, `pagesReadByYear` and `audioRuntimeByYear` at once. Only worth it when the query count shows up in a profile.

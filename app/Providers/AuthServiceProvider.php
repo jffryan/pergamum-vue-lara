@@ -4,7 +4,9 @@ namespace App\Providers;
 
 // use Illuminate\Support\Facades\Gate;
 use App\Models\BookList;
+use App\Models\Genre;
 use App\Policies\BookListPolicy;
+use App\Policies\GenrePolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -16,6 +18,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         BookList::class => BookListPolicy::class,
+        Genre::class => GenrePolicy::class,
     ];
 
     /**

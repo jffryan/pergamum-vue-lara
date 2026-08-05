@@ -32,7 +32,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::resource('/books', BookController::class);
-    Route::resource('/genres', GenreController::class);
+    // `apiResource`, not `resource` — the `create` and `edit` routes only ever
+    // pointed at empty stubs. The merge route is declared first so `{genre}/merge`
+    // isn't shadowed by anything the resource registers.
+    Route::post('/genres/{genre}/merge', [GenreController::class, 'merge']);
+    Route::apiResource('/genres', GenreController::class);
 
     Route::get('/completed/years', [BookController::class, 'getCompletedYears']);
     Route::get('/completed/{year}', [BookController::class, 'getBooksByYear']);
