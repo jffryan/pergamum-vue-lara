@@ -8,11 +8,11 @@ use App\Http\Requests\UpdateBookRequest;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
-use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\Version;
 use App\Services\BookService;
+use App\Services\GenreService;
 use App\Support\BookCreator;
 use App\Support\Slugger;
 use Illuminate\Http\Request;
@@ -24,9 +24,12 @@ class BookController extends Controller
 {
     protected $bookService;
 
-    public function __construct(BookService $bookService)
+    protected $genreService;
+
+    public function __construct(BookService $bookService, GenreService $genreService)
     {
         $this->bookService = $bookService;
+        $this->genreService = $genreService;
     }
 
     /**
@@ -152,9 +155,10 @@ class BookController extends Controller
 
         $new_authors = $this->handleAuthors($request->authors());
         $new_versions = $this->prepareVersions($request->versions());
-        $new_genres = $this->handleGenres($request->genreNames());
 
-        $this->attachModels($book, $new_authors, $new_versions, $new_genres);
+        $this->attachModels($book, $new_authors, $new_versions);
+
+        $new_genres = $this->genreService->attachByName($book, $request->genreNames());
 
         $new_read_instances = [];
         $readInstancesData = $request->readInstances();
@@ -270,44 +274,6 @@ class BookController extends Controller
         return $updated_versions;
     }
 
-    private function updateGenres($existingBook, $genresInput)
-    {
-        // We'll collect all genre IDs for syncing here.
-        $genreIds = [];
-
-        foreach ($genresInput as $input) {
-            // Check if an ID is present and valid
-            if (! empty($input['genre_id'])) {
-                // Make sure this ID actually exists in the DB
-                $existingGenre = Genre::find($input['genre_id']);
-
-                if ($existingGenre) {
-                    // Use the existing ID; ignore any name changes
-                    $genreIds[] = $existingGenre->genre_id;
-                } else {
-                    // If somehow the ID isn't valid, but we do have a name, treat it like a new record
-                    if (! empty($input['name'])) {
-                        $genre = Genre::firstOrCreate(['name' => $input['name']]);
-                        $genreIds[] = $genre->genre_id;
-                    }
-                }
-            } else {
-                // No genre_id, must rely on name
-                if (! empty($input['name'])) {
-                    // Look up existing genre by name, or create
-                    $genre = Genre::firstOrCreate(['name' => $input['name']]);
-                    $genreIds[] = $genre->genre_id;
-                }
-            }
-        }
-
-        // Sync the collected IDs
-        $existingBook->genres()->sync($genreIds);
-
-        // Return the Genre instances for convenience
-        return Genre::findMany($genreIds);
-    }
-
     private function updateReadInstances($existing_book, $readInstancesData)
     {
         $updated_read_instances = [];
@@ -368,11 +334,9 @@ class BookController extends Controller
                 $this->updateAuthors($existing_book, $request->authors());
             }
 
-            // Update genres
-            $genresUpdateResponse = $this->updateGenres($existing_book, $request->genres());
-            if (isset($genresUpdateResponse['error'])) {
-                throw new \Exception($genresUpdateResponse['error']);
-            }
+            // Update genres. Unconditional, unlike authors and versions above:
+            // an edit that names no genres is an instruction to clear them.
+            $this->genreService->syncFromInput($existing_book, $request->genres());
 
             // Update read instances (existing ones only — no UI to add new instances from edit view)
             $existingInstances = $request->existingReadInstances();
@@ -515,26 +479,17 @@ class BookController extends Controller
         return $new_versions;
     }
 
-    private function handleGenres($genresData)
-    {
-        return collect($genresData)->map(function ($genre) {
-            return Genre::firstOrCreate(['name' => $genre]);
-        })->all();
-    }
-
-    private function attachModels($book, $authors, $versions, $genres)
+    /**
+     * Genres are attached separately, by `GenreService::attachByName`.
+     */
+    private function attachModels($book, $authors, $versions)
     {
         $authorIds = array_map(function ($author) {
             return $author->author_id;
         }, $authors);
 
-        $genreIds = array_map(function ($genre) {
-            return $genre->genre_id;
-        }, $genres);
-
         $book->authors()->attach($authorIds);
         $book->versions()->saveMany($versions);
-        $book->genres()->attach($genreIds);
     }
 
     private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])

@@ -9,6 +9,8 @@ status: living
 
 Instructions for agents writing or extending Pergamum's backend test suite (PHP / PHPUnit).
 
+**The suite is breadth-first by design.** It was built to give every domain one feature-test entry point rather than to cover any single domain exhaustively, so most controllers have a happy path and a failure path and few have boundary sweeps. That is the intended shape, not a backlog: depth gets added where a bug is actually surfaced, and the bug goes in the relevant plan file first (see Cardinal rules below). Don't read a thin directory as an invitation to write speculative boundary cases.
+
 ## When tests are in scope
 
 Write or update tests when:
@@ -116,12 +118,15 @@ Every endpoint with validation or authorization gets at least one failure-path t
 
 ### Database engine
 
-Tests run against MySQL via the `db` service in `compose.yml`. `RefreshDatabase` wraps each test in a transaction. Two consequences:
+Tests run against MySQL via the `db` service in `compose.yml`. `RefreshDatabase` wraps each test in a transaction. Three consequences:
 
 - Any code under test that issues DDL (`DB::statement('TRUNCATE …')`, schema changes) breaks the surrounding transaction. Such code should not exist in the request path; if a test surfaces it, log it in the relevant plan file as a Known Limitation and use `DatabaseMigrations` for that single test class as a workaround.
+- **The same applies to tests that issue DDL themselves,** which migration tests must. MySQL implicitly commits on DDL, ending the transaction `RefreshDatabase` opened — so neither the schema change nor any row written after it can be rolled back, and the leak lands on the *next* test in the process as a table missing an index. A test that drops or adds schema has to put it back by hand in `tearDown()`. `AddUniqueIndexToGenresNameTest` is the worked example.
 - Tests cannot rely on auto-increment values being deterministic across runs. Use the IDs returned by factories, never literals.
 
 A dedicated `pergamum_testing` database (or `DB_DATABASE` override in `phpunit.xml` / `.env.testing`) keeps test runs out of the dev DB.
+
+**MySQL, not sqlite-in-memory — deliberately.** Sqlite would be faster, and it was considered and rejected: several behaviours under test are properties of the *connection*, not of Eloquent. Genre name matching is case-insensitive only because the collation is `utf8mb4_unicode_ci`, the unique index on `genres.name` inherits that same insensitivity, and `GenreController::index` orders with a MySQL-specific `REGEXP`. On sqlite those would silently pass for the wrong reason or fail for no reason. If suite runtime ever becomes painful this is still the lever to pull, but every MySQL-specific column type and expression needs auditing first.
 
 ## Factories
 
@@ -163,9 +168,23 @@ Model accessor / mutator tests live in `tests/Unit/Models/` if they're worth pin
 5. Run the file in isolation (`vendor/bin/phpunit tests/Feature/Lists/ListsCrudTest.php`) before running the whole suite.
 6. If a test fails because of an application bug, follow the cardinal rules: log it in the plan file, do not fix it inline.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, as two independent jobs:
+
+- **backend** — `vendor/bin/pint --test`, then `vendor/bin/phpunit --no-coverage` against a `mysql:8` service container. `phpunit.xml` already forces `DB_DATABASE=pergamum_testing`, so the workflow only supplies host and credentials.
+- **frontend** — `npx eslint --ext .js,.vue resources/js`, then `npm run test:run`, then `npm run build`.
+
+Two things to keep in step when changing either side:
+
+- **The MySQL service version and the collation must match `config/database.php`.** See the engine rationale above — a CI database on a different collation would turn the genre tests into false passes.
+- **`--ext .js,.vue` is not optional.** Without it eslint reads only `.js`, every `.vue` file passes because it was never opened, and CI goes green over a broken component.
+
+Coverage is disabled in CI (`--no-coverage`) — the reports configured in `phpunit.xml` are a local triage tool, and generating them on every push buys nothing.
+
 ## Related
 
-- Plan file: `/feature-plans/backend-tests.md` — future improvements and known limitations for the test suite itself.
 - `/documentation/books.md`, `/documentation/lists.md` — the conventions tested here (custom PKs, dual-attached read instances, rating doubling, user scoping) are defined in these docs.
+- `/feature-plans/frontend-tests.md` — the SPA-side suite, which shares this workflow file.
 - `/feature-plans/README.md` — lifecycle for plan files, which is where bugs surfaced by tests get logged.
 - `CLAUDE.md` — top-level command reference (`php artisan test`, `vendor/bin/phpunit`, `vendor/bin/pint`).

@@ -29,7 +29,10 @@ class CompleteBookCreationRequest extends ApiFormRequest
             'bookData.authors.*.last_name' => ['required', 'string', 'max:255'],
 
             'bookData.genres' => ['sometimes', 'nullable', 'array'],
-            'bookData.genres.*.name' => ['required', 'string', 'max:255'],
+            // `nullable`, not `required`: a blank genre row is a form artifact,
+            // and `GenreService::resolveNames` drops it. Matches the other two
+            // ingest doors — see `tests/Feature/Genres/GenreIngestTest`.
+            'bookData.genres.*.name' => ['nullable', 'string', 'max:255'],
 
             'bookData.versions' => ['sometimes', 'nullable', 'array'],
             'bookData.versions.*.version_id' => ['nullable', 'integer', 'exists:versions,version_id'],

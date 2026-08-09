@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: PHP — tests & format
+    runs-on: ubuntu-latest
+
+    services:
+      # The suite runs on MySQL rather than sqlite-in-memory on purpose: several
+      # behaviours under test are properties of the connection, not of Eloquent.
+      # The genre name rules are case-insensitive only because the collation is
+      # utf8mb4_unicode_ci, and the unique index on `genres.name` inherits that
+      # same insensitivity. On sqlite they would silently start passing for the
+      # wrong reason, or failing for no reason. Keep this service in step with
+      # `config/database.php`.
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: pergamum_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_mysql, bcmath
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Check formatting
+        run: vendor/bin/pint --test
+
+      # phpunit.xml forces DB_DATABASE=pergamum_testing; the host and credentials
+      # come from .env, so they are the only things CI has to say.
+      - name: Run tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: ""
+        run: vendor/bin/phpunit --no-coverage
+
+  frontend:
+    name: JS — tests & lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Without --ext the linter reads only .js and every .vue file silently
+      # passes because it was never opened.
+      - name: Lint
+        run: npx eslint --ext .js,.vue resources/js
+
+      - name: Run tests
+        run: npm run test:run
+
+      - name: Build
+        run: npm run build

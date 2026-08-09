@@ -26,7 +26,11 @@ class StoreBookRequest extends ApiFormRequest
             'book.book.title' => ['required', 'string', 'max:255'],
 
             'book.book.genres.parsed' => ['sometimes', 'nullable', 'array'],
-            'book.book.genres.parsed.*' => ['string', 'max:255'],
+            // `nullable`, because `ConvertEmptyStringsToNull` turns a blank
+            // genre slot into `null` and `string` alone then 422'd the whole
+            // book over an empty row the form itself rendered. Blanks are
+            // dropped by `GenreService::resolveNames`, not rejected here.
+            'book.book.genres.parsed.*' => ['nullable', 'string', 'max:255'],
 
             'book.authors' => ['sometimes', 'nullable', 'array'],
             'book.authors.*.first_name' => ['nullable', 'string', 'max:255'],

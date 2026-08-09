@@ -6,9 +6,9 @@ use App\Http\Requests\CompleteBookCreationRequest;
 use App\Http\Requests\CreateBookTitleRequest;
 use App\Models\Author;
 use App\Models\Book;
-use App\Models\Genre;
 use App\Models\ReadInstance;
 use App\Models\Version;
+use App\Services\GenreService;
 use App\Support\BookCreator;
 use App\Support\Slugger;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,13 @@ use Illuminate\Support\Facades\Log;
 
 class NewBookController extends Controller
 {
-    //
+    protected $genreService;
+
+    public function __construct(GenreService $genreService)
+    {
+        $this->genreService = $genreService;
+    }
+
     public function createOrGetBookByTitle(CreateBookTitleRequest $request)
     {
         $title = $request->title();
@@ -62,13 +68,6 @@ class NewBookController extends Controller
         })->all();
     }
 
-    private function handleGenres($genreNames)
-    {
-        return collect($genreNames)->map(function ($name) {
-            return Genre::firstOrCreate(['name' => $name]);
-        })->all();
-    }
-
     /**
      * Existing copies are looked up; new ones are created against the book.
      *
@@ -104,18 +103,16 @@ class NewBookController extends Controller
         })->all();
     }
 
-    private function attachModels($book, $authors, $genres, $versions)
+    /**
+     * Genres are attached separately, by `GenreService::attachByName`.
+     */
+    private function attachModels($book, $authors, $versions)
     {
         $authorIds = array_map(function ($author) {
             return $author->author_id;
         }, $authors);
 
-        $genreIds = array_map(function ($genre) {
-            return $genre->genre_id;
-        }, $genres);
-
         $book->authors()->attach($authorIds);
-        $book->genres()->attach($genreIds);
         $book->versions()->saveMany($versions);
     }
 
@@ -135,11 +132,12 @@ class NewBookController extends Controller
             // Create the main book record
             $book = BookCreator::create($request->title());
             $authors = $this->handleAuthors($request->authors());
-            $genres = $this->handleGenres($request->genreNames());
             $versions = $this->handleVersions($request->versions(), $book);
             $read_instances = $this->handleReadInstances($request->readInstances(), $book, $versions);
 
-            $this->attachModels($book, $authors, $genres, $versions);
+            $this->attachModels($book, $authors, $versions);
+
+            $genres = $this->genreService->attachByName($book, $request->genreNames());
 
             // If all operations are successful, commit the transaction
             DB::commit();

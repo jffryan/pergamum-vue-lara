@@ -7,7 +7,9 @@ status: in-progress
 
 ## Goal
 
-The SPA has a small starter Vitest suite — `tests/api/apiHelpers.test.js`, `tests/services/BookServices.test.js`, `tests/stores/BooksStore.test.js`, `tests/stores/NewBookStore.test.js`. That's it: four files covering one helper, one service, two stores. The 7 other Pinia stores, all 6 axios-wrapper API controllers, every util, every service-layer call beyond `addVersionToBookService`, and 100% of the component and view layer are untested.
+The SPA's Vitest suite covers four of the seven layers below it. As of the CI wiring (2026-08-09) there are 10 files / 117 tests across `tests/api/` (`apiHelpers`, `BulkUploadApi`, `StatisticsController`), `tests/services/` (`BookServices`, `statistics/surfaces`), `tests/stores/` (`Books`, `NewBook`, `Genre`, `Statistics`) and `tests/utils/` (`formats`).
+
+What is still untested: the remaining Pinia stores (`Auth`, `Authors`, `Config`, `Lists`), the remaining api controllers (`AuthorController`, `BookController`, `GenresController`, `ListController`, `VersionController`), `utils/validators.js` and `utils/checkForChanges.js`, the router guard, and **100% of the component and view layer** — which is the gap that blocks items in `/feature-plans/genre-management.md`, `/feature-plans/statistics-widgets.md` and `/feature-plans/books.md`.
 
 This plan establishes the strategy for growing the suite from "starter" to "covers the load-bearing seams." The aim is not 100% coverage. It is enough coverage to (a) lock the data-flow contract `views → services/stores → api/<Domain>Controller → axios` so a future refactor of `apiHelpers.js` or a store's shape doesn't silently break consumers, (b) catch regressions in the validation / change-detection utilities (`utils/validators.js`, `utils/checkForChanges.js`) that run before any network call, and (c) give every store and api-controller a test file so future work has a place to extend rather than a blank file.
 
@@ -114,8 +116,9 @@ Skip pure-presentation components (svgs, `AlertBox.vue`, `PageLoadingIndicator.v
 
 ## Touches existing systems
 
-- `vite.config.js` — needs an explicit `resolve.alias` for `@` (currently missing); optionally a `test:` block, or a separate `vitest.config.js` extending it.
-- `package.json` — add `@vue/test-utils`, `happy-dom`, `@pinia/testing` as devDependencies. Optionally `@vitest/coverage-v8`.
+- `vite.config.js` — already declares `resolve.alias` for `@`; a `test:` block or a separate `vitest.config.js` is still optional (see "Aliases" above for the trap if one is added).
+- `package.json` — add `@vue/test-utils`, `happy-dom`, `@pinia/testing` as devDependencies. Optionally `@vitest/coverage-v8`. `test` and `test:run` scripts already exist.
+- `.github/workflows/ci.yml` — the `frontend` job runs lint, `test:run` and `build`. New devDependencies must survive `npm ci` there.
 - `resources/js/tests/` — adding `utils/`, `components/`, `views/`, `router/` subfolders alongside existing `api/`, `services/`, `stores/`.
 - Existing tests (`BooksStore.test.js`, `NewBookStore.test.js`, `BookServices.test.js`, `apiHelpers.test.js`) — leave alone. The conventions they establish are the ones this plan extends.
 - Existing source — **read-only** for this plan. If a test reveals a bug, file it as a separate task rather than bundling the fix.
@@ -126,7 +129,7 @@ Skip pure-presentation components (svgs, `AlertBox.vue`, `PageLoadingIndicator.v
 - **`@pinia/testing` adoption** — adds a dependency. Worth it once stores are mocked from component tests in volume; skip while only direct store unit tests exist.
 - **Coverage tooling** — `@vitest/coverage-v8` is one line of config, but enforcing a coverage threshold on a greenfield suite is counterproductive. Default: install but don't enforce; revisit when the suite is mature.
 - **Pest-equivalent DSL** — none needed; Vitest's `describe`/`it` is already terse. No analog to the backend "Pest vs PHPUnit" question.
-- **CI integration** — no CI is wired up today (same as backend plan). Out of scope; suite must remain runnable via `npm test`.
+- ~~**CI integration**~~ — resolved. `.github/workflows/ci.yml` runs `npm run test:run` (plus eslint and a production build) on every push to `main` and every PR. `npm test` still starts Vitest in watch mode for local work; `test:run` is the single-shot script CI calls. Anything added to this plan must pass in both.
 - **Snapshot testing** — Vitest supports it via `toMatchSnapshot()`. Same risks as on the backend (over-broad assertions, cosmetic-change churn). Default: skip; assert on specific properties / rendered text instead.
 - **MSW (Mock Service Worker)** — an alternative to per-test axios mocks; intercepts at the network layer and gives one shared "fake API" across the suite. More setup, more fidelity. Default: stick with `vi.mock` for now; revisit if axios-mocking duplication grows painful.
 - **Component testing scope creep** — the `newBook/*Input.vue` family is 8 files of overlapping form logic. Worth deciding whether to test each in isolation or to test the parent (`NewBookProgressForm`) end-to-end and let the children ride along. Lean toward the parent test + targeted child tests for the two or three with non-trivial validation.

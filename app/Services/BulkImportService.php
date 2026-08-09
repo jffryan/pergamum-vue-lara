@@ -47,6 +47,8 @@ class BulkImportService
 
     private const FALSEY = ['', '0', 'false', 'no', 'n'];
 
+    public function __construct(private readonly GenreService $genreService) {}
+
     public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array
     {
         // Deliberately ahead of header validation, so a request that is both
@@ -546,20 +548,18 @@ class BulkImportService
         }
     }
 
+    /**
+     * The fourth genre-ingest door, and the one easiest to forget — it isn't
+     * an HTTP endpoint and has no FormRequest.
+     *
+     * It used to match with `LOWER(TRIM(name))`, which trimmed but did not
+     * collapse internal whitespace, and which no index can serve. Routing it
+     * through `GenreService` gives an import the same name rules as the book
+     * forms, and lets the lookup use the unique index on `genres.name`.
+     */
     private function attachGenres(Book $book, array $names): void
     {
-        $existingIds = $book->genres()->pluck('genres.genre_id')->all();
-
-        foreach ($names as $name) {
-            $genre = Genre::whereRaw('LOWER(TRIM(name)) = ?', [strtolower($name)])->first();
-            if (! $genre) {
-                $genre = Genre::create(['name' => $name]);
-            }
-            if (! in_array($genre->genre_id, $existingIds, true)) {
-                $book->genres()->attach($genre->genre_id);
-                $existingIds[] = $genre->genre_id;
-            }
-        }
+        $this->genreService->attachByName($book, $names);
     }
 
     private function resolveVersion(

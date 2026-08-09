@@ -17,8 +17,8 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Validation & request shape
 
-- **A whitespace-only title still slugs to an empty string.** `required|string|max:255` rejects an empty title but not `'   '`. Trim in `prepareForValidation` (and everywhere else a name is slugified — same gap on authors and genres).
-- **Genre names are not normalized.** `name` is now required and a string, but whitespace and casing variants within one request still create separate rows — `handleGenres` calls `Genre::firstOrCreate` on the raw value. Owned by `/feature-plans/genres.md`.
+- **A whitespace-only title still slugs to an empty string.** `required|string|max:255` rejects an empty title but not `'   '`. Trim in `prepareForValidation` (and everywhere else a name is slugified — same gap on authors). Genres no longer have this gap: `GenreService::normalize` runs on every ingest door.
+- **`bookData.genres.*.name` is `nullable`, not `required`.** Deliberate — a blank genre row is a form artifact and `GenreService` drops it, matching the other two ingest doors. It does mean this endpoint will not tell a caller that a genre failed to parse; it just returns fewer genres. See `/documentation/genres.md`.
 
 ### Data integrity
 

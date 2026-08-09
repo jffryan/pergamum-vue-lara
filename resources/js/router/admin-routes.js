@@ -29,8 +29,7 @@ const adminRoutes = [
             component: "GenresIndex",
             adminMenu: {
                 title: "Manage Genres",
-                description:
-                    "Create, rename, merge, and delete genres. Merging is how near-duplicates like 'essay' and 'essays' get folded together.",
+                description: "Create, rename, merge, and delete genres.",
             },
         },
     },

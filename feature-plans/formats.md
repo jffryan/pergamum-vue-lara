@@ -84,6 +84,6 @@ In rough priority order — earlier items unblock later ones.
 10. **Build a `FormatController::index`** that returns the full row (not the `/config/formats` projection) for use by the admin UI. Frees the admin list to surface `slug`, `created_at`, and a `versions_count`.
 11. **Surface format-level stats on `FormatView`.** Total versions, total books, total reads in the format, average rating, top authors. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
 12. **Add display ordering.** A `display_order` column (or just sort by `format_id`) so the `<select>` is always presented in a deterministic, designer-controlled order rather than insertion order.
-13. **Soft-delete formats** once item 5 lands, so an automatic prune (or an admin delete misclick) is recoverable. Same trait + `deleted_at` strategy as `/feature-plans/books.md` item 10 and the matching items in authors / genres.
+13. **Soft-delete formats** once item 5 lands, so an automatic prune (or an admin delete misclick) is recoverable. Same trait + `deleted_at` strategy as `/feature-plans/books.md` ("Soft-delete books, versions, and read instances") and the matching items in authors / genres.
 14. **Stabilize `FormatsList` keying** — change `:key="format.id"` to `:key="format.format_id"`. One-line fix.
 15. **Clear `success` / `error` on `CreateFormat` keystroke.** Watch `name`; reset both refs. One-line UX fix.
