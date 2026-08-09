@@ -12,6 +12,10 @@ use App\Statistics\Support\ReadInstanceQuery;
  *
  * Unrated reads (null or 0) are absent rather than bucketed at zero — "I
  * didn't rate it" isn't a rating.
+ *
+ * The grouping predicates name the column, so they see the doubled storage
+ * value; `$row->rating` is hydrated onto a model and comes back through
+ * `ReadInstance`'s accessor already on the display scale.
  */
 class RatingDistribution extends AbstractMetric
 {
@@ -32,7 +36,7 @@ class RatingDistribution extends AbstractMetric
             ->orderBy('read_instances.rating', 'desc')
             ->get()
             ->map(fn ($row) => [
-                'rating' => round($row->rating / 2, 1),
+                'rating' => round($row->rating, 1),
                 'total' => (int) $row->total,
             ])
             ->all();

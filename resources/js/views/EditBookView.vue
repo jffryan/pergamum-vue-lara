@@ -175,7 +175,7 @@
                                         (_, i) => 1 + i * 0.5,
                                     )"
                                     :key="idx"
-                                    :value="rating * 2"
+                                    :value="rating"
                                     class="text-zinc-700"
                                 >
                                     {{ rating }}

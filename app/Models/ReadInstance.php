@@ -54,9 +54,25 @@ class ReadInstance extends Model
         return $this->belongsTo(Version::class, 'version_id');
     }
 
+    /**
+     * Ratings live on a 0.5–5 scale with half-star steps, and the column is an
+     * unsigned tinyint, so storage doubles the display value: 4.5 stars is a
+     * `9`. This pair is the only place that conversion happens — read `rating`
+     * off the model and you get the display scale back, so nothing downstream
+     * needs to remember to halve.
+     *
+     * Two paths deliberately bypass it and must convert by hand: aggregates
+     * (`avg()` and friends pass through to the query builder, which never runs
+     * accessors) and anything hitting the table with `DB::table()`.
+     */
     public function setRatingAttribute($value)
     {
         $this->attributes['rating'] = $value !== null ? $value * 2 : null;
+    }
+
+    public function getRatingAttribute($value)
+    {
+        return $value !== null ? $value / 2 : null;
     }
 
     protected function serializeDate(\DateTimeInterface $date)

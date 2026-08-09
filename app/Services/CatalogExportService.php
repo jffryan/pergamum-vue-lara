@@ -117,17 +117,15 @@ class CatalogExportService
     }
 
     /**
-     * Ratings are stored doubled — `ReadInstance::setRatingAttribute` multiplies
-     * by two on write and nothing halves on read — so the export has to undo it
-     * or a roundtrip would double the rating every time through.
+     * The rating arrives on the display scale already — `ReadInstance`'s
+     * accessor halves the doubled column value — so this only has to format:
+     * 4.5 stays "4.5", 4.0 becomes "4", null becomes an empty cell.
      */
-    private function ratingField(?int $stored): string
+    private function ratingField(int|float|null $display): string
     {
-        if ($stored === null) {
+        if ($display === null) {
             return '';
         }
-
-        $display = $stored / 2;
 
         return rtrim(rtrim(number_format($display, 1, '.', ''), '0'), '.');
     }

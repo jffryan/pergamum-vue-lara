@@ -11,8 +11,10 @@ use App\Statistics\Support\ReadInstanceQuery;
  * The user's mean rating on the display scale, or null when nothing is rated.
  *
  * `read_instances.rating` is stored doubled (see /documentation/books.md) so
- * that half-stars fit an integer column. Halving happens here, once, for
- * every rating metric — widgets receive 0–5 and never divide.
+ * that half-stars fit an integer column. `ReadInstance`'s accessor normally
+ * undoes that, but `avg()` passes straight through to the query builder and
+ * never hydrates a model, so this is one of the two paths that still has to
+ * halve by hand. Widgets receive 0–5 either way.
  */
 class AverageRating extends AbstractMetric
 {

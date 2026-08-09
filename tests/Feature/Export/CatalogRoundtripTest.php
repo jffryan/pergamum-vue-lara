@@ -249,9 +249,11 @@ class CatalogRoundtripTest extends TestCase
             'version_id' => $version->version_id, 'date_read' => '2024-01-01', 'rating' => 4.5,
         ]);
 
-        // Stored doubled by the mutator; the export undoes it, or a roundtrip
-        // would double the rating on every pass.
-        $this->assertSame(9, ReadInstance::first()->rating);
+        // Stored doubled by the mutator, read back on the display scale by the
+        // accessor. The column is what a roundtrip would double if either half
+        // of that pair went missing, so assert against the column.
+        $this->assertSame(9, (int) ReadInstance::first()->getRawOriginal('rating'));
+        $this->assertSame(4.5, ReadInstance::first()->rating);
 
         $csv = $this->get('/api/export')->assertOk()->streamedContent();
         $this->assertStringContainsString(',4.5,', $csv);

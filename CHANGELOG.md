@@ -2,6 +2,13 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.11] - 2026-08-09
+
+- **Fixed: saving the book edit form 422'd on any book rated above 2.5 stars.** `PATCH /api/books/{id}` came back `rating_out_of_range` — "rating '6' must be between 0.5 and 5 in 0.5 steps" — because the form was round-tripping the storage scale. Ratings are stored doubled to fit an integer column, the show payload carried the doubled value, and `EditBookView` compensated by doubling its `<option>` values too, so a 3-star read submitted a `6` into a rule that validates the 0.5–5 display scale.
+- **`ReadInstance` now has a `getRatingAttribute` that halves on read**, closing the mutator-without-accessor asymmetry that `/feature-plans/books.md` had flagged as a recurring source of bugs. Every Eloquent path — book show, list payloads, the CSV export — now emits the display scale, so the ad-hoc `/ 2` in `BookView`, `BookTableRow` and `CatalogExportService::ratingField` is gone. The doubling itself is unchanged and no data moves; only what crosses the wire changes, from `10` to `5`.
+- Two paths deliberately still convert by hand and say so in comments: `AverageRating`, because `avg()` passes through to the query builder and never hydrates a model, and anything using `DB::table()`. `RatingDistribution` does hydrate, so it stopped dividing.
+- API consumers other than the SPA should note the wire-format change on `read_instances.rating`. Writes were always on the display scale and are unaffected.
+
 ## [0.1.10] - 2026-08-09
 
 - **All four genre-ingest paths now go through `GenreService`.** `BookController::handleGenres`, `::updateGenres` and `NewBookController::handleGenres` each called `Genre::firstOrCreate` with whatever the caller typed, so `GenreService::normalize` applied to the admin door only and the same genre could arrive spelled three ways. They are replaced by `GenreService::attachByName()` (the create doors) and `::syncFromInput()` (the edit door). The input shapes still differ — consolidating those needs the create endpoints merged first — but the resulting rows no longer do.

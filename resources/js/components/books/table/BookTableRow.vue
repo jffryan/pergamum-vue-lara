@@ -164,7 +164,7 @@ export default {
         },
         calculatedRating() {
             if (!this.readInstance) return null;
-            return this.readInstance.rating / 2;
+            return this.readInstance.rating;
         },
     },
 };

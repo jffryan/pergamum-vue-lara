@@ -86,8 +86,9 @@ class ListsCrudTest extends TestCase
 
         $reads = $response->json('items.0.version.book.read_instances');
         $this->assertCount(1, $reads, 'read_instances should only include the authenticated users reads');
-        // Rating is doubled by the model accessor, so the owner's rating=5 is stored/returned as 10.
-        $this->assertSame(10, $reads[0]['rating']);
+        // Stored doubled, returned on the display scale — the accessor undoes
+        // the mutator, so the owner's 5 makes the round trip unchanged.
+        $this->assertSame(5, $reads[0]['rating']);
     }
 
     public function test_store_creates_list_with_slug_and_user_id(): void

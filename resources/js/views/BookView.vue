@@ -252,8 +252,8 @@ export default {
                 const versionFormatName = readInstanceVersion
                     ? readInstanceVersion.format.name
                     : null;
-                // Set rating to 5-point scale
-                let rating = readInstance.rating / 2;
+                // The API sends the display scale; 0 means "never rated".
+                let { rating } = readInstance;
                 if (rating === 0) {
                     rating = null;
                 }
