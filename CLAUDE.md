@@ -37,7 +37,7 @@ If running PHP locally instead: `php artisan serve`, `npm run dev`, `npm run bui
 - **JS lint:** `npx eslint --ext .js,.vue resources/js` (`--fix` to auto-fix). ESLint extends `airbnb-base` + `vue3-essential` + `prettier`; double quotes enforced; `camelcase` and `no-console` are off.
 - **JS tooling runs *inside* the `vite` container** — `node_modules` is a named volume, not on the host. Prefix with `docker compose exec vite sh -lc '…'`. Run bare on the host and `npx` silently fetches a newer eslint that then fails on `.eslintrc.js`, which looks like a config problem but isn't.
 - **Without `--ext .js,.vue`, eslint checks only `.js`.** `.vue` files then appear clean because they were never read — always pass the flag. The tree is currently clean under it; keep it that way.
-- **Line endings:** CRLF for JS/Vue (prettier enforces it), LF for PHP. `.editorconfig` says CRLF; write files however and let `--fix` / `pint` settle it.
+- **Line endings:** LF everywhere. `.gitattributes` (`* text=auto eol=lf`) checks files out as LF on every platform, `.editorconfig` says `end_of_line = lf`, and `.prettierrc` pins `"endOfLine": "lf"` so prettier can't be talked into CRLF by an editorconfig change. Don't reintroduce CRLF — git normalizes to LF on commit, so CI would see LF while your worktree sees CRLF and prettier would fail there but pass locally.
 - **CI:** `.github/workflows/ci.yml` runs all four of the above (pint --test, phpunit, eslint, vitest) plus a production build, on every push to `main` and every PR. Run them locally before pushing — the workflow is the same commands, not a looser subset. Details in `/documentation/backend-tests.md`.
 
 ## Aliases & Vite
