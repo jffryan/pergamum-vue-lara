@@ -2,18 +2,13 @@ import { defineStore } from "pinia";
 import { addVersionToBookService } from "@/services/BookServices";
 
 const useBooksStore = defineStore("BooksStore", {
+    // Ordering is not state here. The library listing is paginated, so its
+    // sort is a query parameter resolved by the server — see
+    // BookController::SORTABLE. A client-side `sortedBy` could only ever
+    // reorder the page already fetched.
     state: () => ({
         allBooks: [],
-        sortedBy: "default",
     }),
-    getters: {
-        sortedBooks(state) {
-            if (state.sortedBy === "default") return state.allBooks;
-            return [...state.allBooks].sort((a, b) =>
-                a.book.title.localeCompare(b.book.title),
-            );
-        },
-    },
     actions: {
         setAllBooks(books) {
             this.allBooks = books;

@@ -106,9 +106,23 @@ Both return the same shape; pick based on what the caller has.
 
 ### Listing / searching
 
-`GET /books` paginates (default 20, `?limit=` to override), sorts by primary author's last name, and accepts `?search=` (matches title or author name), `?format=` (filters by format name), and `?discarded=`.
+`GET /books` paginates (default 20, `?limit=` to override) and accepts `?sort=` / `?direction=`, `?search=` (matches title or author name), `?format=` (filters by format name), and `?discarded=`. All four compose — search, filter and sort are applied to one query, not to separate branches.
 
-`?discarded=` takes `exclude` (the default — hides books whose every version is discarded), `only` (just those books, i.e. the "Discarded" shelf), or `all` (no filtering). `0`/`false` alias to `exclude` and `1`/`true` to `only`; anything unrecognized falls back to `exclude`. The filter applies to the `?search=` branch too, so searching the library can't surface books the library itself won't show.
+`?discarded=` takes `exclude` (the default — hides books whose every version is discarded), `only` (just those books, i.e. the "Discarded" shelf), or `all` (no filtering). `0`/`false` alias to `exclude` and `1`/`true` to `only`; anything unrecognized falls back to `exclude`.
+
+#### Sorting
+
+`?sort=` takes one of `title`, `author` (the default), `format`, `pages`, `date_read`, `rating`; `?direction=` takes `asc` (default) or `desc`. Both fall back to the default on anything unrecognized rather than erroring — a stale bookmark should render the library, not a 422. The whitelist is `BookController::SORTABLE`, and it is a whitelist because the value reaches `ORDER BY` as an identifier rather than a bound parameter.
+
+Sorting is server-side because the listing is paginated: ordering the twenty rows already fetched would rank a page, not a library. There is deliberately no client-side sort anywhere in the SPA.
+
+Three rules the column semantics depend on:
+
+- **Absent values sort last in both directions.** MySQL puts `NULL` first ascending, which would head a "by rating" list with every book you have never read.
+- **`date_read` and `rating` both resolve against the *most recent* read**, not a max or an average — the row displays the latest read, so the sort has to rank on the same value.
+- **`format`, `pages` and `author` resolve against the first version / lowest `author_ordinal`**, matching what `BookTableRow` renders. The eager loads in `BookController::libraryQuery` are ordered to match for the same reason: if the value shown isn't the value sorted on, sorting looks broken on any book with two authors or two copies.
+
+Each sortable column is a correlated subquery in `libraryQuery()`, so adding one is one more `addSelect` plus a `SORTABLE` entry. The read-derived subqueries are Eloquent builders, which is what makes `BelongsToCurrentUser` apply inside them — the raw `leftJoin('read_instances', …)` this replaced was outside the scope's reach and ordered against every account's reads.
 
 Response shape: `{ books, pagination: { total, perPage, currentPage, lastPage, from, to } }`. Items are run through `BookService::getBooksList`, which is the canonical "card-shaped" book payload — reuse it instead of building a parallel projection.
 

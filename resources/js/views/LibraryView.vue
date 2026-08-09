@@ -22,7 +22,10 @@
         </div>
         <div v-else>
             <div class="mb-4">
-                <div class="mb-4 flex items-baseline">
+                <form
+                    class="mb-4 flex items-baseline"
+                    @submit.prevent="submitSearch"
+                >
                     <input
                         type="text"
                         placeholder="Search books..."
@@ -30,22 +33,36 @@
                         v-model="searchTerm"
                     />
                     <button
+                        type="submit"
                         class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 btn btn-primary"
-                        @click="searchForBookByTitle"
                     >
                         Search
                     </button>
-                </div>
+                    <button
+                        v-if="activeSearch"
+                        type="button"
+                        class="ml-2 px-2 py-1 underline"
+                        @click="clearSearch"
+                    >
+                        Clear
+                    </button>
+                </form>
             </div>
-            <BookshelfTable :books="allBooks" class="mb-4" />
+            <BookshelfTable
+                :books="allBooks"
+                class="mb-4"
+                sortable
+                :sort-key="sortKey"
+                :sort-direction="sortDirection"
+                @sort="applySort"
+            />
             <div
                 v-for="page in pagination"
                 :key="page.label"
                 class="inline mr-2"
             >
                 <router-link
-                    v-if="page.url"
-                    :to="page.url"
+                    :to="page.to"
                     :class="page.active ? 'font-bold underline' : ''"
                 >
                     {{ page.label }}
@@ -63,6 +80,12 @@ import { useBooksStore } from "@/stores";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
+
+// Mirrors BookController::SORTABLE. An unrecognized key falls back server-side
+// too, so a stale bookmark renders the library rather than erroring — this is
+// only here so the header arrow doesn't point at a column that isn't sorted.
+const SORT_KEYS = ["title", "author", "format", "pages", "date_read", "rating"];
+const DEFAULT_SORT = "author";
 
 export default {
     name: "LibraryView",
@@ -84,7 +107,9 @@ export default {
             showErrorMessage: false,
             error: "",
             pagination: [],
-            searchTerm: "",
+            // Local only while the user is typing; the committed term lives in
+            // the URL so sorting and paginating keep it.
+            searchTerm: this.$route.query.search || "",
         };
     },
     computed: {
@@ -92,7 +117,7 @@ export default {
             return this.BooksStore.allBooks;
         },
         currentPage() {
-            return this.$route.query.page || 1;
+            return Number(this.$route.query.page) || 1;
         },
         // Absent means "on the shelf" — the backend defaults to excluding
         // books whose every version has been discarded.
@@ -102,35 +127,41 @@ export default {
         showingDiscarded() {
             return this.discardedMode === "only";
         },
-        discardedParam() {
-            return this.discardedMode ? { discarded: this.discardedMode } : {};
+        activeSearch() {
+            return this.$route.query.search || "";
         },
-        displayedBooks() {
-            // This only works if the book you're looking for is on the page you're actively on.
-            // That doesn't really work for users...
-            let filteredBooks = [...this.allBooks];
+        sortKey() {
+            const key = this.$route.query.sort;
 
-            if (this.searchTerm) {
-                filteredBooks = filteredBooks.filter((book) => {
-                    return book.title
-                        .toLowerCase()
-                        .includes(this.searchTerm.toLowerCase());
-                });
-            }
+            return SORT_KEYS.includes(key) ? key : DEFAULT_SORT;
+        },
+        sortDirection() {
+            return this.$route.query.direction === "desc" ? "desc" : "asc";
+        },
+        // The listing is paginated server-side, so every control that changes
+        // what the query returns has to go through the URL — sorting a page of
+        // twenty would rank a slice of the library rather than the library.
+        requestOptions() {
+            const options = {
+                page: this.currentPage,
+                sort: this.sortKey,
+                direction: this.sortDirection,
+            };
 
-            return filteredBooks;
+            if (this.activeSearch) options.search = this.activeSearch;
+            if (this.discardedMode) options.discarded = this.discardedMode;
+
+            return options;
         },
     },
 
     methods: {
         async fetchData() {
-            const options = {
-                page: this.currentPage,
-                ...this.discardedParam,
-            };
+            this.isLoading = true;
+            this.showErrorMessage = false;
 
             try {
-                const res = await getAllBooks(options);
+                const res = await getAllBooks(this.requestOptions);
                 if (!res.data || res.status !== 200) {
                     throw new Error(
                         "Failed to fetch data: Invalid response from the server",
@@ -150,59 +181,83 @@ export default {
                 this.isLoading = false;
             }
         },
-        async searchForBookByTitle() {
-            try {
-                const res = await getAllBooks({
-                    search: this.searchTerm,
-                    ...this.discardedParam,
-                });
-                if (!res.data || res.status !== 200) {
-                    throw new Error(
-                        "Failed to fetch data: Invalid response from the server",
-                    );
-                }
-                this.BooksStore.setAllBooks(res.data.books);
-                this.pagination = this.setPaginationLinks(res.data.pagination);
-            } catch (error) {
-                // Log the error for debugging purposes
-                console.error("Error fetching books:", error);
+        // Every navigation below drops back to page 1: the row that was on
+        // page 4 under one sort is somewhere else entirely under the next.
+        navigate(query) {
+            this.$router.push({
+                name: "library.index",
+                query: this.buildQuery({ ...query, page: undefined }),
+            });
+        },
+        buildQuery(overrides = {}) {
+            const merged = {
+                sort: this.sortKey,
+                direction: this.sortDirection,
+                search: this.activeSearch,
+                discarded: this.discardedMode,
+                page: this.currentPage,
+                ...overrides,
+            };
 
-                // Provide user feedback
-                this.showErrorMessage = true;
-                this.error =
-                    "Unable to load books at this time. Please try again later.";
-            } finally {
-                this.isLoading = false;
-            }
+            // Keep defaults out of the URL so the common case stays a clean
+            // /library and the back button doesn't collect no-op entries.
+            if (merged.sort === DEFAULT_SORT) delete merged.sort;
+            if (merged.direction === "asc") delete merged.direction;
+            if (merged.page === 1) delete merged.page;
+
+            return Object.fromEntries(
+                Object.entries(merged).filter(
+                    ([, value]) => value !== "" && value !== undefined,
+                ),
+            );
+        },
+        applySort({ key, direction }) {
+            this.navigate({ sort: key, direction });
+        },
+        submitSearch() {
+            this.navigate({ search: this.searchTerm });
+        },
+        clearSearch() {
+            this.searchTerm = "";
+            this.navigate({ search: "" });
         },
         setPaginationLinks(paginationData) {
             const { currentPage, lastPage } = paginationData;
             const paginationLabels = [...Array(lastPage).keys()].map(
                 (i) => i + 1,
             );
-            // Keep the shelf/discarded context when paginating.
-            const suffix = this.discardedMode
-                ? `&discarded=${this.discardedMode}`
-                : "";
 
-            return paginationLabels.map((label) => {
-                return {
-                    label,
-                    url: `?page=${label}${suffix}`,
-                    active: label === currentPage,
-                };
-            });
+            return paginationLabels.map((label) => ({
+                label,
+                // Paging keeps the sort, search and shelf context it was
+                // reached under.
+                to: {
+                    name: "library.index",
+                    query: this.buildQuery({ page: label }),
+                },
+                active: label === currentPage,
+            }));
         },
     },
 
     watch: {
-        currentPage: {
+        // One watcher over the whole request shape: page, sort, direction,
+        // search and shelf all change the same query, and watching them
+        // separately fired duplicate fetches whenever a navigation changed two
+        // at once (sorting always resets the page).
+        requestOptions: {
             immediate: true,
-            handler: "fetchData",
+            deep: true,
+            handler(next, previous) {
+                if (JSON.stringify(next) === JSON.stringify(previous)) return;
+                this.fetchData();
+            },
         },
-        // Toggling between the shelf and the discarded list leaves the page at
-        // 1, so currentPage alone won't refire.
-        discardedMode: "fetchData",
+        activeSearch(term) {
+            // Keep the input in step when the term changes from outside it —
+            // a back navigation, or the clear button.
+            this.searchTerm = term;
+        },
     },
 };
 </script>

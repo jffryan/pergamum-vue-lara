@@ -5,49 +5,33 @@
             <div
                 class="hidden sm:grid grid-cols-12 bg-slate-900 text-slate-200 rounded-t-md"
             >
-                <div
+                <component
+                    :is="isSortable(column) ? 'button' : 'div'"
                     v-for="column in columns"
                     :key="column.name"
-                    @click="column.clickHandler"
+                    :type="isSortable(column) ? 'button' : null"
+                    @click="isSortable(column) && emitSort(column)"
+                    :aria-sort="ariaSort(column)"
                     :class="[
-                        'p-2 flex justify-between align-bottom',
-                        column.clickHandler ? 'cursor-pointer' : '',
-                        `col-span-${column.span}`,
+                        'p-2 flex justify-between align-bottom text-left',
+                        isSortable(column) ? 'cursor-pointer' : '',
+                        spanClass(column.span),
                     ]"
                 >
                     {{ column.name }}
                     <UpArrow
-                        v-if="
-                            arrowPosition(column.ascending, column.descending)
-                        "
+                        v-if="isSortable(column) && column.sortKey === sortKey"
                         :class="[
-                            `arrow-${arrowPosition(column.ascending, column.descending)}`,
+                            sortDirection === 'desc' ? 'arrow-down' : '',
                             'fill-white',
                         ]"
                     />
-                </div>
+                </component>
             </div>
-            <Sortable
-                v-if="isSortable"
-                :list="books"
-                item-key="book_id"
-                @end="onSortEnd"
-            >
-                <template #item="{ element, index }">
-                    <BookTableRow
-                        :key="element.book_id"
-                        :book="element"
-                        :class="[
-                            index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-200',
-                            ' text-black cursor-pointer hover:bg-slate-500 hover:text-white',
-                        ]"
-                    />
-                </template>
-            </Sortable>
-            <div v-else>
+            <div>
                 <BookTableRow
                     v-for="(book, index) in books"
-                    :key="book.book_id"
+                    :key="book.book.book_id"
                     :book="book"
                     :class="[
                         index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-200',
@@ -60,19 +44,24 @@
 </template>
 
 <script>
-import { Sortable } from "sortablejs-vue3";
-
-import { useBooksStore } from "@/stores";
-
 import BookTableRow from "@/components/books/table/BookTableRow.vue";
 import UpArrow from "@/components/globals/svgs/UpArrow.vue";
+
+// Tailwind's scanner reads source text, so an interpolated `col-span-${n}`
+// class is invisible to it. These only survived before by coincidence — the
+// same literals happened to appear in BookTableRow. Keep the mapping explicit
+// so a new column with a new span doesn't silently render unstyled.
+const SPAN_CLASSES = {
+    1: "col-span-1",
+    2: "col-span-2",
+    3: "col-span-3",
+};
 
 export default {
     name: "BookshelfTable",
     components: {
         BookTableRow,
         UpArrow,
-        Sortable,
     },
     props: {
         books: {
@@ -84,94 +73,64 @@ export default {
             required: false,
             default: "All Books",
         },
-        isSortable: {
+        // Sorting is server-side, so a table can only offer it if its parent
+        // fetches through an endpoint that supports `?sort=`. Views backed by
+        // a plain relation load leave this off and get inert headers.
+        sortable: {
             type: Boolean,
             required: false,
             default: false,
         },
+        // The key currently sorted on, matching BookController::SORTABLE.
+        sortKey: {
+            type: String,
+            required: false,
+            default: null,
+        },
+        sortDirection: {
+            type: String,
+            required: false,
+            default: "asc",
+        },
     },
-    setup() {
-        const BooksStore = useBooksStore();
-
-        return {
-            BooksStore,
-        };
-    },
-    emits: ["update:books"],
+    emits: ["sort"],
     data() {
         return {
             columns: [
-                {
-                    name: "Title",
-                    span: 3,
-                    ascending: "sortByTitleAlpha",
-                    descending: "sortByTitleAlphaDesc",
-                },
-                {
-                    name: "Primary Author",
-                    span: 2,
-                    ascending: "sortByAuthorLastName",
-                    descending: "sortByAuthorLastNameDesc",
-                },
-                {
-                    name: "Format",
-                    span: 1,
-                    ascending: "sortByFormat",
-                    descending: "sortByFormatDesc",
-                },
-                {
-                    name: "Page Count",
-                    span: 1,
-                    ascending: null,
-                    descending: null,
-                },
-                {
-                    name: "Genres",
-                    span: 3,
-                    ascending: null,
-                    descending: null,
-                },
-                {
-                    name: "Date Read",
-                    span: 1,
-                    ascending: "sortByDateCompleted",
-                    descending: "sortByDateCompletedDesc",
-                },
-                {
-                    name: "Rating",
-                    span: 1,
-                    ascending: "sortByRating",
-                    descending: "sortByRatingDesc",
-                },
+                { name: "Title", span: 3, sortKey: "title" },
+                { name: "Primary Author", span: 2, sortKey: "author" },
+                { name: "Format", span: 1, sortKey: "format" },
+                { name: "Page Count", span: 1, sortKey: "pages" },
+                // Books render up to two genres, so there is no single value
+                // to order on.
+                { name: "Genres", span: 3, sortKey: null },
+                { name: "Date Read", span: 1, sortKey: "date_read" },
+                { name: "Rating", span: 1, sortKey: "rating" },
             ],
-            sortedBooks: [...this.books],
         };
     },
-    computed: {
-        sortedByValue() {
-            return this.BooksStore.sortedBy;
-        },
-        arrowPosition() {
-            return (ascending, descending) => {
-                if (this.sortedByValue === ascending) {
-                    return "up";
-                }
-                if (this.sortedByValue === descending) {
-                    return "down";
-                }
-                return null;
-            };
-        },
-    },
-    watch: {
-        books(newBooks) {
-            this.sortedBooks = [...newBooks];
-        },
-    },
     methods: {
-        onSortEnd() {
-            console.log("EMIT", this.sortedBooks);
-            this.$emit("update:books", this.sortedBooks);
+        isSortable(column) {
+            return this.sortable && Boolean(column.sortKey);
+        },
+        spanClass(span) {
+            return SPAN_CLASSES[span] || "";
+        },
+        ariaSort(column) {
+            if (!this.isSortable(column)) return null;
+            if (column.sortKey !== this.sortKey) return "none";
+            return this.sortDirection === "desc" ? "descending" : "ascending";
+        },
+        // Clicking the active column flips direction; clicking any other
+        // starts it ascending. The parent owns the state but not this rule —
+        // otherwise every consumer reimplements the toggle.
+        emitSort(column) {
+            const direction =
+                column.sortKey === this.sortKey && this.sortDirection === "asc"
+                    ? "desc"
+                    : "asc";
+
+            this.$emit("sort", { key: column.sortKey, direction });
         },
     },
 };

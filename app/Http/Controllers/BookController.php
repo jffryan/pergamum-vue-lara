@@ -22,6 +22,25 @@ use Illuminate\Support\Facades\Log;
 
 class BookController extends Controller
 {
+    /**
+     * Columns the library listing can be ordered by.
+     *
+     * Keys are the public `?sort=` values; values are what reaches `ORDER BY`.
+     * Everything but `title` resolves to a subquery alias added by
+     * {@see libraryQuery()}. Whitelisted rather than passed through because
+     * the value lands in the query as an identifier, not a bound parameter.
+     */
+    private const SORTABLE = [
+        'title' => 'books.title',
+        'author' => 'sort_author',
+        'format' => 'sort_format',
+        'pages' => 'sort_pages',
+        'date_read' => 'sort_date_read',
+        'rating' => 'sort_rating',
+    ];
+
+    private const DEFAULT_SORT = 'author';
+
     protected $bookService;
 
     protected $genreService;
@@ -39,21 +58,11 @@ class BookController extends Controller
      */
     public function index(Request $request)
     {
-        if ($request->has('search')) {
-            return $this->searchBooks($request);
-        }
+        $query = $this->libraryQuery();
 
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances'])
-            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
-            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-            // NB: this join is *not* user-scoped, and BelongsToCurrentUser does
-            // not reach it — a global scope constrains the model's own queries,
-            // not a raw join against its table. It inflates the grouped row
-            // count only; the returned read history comes from the eager load
-            // above, which is scoped. Tracked in /feature-plans/books.md.
-            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            ->groupBy('books.book_id', 'books.title', 'books.slug');
+        if ($request->filled('search')) {
+            $this->applySearchFilter($query, (string) $request->input('search'));
+        }
 
         if ($request->has('format')) {
             $format = $request->get('format');
@@ -63,10 +72,9 @@ class BookController extends Controller
         }
 
         $this->applyDiscardedFilter($query, $request);
+        $this->applySort($query, $request);
 
-        $query->orderBy('primary_author_last_name', 'asc');
-
-        // Determine the pagination size, default to 30 if not specified
+        // Determine the pagination size, default to 20 if not specified
         $pageSize = $request->input('limit', 20);
 
         // Paginate the results
@@ -86,6 +94,118 @@ class BookController extends Controller
                 'to' => $books->lastItem(),
             ],
         ]);
+    }
+
+    /**
+     * The library listing query, with one sortable value selected per column.
+     *
+     * Each sort dimension is a correlated subquery rather than a join. The
+     * join-and-GROUP-BY shape this replaced had to collapse the row explosion
+     * with `MIN(authors.last_name)`, which meant every added select had to
+     * join the `GROUP BY` too — a standing trap under MySQL 8's
+     * `ONLY_FULL_GROUP_BY`. Subqueries produce one row per book to begin with,
+     * so there is nothing to group and each new sortable column is one more
+     * entry here.
+     *
+     * The read-derived subqueries matter for a second reason: they are
+     * Eloquent builders, so `BelongsToCurrentUser` applies inside them. The
+     * `leftJoin('read_instances', …)` they replaced was raw, and a global
+     * scope constrains a model's own queries rather than a join against its
+     * table — so it silently ordered and counted against every account's
+     * reads. "Date read" and "rating" are only meaningful per-user, so the
+     * feature and the fix are the same change.
+     *
+     * Eager loads are ordered to match: the row renders `authors[0]`,
+     * `versions[0]` and `readInstances[0]`, so the value shown in a column has
+     * to be the value sorted on, or sorting looks broken on any book with more
+     * than one of something.
+     */
+    private function libraryQuery()
+    {
+        return Book::query()
+            ->with([
+                'authors' => fn ($q) => $q->orderBy('book_author.author_ordinal'),
+                'versions' => fn ($q) => $q->orderBy('versions.version_id'),
+                'versions.format',
+                'genres',
+                'readInstances' => fn ($q) => $q->orderByDesc('date_read'),
+            ])
+            ->select('books.*')
+            ->addSelect([
+                'sort_author' => Author::select('authors.last_name')
+                    ->join('book_author', 'book_author.author_id', '=', 'authors.author_id')
+                    ->whereColumn('book_author.book_id', 'books.book_id')
+                    ->orderBy('book_author.author_ordinal')
+                    ->orderBy('authors.last_name')
+                    ->limit(1),
+                'sort_format' => Format::select('formats.name')
+                    ->join('versions', 'versions.format_id', '=', 'formats.format_id')
+                    ->whereColumn('versions.book_id', 'books.book_id')
+                    ->orderBy('versions.version_id')
+                    ->limit(1),
+                'sort_pages' => Version::select('versions.page_count')
+                    ->whereColumn('versions.book_id', 'books.book_id')
+                    ->orderBy('versions.version_id')
+                    ->limit(1),
+                // Both read-derived sorts resolve against the *most recent*
+                // read, so "sort by rating" ranks by how you rated it last
+                // rather than by a best-ever the row never displays.
+                'sort_date_read' => ReadInstance::select('read_instances.date_read')
+                    ->whereColumn('read_instances.book_id', 'books.book_id')
+                    ->orderByDesc('read_instances.date_read')
+                    ->limit(1),
+                // Ratings are stored doubled (see ReadInstance's accessor).
+                // Doubling is monotonic, so ordering on the raw column is
+                // correct — this value is never rendered, only sorted on.
+                'sort_rating' => ReadInstance::select('read_instances.rating')
+                    ->whereColumn('read_instances.book_id', 'books.book_id')
+                    ->orderByDesc('read_instances.date_read')
+                    ->limit(1),
+            ]);
+    }
+
+    /**
+     * Apply `?sort=` / `?direction=`, falling back to the default on anything
+     * unrecognized rather than erroring — a stale bookmark should render the
+     * library, not a 422.
+     */
+    private function applySort($query, Request $request): void
+    {
+        $key = strtolower((string) $request->input('sort', self::DEFAULT_SORT));
+        $column = self::SORTABLE[$key] ?? self::SORTABLE[self::DEFAULT_SORT];
+
+        $direction = strtolower((string) $request->input('direction')) === 'desc' ? 'desc' : 'asc';
+
+        // MySQL sorts NULL first ascending, which would head a "by rating"
+        // list with every book you have never read. Absent values go last in
+        // both directions instead.
+        $query->orderByRaw("({$column} is null) asc")
+            ->orderBy($column, $direction)
+            // No sort key here is unique, and pagination over a non-unique
+            // ordering lets rows swap between pages. Break the tie on the PK.
+            ->orderBy('books.book_id', 'asc');
+    }
+
+    /**
+     * Match `?search=` against the title or either half of an author's name.
+     *
+     * Author matching goes through `whereHas` rather than a join so the query
+     * keeps its one-row-per-book shape — see {@see libraryQuery()}.
+     */
+    private function applySearchFilter($query, string $search): void
+    {
+        // `%` and `_` are wildcards to LIKE, so an unescaped term matches
+        // arbitrarily. Bound parameters make this injection-safe either way;
+        // escaping is what makes the search return what it looks like it will.
+        $term = '%'.addcslashes($search, '%_\\').'%';
+
+        $query->where(function ($q) use ($term) {
+            $q->where('books.title', 'like', $term)
+                ->orWhereHas('authors', function ($a) use ($term) {
+                    $a->where('authors.first_name', 'like', $term)
+                        ->orWhere('authors.last_name', 'like', $term);
+                });
+        });
     }
 
     /**
@@ -503,51 +623,5 @@ class BookController extends Controller
         ];
 
         return response()->json($nestedResponse);
-    }
-
-    private function searchBooks(Request $request)
-    {
-        $search = $request->search;
-
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances'])
-            ->selectRaw('books.book_id, books.title, books.slug, MIN(authors.last_name) as primary_author_last_name')
-            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
-            // Grouped: an ungrouped orWhere chain lets any subsequent AND
-            // clause (the shelf filter below) bind to the last term only.
-            ->where(function ($q) use ($search) {
-                $q->where('books.title', 'like', "%$search%")
-                    ->orWhere('authors.first_name', 'like', "%$search%")
-                    ->orWhere('authors.last_name', 'like', "%$search%");
-            })
-            ->groupBy('books.book_id', 'books.title', 'books.slug');
-
-        // Search obeys the same shelf filter as the listing, so searching the
-        // library can't turn up books the library itself won't show.
-        $this->applyDiscardedFilter($query, $request);
-
-        $query->orderBy('primary_author_last_name', 'asc');
-
-        // Determine the pagination size, default to 30 if not specified
-        $pageSize = $request->input('limit', 20);
-
-        // Paginate the results
-        $books = $query->paginate($pageSize);
-
-        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
-
-        // Return paginated results
-        return response()->json([
-            'books' => $formattedBooks,
-            'pagination' => [
-                'total' => $books->total(),
-                'perPage' => $books->perPage(),
-                'currentPage' => $books->currentPage(),
-                'lastPage' => $books->lastPage(),
-                'from' => $books->firstItem(),
-                'to' => $books->lastItem(),
-            ],
-        ]);
     }
 }

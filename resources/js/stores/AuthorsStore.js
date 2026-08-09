@@ -4,7 +4,6 @@ const useAuthorsStore = defineStore("AuthorsStore", {
     state: () => ({
         allAuthors: [],
         currentAuthor: {},
-        sortedBy: "default",
     }),
     actions: {
         setCurrentAuthor(author) {

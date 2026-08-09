@@ -21,7 +21,6 @@ describe("BooksStore", () => {
     // ------------------------
     it("should have the correct initial state", () => {
         expect(store.allBooks).toEqual([]);
-        expect(store.sortedBy).toBe("default");
     });
 
     // ------------------------
@@ -182,29 +181,18 @@ describe("BooksStore", () => {
     });
 
     // ------------------------
-    // sortedBooks Getter
+    // Ordering
     // ------------------------
-    it("should return books sorted by title when sortedBy is not default", () => {
-        store.setAllBooks([
-            { book: { book_id: 2, title: "Z Book" }, versions: [] },
-            { book: { book_id: 1, title: "A Book" }, versions: [] },
-        ]);
-
-        store.sortedBy = "title"; // Changing sort criteria
-
-        expect(store.sortedBooks).toEqual([
-            { book: { book_id: 1, title: "A Book" }, versions: [] },
-            { book: { book_id: 2, title: "Z Book" }, versions: [] },
-        ]);
-    });
-
-    it("should return books in default order if sortedBy is default", () => {
+    // The store holds one page of a server-ordered listing, so it preserves
+    // the order it was given rather than imposing one. Sorting is a query
+    // parameter — see LibrarySortingTest.php.
+    it("should preserve the order books were set in", () => {
         const books = [
-            { book: { book_id: 1, title: "A Book" }, versions: [] },
             { book: { book_id: 2, title: "Z Book" }, versions: [] },
+            { book: { book_id: 1, title: "A Book" }, versions: [] },
         ];
         store.setAllBooks(books);
 
-        expect(store.sortedBooks).toEqual(books);
+        expect(store.allBooks).toEqual(books);
     });
 });
