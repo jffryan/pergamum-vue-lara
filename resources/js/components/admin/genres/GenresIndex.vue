@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useGenreStore } from "@/stores";
+import { filterGenres } from "@/utils/genreList";
 import GenresTable from "./GenresTable.vue";
 import CreateGenre from "./CreateGenre.vue";
 import MergeGenresBar from "./MergeGenresBar.vue";
@@ -25,21 +26,14 @@ onMounted(async () => {
     }
 });
 
-// A plain filtered table rather than a copy of GenresView's search + sort +
-// pagination. Duplicating that would mean two implementations to keep honest;
-// extracting it would mean refactoring a working user-facing view to serve an
-// admin screen. Revisit if the genre count makes this unusable.
-const filteredGenres = computed(() => {
-    const term = searchTerm.value.trim().toLowerCase();
-
-    if (!term) {
-        return genreStore.allGenres;
-    }
-
-    return genreStore.allGenres.filter((genre) =>
-        genre.name.toLowerCase().includes(term),
-    );
-});
+// Shares `GenresView`'s filter so the two search boxes can't drift apart. The
+// sort and the letter grouping in `utils/genreList` are deliberately not used
+// here: this table is ordered by the API and every row carries actions, so
+// section headings would just get in the way. Revisit if the genre count makes
+// an unsorted, unpaginated table unusable.
+const filteredGenres = computed(() =>
+    filterGenres(genreStore.allGenres, searchTerm.value),
+);
 
 // Resolved against the live list rather than held as objects, so ids that
 // stopped existing (merged away, deleted) drop out of the selection on their own.

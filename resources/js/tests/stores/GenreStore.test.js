@@ -49,7 +49,6 @@ describe("GenreStore", () => {
     // ------------------------
     it("should have the correct initial state", () => {
         expect(store.allGenres).toEqual([]);
-        expect(store.currentPage).toBe(1);
     });
 
     it("should populate allGenres from the API", async () => {

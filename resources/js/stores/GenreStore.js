@@ -10,7 +10,6 @@ import {
 const useGenreStore = defineStore("GenreStore", {
     state: () => ({
         allGenres: [],
-        currentPage: 1,
     }),
     actions: {
         setAllGenres(genres) {
