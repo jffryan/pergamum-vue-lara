@@ -2,6 +2,14 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.16] - 2026-08-19
+
+- **Fixed: the genre page ordered its books by an author it never showed.** `GenreController::show` still ranked books by `MIN(authors.last_name)` — the author whose name sorts first alphabetically — while the column above them is headed "Primary Author" and renders `authors[0]`. A book credited to Vance and Anderson filed under A and displayed Vance, so the page looked unsorted next to the library, which has ordered on the primary author (lowest `author_ordinal`) since 0.1.12.
+- **Both listings now build the same query.** `BookController::libraryQuery()` and its sort applier moved to `App\Support\BookListing` — `SORTABLE`, the per-column correlated subqueries, the absent-values-last rule, and the `books.book_id` tiebreak. `BookController::index` reads `?sort=` / `?direction=` off the request; `GenreController::show` builds on the same query and takes the default. A new book listing should call it rather than growing a third variant, which is exactly how the genre page drifted.
+- **Three more things came with the shared query.** Genre pages now eager-load authors in `author_ordinal` order, versions by `version_id` and reads newest-first, so the author, format, page count and date each row renders is the one the ordering used. Ties break on the primary key, so paging through a genre where every book files under the same name can no longer repeat or drop a row. And the raw `leftJoin('read_instances', …)` is gone — it sat outside `BelongsToCurrentUser`'s reach, the last place in the app that did.
+- Not changed: `GET /genres/{genre}` still takes no `?sort=`, and `GenreView`'s table headers stay inert. The endpoint is one passthrough away from accepting it now; the remaining work is the URL handling `LibraryView` already models, tracked in `/feature-plans/books.md`.
+- `tests/Feature/Genres/GenreBooksOrderingTest` pins the ordering, the eager-load order, the pagination tiebreak and the user scoping (9 tests).
+
 ## [0.1.15] - 2026-08-19
 
 - **The genre index is one page again.** `GenresView` paginated 142 genres at 25 a page — six clicks over a list that fits on one screen, with the longest name in the catalog at 23 characters. It now renders the whole catalog as a responsive card grid, grouped under sticky letter headings with an A–Z jump rail, and `books_count` is drawn as a bar beside the number rather than parenthesised after the name.

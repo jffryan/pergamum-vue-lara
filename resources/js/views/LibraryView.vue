@@ -81,7 +81,7 @@ import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 
-// Mirrors BookController::SORTABLE. An unrecognized key falls back server-side
+// Mirrors BookListing::SORTABLE. An unrecognized key falls back server-side
 // too, so a stale bookmark renders the library rather than erroring — this is
 // only here so the header arrow doesn't point at a column that isn't sorted.
 const SORT_KEYS = ["title", "author", "format", "pages", "date_read", "rating"];

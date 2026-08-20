@@ -81,7 +81,7 @@ export default {
             required: false,
             default: false,
         },
-        // The key currently sorted on, matching BookController::SORTABLE.
+        // The key currently sorted on, matching BookListing::SORTABLE.
         sortKey: {
             type: String,
             required: false,

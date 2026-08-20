@@ -4,7 +4,7 @@ import { addVersionToBookService } from "@/services/BookServices";
 const useBooksStore = defineStore("BooksStore", {
     // Ordering is not state here. The library listing is paginated, so its
     // sort is a query parameter resolved by the server — see
-    // BookController::SORTABLE. A client-side `sortedBy` could only ever
+    // BookListing::SORTABLE. A client-side `sortedBy` could only ever
     // reorder the page already fetched.
     state: () => ({
         allBooks: [],

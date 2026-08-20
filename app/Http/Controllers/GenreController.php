@@ -5,13 +5,12 @@ namespace App\Http\Controllers;
 use App\Http\Requests\MergeGenresRequest;
 use App\Http\Requests\StoreGenreRequest;
 use App\Http\Requests\UpdateGenreRequest;
-use App\Models\Author;
-use App\Models\Book;
 use App\Models\Genre;
 use App\Services\BookService;
 use App\Services\Exceptions\GenreInUseException;
 use App\Services\Exceptions\GenreNameConflictException;
 use App\Services\GenreService;
+use App\Support\BookListing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -66,24 +65,17 @@ class GenreController extends Controller
     {
         $genre_id = $genre->genre_id;
 
-        $query = Book::with('authors', 'versions', 'versions.format', 'genres', 'readInstances')
-            ->selectRaw(
-                'books.book_id, books.title, books.slug, MIN('
-                .Author::sortNameExpression()
-                .') as primary_author_last_name'
-            )
-            ->leftJoin('book_author', 'books.book_id', '=', 'book_author.book_id')
-            ->leftJoin('authors', 'authors.author_id', '=', 'book_author.author_id')
-            ->leftJoin('read_instances', 'books.book_id', '=', 'read_instances.book_id')
+        // Same listing query the library is built on, so a book files under
+        // the author the row renders. See `App\Support\BookListing`.
+        $query = BookListing::query()
             ->whereHas('genres', function ($q) use ($genre_id) {
                 $q->where('genres.genre_id', $genre_id);
-            })
-            ->groupBy('books.book_id', 'books.title', 'books.slug');
+            });
 
-        // Sort by the name each book's authors file under — a surname where
-        // there is one, the single name otherwise. See
-        // `Author::sortNameExpression()`.
-        $query->orderBy('primary_author_last_name', 'asc');
+        // No sort UI on this page yet, so it takes the default (primary
+        // author, ascending). Turning `?sort=` on here is passing the two
+        // request inputs through, as `BookController::index` does.
+        BookListing::sort($query);
 
         // Determine the pagination size, default to 20 if not specified
         $pageSize = $request->input('limit', 20);
