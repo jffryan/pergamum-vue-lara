@@ -60,7 +60,29 @@ class BookWriteValidationTest extends TestCase
         $this->assertSame(0, Book::count());
     }
 
-    public function test_create_requires_a_last_name_on_every_author(): void
+    /**
+     * A first name alone is a whole author — see
+     * `App\Http\Requests\Concerns\ValidatesAuthorNames`. This used to 422
+     * on the missing last name, which made Plato uncreatable through the form
+     * and unsaveable through the edit form once bulk import had let him in.
+     */
+    public function test_create_accepts_an_author_with_only_a_first_name(): void
+    {
+        $this->actingAsUser();
+        $format = Format::factory()->print()->create();
+
+        $this->postJson('/api/books', [
+            'book' => [
+                'book' => ['title' => 'Republic'],
+                'authors' => [['first_name' => 'Plato']],
+                'versions' => [['format' => $format->format_id, 'page_count' => 100]],
+            ],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('authors', ['first_name' => 'Plato', 'last_name' => '', 'slug' => 'plato']);
+    }
+
+    public function test_create_rejects_an_author_with_neither_name(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->print()->create();
@@ -68,11 +90,12 @@ class BookWriteValidationTest extends TestCase
         $this->postJson('/api/books', [
             'book' => [
                 'book' => ['title' => 'Anonymous'],
-                'authors' => [['first_name' => 'Just']],
+                'authors' => [['first_name' => '', 'last_name' => '   ']],
                 'versions' => [['format' => $format->format_id, 'page_count' => 100]],
             ],
         ])
             ->assertStatus(422)
+            ->assertJsonPath('reason_code', 'author_name_required')
             ->assertJsonValidationErrors('book.authors.0.last_name');
     }
 

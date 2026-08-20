@@ -49,7 +49,13 @@ class Book extends Model
 
     public function authors(): BelongsToMany
     {
-        return $this->belongsToMany(Author::class, 'book_author', 'book_id', 'author_id')->withTimestamps();
+        // `author_ordinal` is what makes `authors[0]` mean "primary author"
+        // rather than "whichever row came back first" — the library sort, the
+        // table row, and the CSV export all lean on it, and none of them could
+        // read it while the pivot column went unloaded.
+        return $this->belongsToMany(Author::class, 'book_author', 'book_id', 'author_id')
+            ->withPivot('author_ordinal')
+            ->withTimestamps();
     }
 
     public function genres(): BelongsToMany

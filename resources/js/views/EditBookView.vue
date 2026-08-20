@@ -47,7 +47,7 @@
                             v-if="!isValidAuthors[idx]"
                             class="text-sm text-red-500"
                         >
-                            Last name is required.
+                            Enter a first or last name.
                         </p>
                     </div>
                     <span
@@ -227,7 +227,7 @@ import {
     formatDateRead,
 } from "@/services/BookServices";
 import { updateBook, deleteBook } from "@/api/BookController";
-import { validateString } from "@/utils/validators";
+import { validateAuthor } from "@/utils/validators";
 import { formatExpects } from "@/utils/formats";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
@@ -320,7 +320,7 @@ export default {
         },
         validateAuthors() {
             this.isValidAuthors = this.bookData.authors.map((author) =>
-                validateString(author.last_name),
+                validateAuthor(author),
             );
             return this.isValidAuthors.every((v) => v);
         },

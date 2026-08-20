@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Author;
 use App\Models\Book;
 use App\Models\BookList;
 use App\Models\Format;
@@ -47,7 +46,10 @@ class BulkImportService
 
     private const FALSEY = ['', '0', 'false', 'no', 'n'];
 
-    public function __construct(private readonly GenreService $genreService) {}
+    public function __construct(
+        private readonly GenreService $genreService,
+        private readonly AuthorService $authorService,
+    ) {}
 
     public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array
     {
@@ -459,12 +461,15 @@ class BulkImportService
                 return null;
             }
             [$first, $last] = explode('|', $entry, 2);
-            $first = trim($first);
-            $last = trim($last);
+            // Normalizing here rather than trimming by hand keeps the CSV door
+            // on the same spelling rule as the three book forms — see
+            // `AuthorService`.
+            $first = AuthorService::normalize($first);
+            $last = AuthorService::normalize($last);
             if ($first === '' && $last === '') {
                 return null;
             }
-            $slug = Slugger::for(trim($first.' '.$last));
+            $slug = AuthorService::slugFor($first, $last);
             if ($slug === '') {
                 return null;
             }
@@ -524,28 +529,17 @@ class BulkImportService
         return Book::create(['title' => $title, 'slug' => $slug]);
     }
 
+    /**
+     * The find-or-create and the ordinal bookkeeping this used to own by hand
+     * now live in `AuthorService` — they were the canonical semantics all
+     * along, and the book forms were the doors that disagreed.
+     */
     private function attachAuthors(Book $book, array $authors): void
     {
-        $existingIds = $book->authors()->pluck('authors.author_id')->all();
-        $maxOrdinal = (int) DB::table('book_author')
-            ->where('book_id', $book->book_id)
-            ->max('author_ordinal');
-
-        foreach ($authors as $entry) {
-            $author = Author::where('slug', $entry['slug'])->first();
-            if (! $author) {
-                $author = Author::create([
-                    'first_name' => $entry['first'],
-                    'last_name' => $entry['last'],
-                    'slug' => $entry['slug'],
-                ]);
-            }
-            if (! in_array($author->author_id, $existingIds, true)) {
-                $maxOrdinal++;
-                $book->authors()->attach($author->author_id, ['author_ordinal' => $maxOrdinal]);
-                $existingIds[] = $author->author_id;
-            }
-        }
+        $this->authorService->attachToBook($book, array_map(
+            fn ($entry) => ['first_name' => $entry['first'], 'last_name' => $entry['last']],
+            $authors,
+        ));
     }
 
     /**

@@ -92,7 +92,7 @@
                     </div>
 
                     <p v-if="!isValid.authors[idx]" class="p-2 text-red-300">
-                        Last name is required.
+                        Enter a first or last name.
                     </p>
                 </div>
             </div>
@@ -348,6 +348,7 @@ import {
     validateString,
     validateAuthor,
     validateNumber,
+    validateVersionLength,
 } from "@/utils/validators";
 
 import { formatExpects } from "@/utils/formats";
@@ -460,10 +461,11 @@ export default {
                     last_name: "",
                 };
                 this.bookForm.authors.push(newAuthor);
-                // Add another isValid input
-                this.isValid.authors.push({
-                    last_name: true,
-                });
+                // A boolean, matching what `validateBook` writes and what the
+                // template tests. Pushing `{ last_name: true }` here meant the
+                // row's error could never render — an object is truthy, so
+                // `v-if="!isValid.authors[idx]"` was always false.
+                this.isValid.authors.push(true);
             }
         },
         removeAuthorInput(index) {
@@ -527,13 +529,6 @@ export default {
             formattedBook.authors = book.authors;
             formattedBook.book_id = book.book_id;
 
-            // BUGGY!
-            for (let i = 0; i < formattedBook.authors.length; i += 1) {
-                this.isValid.authors.push({
-                    last_name: true,
-                });
-            }
-
             // Genres
             formattedBook.book.genres.raw = book.genres
                 .map(
@@ -553,14 +548,20 @@ export default {
                     nickname: book.versions[i].nickname,
                     version_id: book.versions[i].version_id,
                 });
-                // BUGGY!
-                this.isValid.versions.push({
-                    format: true,
-                    page_count: true,
-                    audio_runtime: true,
-                });
             }
             formattedBook.versions = versions;
+
+            // The validity arrays shadow the form arrays index for index, so
+            // they are rebuilt to match rather than pushed onto the single
+            // blank row `initializeBookForm` starts with. Pushing left them one
+            // longer than the form, which pointed every row's error message at
+            // its neighbour.
+            this.isValid.authors = formattedBook.authors.map(() => true);
+            this.isValid.versions = versions.map(() => ({
+                format: true,
+                page_count: true,
+                audio_runtime: true,
+            }));
 
             if (book.is_completed) {
                 formattedBook.readInstances = this.currentBook.read_instances;
@@ -578,11 +579,13 @@ export default {
                 format: validateNumber(version.format),
                 page_count:
                     !this.expectsPageCount(version.format) ||
-                    validateString(version.page_count) ||
-                    validateNumber(version.page_count),
+                    validateVersionLength(version.page_count),
+                // Same check as page count, which is the point of the shared
+                // helper: this half used to require an actual number, and the
+                // inputs produce strings, so a filled audiobook was invalid.
                 audio_runtime:
                     !this.expectsAudioRuntime(version.format) ||
-                    validateNumber(version.audio_runtime),
+                    validateVersionLength(version.audio_runtime),
             }));
 
             const isValid = {
@@ -598,7 +601,18 @@ export default {
 
             this.isValid = isValid;
 
-            return Object.values(isValid.book).every((value) => value);
+            // Every section, not just the book's own fields. The author and
+            // version results were computed, written to `isValid` for the
+            // template to render, and then dropped on the floor — so the form
+            // showed the error and submitted anyway, and the API answered the
+            // 422 the user had already been told about.
+            return (
+                Object.values(isValid.book).every(Boolean) &&
+                isValid.authors.every(Boolean) &&
+                isValid.versions.every((version) =>
+                    Object.values(version).every(Boolean),
+                )
+            );
         },
         // Formatting submission
         formatBookForm(bookForm, parsedGenres) {

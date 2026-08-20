@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesReadDates;
+use App\Http\Requests\Concerns\ValidatesAuthorNames;
 use App\Rules\Rating;
 
 /**
@@ -18,17 +19,15 @@ use App\Rules\Rating;
 class UpdateBookRequest extends ApiFormRequest
 {
     use NormalizesReadDates;
+    use ValidatesAuthorNames;
 
     public function rules(): array
     {
-        return [
+        return $this->authorNameRules('authors') + [
             'book' => ['required', 'array'],
             'book.title' => ['required', 'string', 'max:255'],
 
-            'authors' => ['sometimes', 'nullable', 'array'],
             'authors.*.author_id' => ['nullable', 'integer', 'exists:authors,author_id'],
-            'authors.*.first_name' => ['nullable', 'string', 'max:255'],
-            'authors.*.last_name' => ['required', 'string', 'max:255'],
 
             'genres' => ['sometimes', 'nullable', 'array'],
             'genres.*.genre_id' => ['nullable', 'integer'],
@@ -50,13 +49,25 @@ class UpdateBookRequest extends ApiFormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return $this->authorNameMessages('authors');
+    }
+
     protected function reasonCodes(): array
     {
-        return ['readInstances.*.rating.rating' => 'rating_out_of_range'];
+        return ['readInstances.*.rating.rating' => 'rating_out_of_range']
+            + $this->authorNameReasonCodes('authors');
     }
 
     protected function prepareForValidation(): void
     {
+        if ($this->has('authors')) {
+            $this->merge([
+                'authors' => $this->normalizeAuthorNamesIn($this->input('authors')),
+            ]);
+        }
+
         if ($this->has('readInstances')) {
             $this->merge([
                 'readInstances' => $this->normalizeReadDatesIn($this->input('readInstances')),

@@ -11,6 +11,7 @@ use App\Models\Format;
 use App\Models\ReadInstance;
 use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\Version;
+use App\Services\AuthorService;
 use App\Services\BookService;
 use App\Services\GenreService;
 use App\Support\BookCreator;
@@ -45,10 +46,16 @@ class BookController extends Controller
 
     protected $genreService;
 
-    public function __construct(BookService $bookService, GenreService $genreService)
-    {
+    protected $authorService;
+
+    public function __construct(
+        BookService $bookService,
+        GenreService $genreService,
+        AuthorService $authorService
+    ) {
         $this->bookService = $bookService;
         $this->genreService = $genreService;
+        $this->authorService = $authorService;
     }
 
     /**
@@ -132,11 +139,15 @@ class BookController extends Controller
             ])
             ->select('books.*')
             ->addSelect([
-                'sort_author' => Author::select('authors.last_name')
+                // Filed under `Author::sortNameExpression()`, not `last_name`,
+                // so single-name authors sort by the name they have. The
+                // tie-break has to use the same value: it decides which author
+                // of an unordered pair the sort key comes from.
+                'sort_author' => Author::selectRaw(Author::sortNameExpression())
                     ->join('book_author', 'book_author.author_id', '=', 'authors.author_id')
                     ->whereColumn('book_author.book_id', 'books.book_id')
                     ->orderBy('book_author.author_ordinal')
-                    ->orderBy('authors.last_name')
+                    ->orderByRaw(Author::sortNameExpression())
                     ->limit(1),
                 'sort_format' => Format::select('formats.name')
                     ->join('versions', 'versions.format_id', '=', 'formats.format_id')
@@ -273,10 +284,10 @@ class BookController extends Controller
     {
         $book = BookCreator::create($request->title());
 
-        $new_authors = $this->handleAuthors($request->authors());
+        $new_authors = $this->authorService->attachToBook($book, $request->authors());
         $new_versions = $this->prepareVersions($request->versions());
 
-        $this->attachModels($book, $new_authors, $new_versions);
+        $book->versions()->saveMany($new_versions);
 
         $new_genres = $this->genreService->attachByName($book, $request->genreNames());
 
@@ -330,28 +341,44 @@ class BookController extends Controller
         }
     }
 
+    /**
+     * A row carrying an `author_id` renames that author in place; a row without
+     * one resolves to an author and joins the book.
+     *
+     * Both halves are `AuthorService`'s — see its class docblock for why the
+     * find-or-create rules live in one place. Note that nothing here detaches:
+     * removing an author from a book has no door yet.
+     */
     private function updateAuthors($existing_book, $patch_authors)
     {
         $updated_authors = [];
+        $newEntries = [];
 
-        foreach ($patch_authors as $author) {
+        foreach ($patch_authors as $index => $author) {
             if (isset($author['author_id'])) {
-                $existing_author = Author::findOrFail($author['author_id']);
-                $existing_author->update($author);
-            } else {
-                $firstName = $author['first_name'] ?? '';
-                $lastName = $author['last_name'] ?? '';
-                $slug = Slugger::for(trim("$firstName $lastName"));
-
-                $existing_author = Author::firstOrCreate(
-                    ['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]
+                $updated_authors[$index] = $this->authorService->rename(
+                    Author::findOrFail($author['author_id']),
+                    $author,
                 );
-                $existing_book->authors()->attach($existing_author);
+
+                continue;
             }
-            $updated_authors[] = $existing_author;
+
+            $newEntries[$index] = $author;
         }
 
-        return $updated_authors;
+        // One call rather than one per author: `attachToBook` reads the book's
+        // current max ordinal to continue from, so attaching in a loop would
+        // re-read it each time and stack co-authors onto the same number.
+        $resolved = $this->authorService->attachToBook($existing_book, array_values($newEntries));
+
+        foreach (array_keys($newEntries) as $position => $index) {
+            $updated_authors[$index] = $resolved[$position];
+        }
+
+        ksort($updated_authors);
+
+        return array_values($updated_authors);
     }
 
     private function updateVersions($existing_book, $patch_versions)
@@ -564,17 +591,6 @@ class BookController extends Controller
     /**
      * Helper functions
      */
-    private function handleAuthors($authorsData)
-    {
-        return collect($authorsData)->map(function ($author) {
-            $firstName = $author['first_name'] ?? '';
-            $lastName = $author['last_name'] ?? '';
-            $author['slug'] = Slugger::for(trim("$firstName $lastName"));
-
-            return Author::firstOrCreate($author);
-        })->all();
-    }
-
     private function prepareVersions($versions_data)
     {
         $new_versions = [];
@@ -602,16 +618,6 @@ class BookController extends Controller
     /**
      * Genres are attached separately, by `GenreService::attachByName`.
      */
-    private function attachModels($book, $authors, $versions)
-    {
-        $authorIds = array_map(function ($author) {
-            return $author->author_id;
-        }, $authors);
-
-        $book->authors()->attach($authorIds);
-        $book->versions()->saveMany($versions);
-    }
-
     private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
     {
         $nestedResponse = [

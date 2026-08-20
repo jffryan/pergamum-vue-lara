@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesReadDates;
+use App\Http\Requests\Concerns\ValidatesAuthorNames;
 use App\Models\Format;
 use App\Rules\Rating;
 
@@ -17,16 +18,13 @@ use App\Rules\Rating;
 class CompleteBookCreationRequest extends ApiFormRequest
 {
     use NormalizesReadDates;
+    use ValidatesAuthorNames;
 
     public function rules(): array
     {
-        return [
+        return $this->authorNameRules('bookData.authors') + [
             'bookData' => ['required', 'array'],
             'bookData.book.title' => ['required', 'string', 'max:255'],
-
-            'bookData.authors' => ['sometimes', 'nullable', 'array'],
-            'bookData.authors.*.first_name' => ['nullable', 'string', 'max:255'],
-            'bookData.authors.*.last_name' => ['required', 'string', 'max:255'],
 
             'bookData.genres' => ['sometimes', 'nullable', 'array'],
             // `nullable`, not `required`: a blank genre row is a form artifact,
@@ -56,20 +54,32 @@ class CompleteBookCreationRequest extends ApiFormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return $this->authorNameMessages('bookData.authors');
+    }
+
     protected function reasonCodes(): array
     {
-        return ['bookData.read_instances.*.rating.rating' => 'rating_out_of_range'];
+        return ['bookData.read_instances.*.rating.rating' => 'rating_out_of_range']
+            + $this->authorNameReasonCodes('bookData.authors');
     }
 
     protected function prepareForValidation(): void
     {
         $bookData = $this->input('bookData');
 
-        if (! is_array($bookData) || ! isset($bookData['read_instances'])) {
+        if (! is_array($bookData)) {
             return;
         }
 
-        $bookData['read_instances'] = $this->normalizeReadDatesIn($bookData['read_instances']);
+        if (isset($bookData['authors'])) {
+            $bookData['authors'] = $this->normalizeAuthorNamesIn($bookData['authors']);
+        }
+
+        if (isset($bookData['read_instances'])) {
+            $bookData['read_instances'] = $this->normalizeReadDatesIn($bookData['read_instances']);
+        }
 
         $this->merge(['bookData' => $bookData]);
     }

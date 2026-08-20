@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesReadDates;
+use App\Http\Requests\Concerns\ValidatesAuthorNames;
 use App\Rules\Rating;
 
 /**
@@ -18,10 +19,11 @@ use App\Rules\Rating;
 class StoreBookRequest extends ApiFormRequest
 {
     use NormalizesReadDates;
+    use ValidatesAuthorNames;
 
     public function rules(): array
     {
-        return [
+        return $this->authorNameRules('book.authors') + [
             'book' => ['required', 'array'],
             'book.book.title' => ['required', 'string', 'max:255'],
 
@@ -31,10 +33,6 @@ class StoreBookRequest extends ApiFormRequest
             // book over an empty row the form itself rendered. Blanks are
             // dropped by `GenreService::resolveNames`, not rejected here.
             'book.book.genres.parsed.*' => ['nullable', 'string', 'max:255'],
-
-            'book.authors' => ['sometimes', 'nullable', 'array'],
-            'book.authors.*.first_name' => ['nullable', 'string', 'max:255'],
-            'book.authors.*.last_name' => ['required', 'string', 'max:255'],
 
             'book.versions' => ['sometimes', 'nullable', 'array'],
             // A format that doesn't exist used to be skipped silently, so a
@@ -50,20 +48,32 @@ class StoreBookRequest extends ApiFormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return $this->authorNameMessages('book.authors');
+    }
+
     protected function reasonCodes(): array
     {
-        return ['book.readInstances.*.rating.rating' => 'rating_out_of_range'];
+        return ['book.readInstances.*.rating.rating' => 'rating_out_of_range']
+            + $this->authorNameReasonCodes('book.authors');
     }
 
     protected function prepareForValidation(): void
     {
         $book = $this->input('book');
 
-        if (! is_array($book) || ! isset($book['readInstances'])) {
+        if (! is_array($book)) {
             return;
         }
 
-        $book['readInstances'] = $this->normalizeReadDatesIn($book['readInstances']);
+        if (isset($book['authors'])) {
+            $book['authors'] = $this->normalizeAuthorNamesIn($book['authors']);
+        }
+
+        if (isset($book['readInstances'])) {
+            $book['readInstances'] = $this->normalizeReadDatesIn($book['readInstances']);
+        }
 
         $this->merge(['book' => $book]);
     }
@@ -73,7 +83,7 @@ class StoreBookRequest extends ApiFormRequest
         return $this->validated()['book']['book']['title'];
     }
 
-    /** @return array<int, array{first_name: string, last_name: string}> */
+    /** @return array<int, array{first_name: ?string, last_name: ?string}> */
     public function authors(): array
     {
         return $this->validated()['book']['authors'] ?? [];

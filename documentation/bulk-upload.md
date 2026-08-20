@@ -73,7 +73,7 @@ reader and the writer, so the importer and the exporter cannot drift apart.
 Each row describes one (book, version, optional read instance). Rows are de-duped against existing rows at each layer:
 
 1. **Book**: find-or-create by `slug = Slugger::for(title)`. Title on existing books is left alone.
-2. **Authors**: each entry → find-or-create by `Slugger::for(trim($first.' '.$last))`. Attached if not already attached. Co-author ordinal continues from the book's current max.
+2. **Authors**: each entry → `AuthorService::attachToBook`, which find-or-creates by `AuthorService::slugFor($first, $last)`, attaches if not already attached, and continues the co-author ordinal from the book's current max. These were the importer's own semantics until the book forms adopted them; they now live in the service and all four doors share them. Whether an entry is *acceptable* — one of the two halves non-empty — is `parseAuthors`, matching `ValidatesAuthorNames` on the form doors.
 3. **Genres**: each entry → find by `LOWER(TRIM(name))` first; if none, create with the trimmed (case-preserved) value. Attached if not already attached.
 4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime`, `page_count`, `is_discarded` and `discarded_at` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits, and an older file can't resurrect a copy you got rid of after writing it).
 5. **Read instance**: if `date_read` is non-blank, always create a new `ReadInstance` against the resolved version with `user_id = auth()->id()`. Multiple rows with the same (title, format, nickname) but different dates produce multiple read instances — re-reads roundtrip cleanly.

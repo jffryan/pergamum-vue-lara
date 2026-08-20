@@ -3,6 +3,7 @@
 namespace Tests\Unit\Services;
 
 use App\Models\Format;
+use App\Services\AuthorService;
 use App\Services\BulkImportService;
 use App\Services\Exceptions\BulkImportRowException;
 use App\Services\GenreService;
@@ -19,7 +20,7 @@ class BulkImportRowValidationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new BulkImportService(new GenreService);
+        $this->service = new BulkImportService(new GenreService, new AuthorService);
     }
 
     /**

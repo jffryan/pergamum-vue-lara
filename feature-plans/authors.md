@@ -24,7 +24,9 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 ### Data integrity
 
 - **`authors.slug` is unique and `NOT NULL` (since `2026_04_30_000000_make_authors_slug_unique_and_required.php`).** The migration backfilled legacy nulls and deduped colliding rows with numeric suffixes. `firstOrCreate` is no longer the only dedupe — the unique index is the actual guarantee. Races and divergent normalizers now surface as `QueryException` instead of silent duplicates; batch importers should catch the constraint violation and re-fetch.
-- **Input-shape divergence remains.** `AuthorController::getOrSetToBeCreatedAuthorsByName` slugifies the frontend-provided `name`; `BookController::handleAuthors`/`updateAuthors` and `NewBookController::handleAuthors` slugify `trim("$first_name $last_name")`. Identical for the common case where `name` equals first + last, but middle names or suffixes from the frontend can break parity.
+- **Input-shape divergence is down to one door.** The three book doors and the CSV importer all resolve authors through `AuthorService`; `AuthorController::getOrSetToBeCreatedAuthorsByName` still slugifies the frontend-provided `name` rather than the two name parts. Identical whenever `name` equals first + last, but middle names or suffixes break parity. It has no live caller — see item 4 below.
+- **`AuthorService::rename` does not re-slug.** Fixing a typo in a name through the book edit form updates `first_name` / `last_name` and leaves `authors.slug` pointing at the old spelling, so the row no longer matches what a fresh find-or-create would derive and a later ingest of the corrected name creates a *second* author. Deliberate for now: re-deriving the slug can collide with the unique index and 500 a book edit, and resolving that collision (suffix? merge?) is the author-edit surface in item 6 plus the merge tool in item 2.
+- **A single-name author is valid everywhere now.** `App\Http\Requests\Concerns\ValidatesAuthorNames` requires a first name *or* a last name across all three book requests, matching what the CSV importer always did. What is still asymmetric is where a lone name goes: the importer accepts `|Aristotle` (last-name-only) and the forms accept either half, so two entries for the same person can differ in which column holds the name while slugging identically — which means they dedupe to one row whose column split depends on who got there first.
 - **No author merge tool.** Once duplicates exist (from divergent slugs, typos, "Jr." vs "Jr", etc.), there's no API or UI to combine them — the only fix is manual SQL.
 - **Orphan-pruning is silent and irreversible.** When `BookController::destroy` deletes the last book by an author, the author row is hard-deleted with no audit trail. If the book deletion was a misclick, the author has to be re-typed by hand and gets a fresh `author_id`, breaking any external reference. Linked from `/feature-plans/books.md` ("Soft-delete books, versions, and read instances").
 - **`bio` is returned by the API but has no column.** `AuthorService::getAuthorWithRelations` includes `bio` in the response payload; the migration doesn't define it and the model doesn't declare it. Reads as `null` today; if a frontend ever depends on it before the column exists, it'll break silently.
@@ -42,7 +44,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 
 ### Extensibility
 
-- **No tests.** No coverage for the slug normalizers, find-or-stub, the author detail payload, or the orphan-prune path on book delete.
+- **Thin test coverage.** `tests/Feature/Authors/AuthorIngestTest` covers the four ingest doors, the shared name rules, and the `author_ordinal` semantics. Find-or-stub, the author detail payload, and the orphan-prune path on book delete are still uncovered.
 - **`AuthorsStore` is mostly stub.** `allAuthors` and `sortedBy` exist but are never read or written; only `currentAuthor` is wired. Not a bug, but anyone extending the store will assume infrastructure exists that doesn't.
 
 ### Frontend & UX
@@ -52,13 +54,13 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 - **Only the primary author is linked from book rows.** `BookTableRow` and `ListItemsTable` both hardcode `book.authors[0]`. Multi-author books surface only one name on the table; the others are reachable only from the book detail page.
 - **Author detail page is bookshelf-only.** Reuses `BookshelfTable` and shows nothing about the author themselves — no bio (no column), no photo, no aggregated stats (total books read, average rating across their catalog, first/most-recent read). The page header is just `"{first} {last}"`.
 - **No edit affordance for authors.** Fixing a typo in `first_name` requires opening every book by that author and editing through the book edit flow. The "edit author" UI doesn't exist.
-- **Author sort on book lists is by primary author's last name only.** A book by "Smith & Adams" sorts under whichever name is `authors[0]`, which depends on insert order — there is no canonical "primary author" concept.
+- **Author sort on book lists is by the primary author only.** A book by "Smith & Adams" sorts under `authors[0]`, which is now the lowest `author_ordinal` rather than insert order (every ingest door numbers co-authors in input order via `AuthorService::attachToBook`). There is still no way to *change* that order after the fact, and no `is_primary` concept — see item 12.
 
 ## Future improvements
 
 In rough priority order — earlier items unblock later ones.
 
-1. **Add Feature tests** for `getAuthorBySlug`, the find-or-stub endpoint, the orphan-prune path on book delete, and each of the three slug normalizers. Necessary before any of the consolidation work below.
+1. **Add Feature tests** for `getAuthorBySlug`, the find-or-stub endpoint, and the orphan-prune path on book delete. The ingest doors and the shared name rules are covered by `tests/Feature/Authors/AuthorIngestTest`; these three surfaces are not.
 2. **Build an author merge tool** — `POST /authors/{keep_id}/merge/{remove_id}` that re-points `book_author` rows from `remove_id` to `keep_id`, deletes the loser, and returns the merged record. Admin-only; needed once duplicates exist (and they probably already do).
 3. **Introduce `FormRequest` classes** for the find-or-stub endpoint and any future author-edit endpoint. Same pattern as the books flow.
 4. **Decide the fate of `/create-authors`.** Either:

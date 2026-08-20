@@ -48,7 +48,7 @@
                 </div>
 
                 <p v-if="!isValid.authors[idx]" class="p-2 text-red-300">
-                    Last name is required.
+                    Enter a first or last name.
                 </p>
             </div>
         </div>
@@ -73,7 +73,7 @@
 </template>
 
 <script>
-import { validateString } from "@/utils/validators";
+import { validateAuthor } from "@/utils/validators";
 
 import { useNewBookStore } from "@/stores";
 
@@ -121,7 +121,7 @@ export default {
         },
         validateAuthors() {
             this.isValid.authors = this.authors.map((author) => {
-                return validateString(author.last_name);
+                return validateAuthor(author);
             });
             return this.isValid.authors.every((isValid) => isValid);
         },

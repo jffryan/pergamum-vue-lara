@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CompleteBookCreationRequest;
 use App\Http\Requests\CreateBookTitleRequest;
-use App\Models\Author;
 use App\Models\Book;
 use App\Models\ReadInstance;
 use App\Models\Version;
+use App\Services\AuthorService;
 use App\Services\GenreService;
 use App\Support\BookCreator;
 use App\Support\Slugger;
@@ -18,9 +18,12 @@ class NewBookController extends Controller
 {
     protected $genreService;
 
-    public function __construct(GenreService $genreService)
+    protected $authorService;
+
+    public function __construct(GenreService $genreService, AuthorService $authorService)
     {
         $this->genreService = $genreService;
+        $this->authorService = $authorService;
     }
 
     public function createOrGetBookByTitle(CreateBookTitleRequest $request)
@@ -55,17 +58,6 @@ class NewBookController extends Controller
                 'book' => $data,
             ],
         );
-    }
-
-    private function handleAuthors($authorsData)
-    {
-        return collect($authorsData)->map(function ($author) {
-            $firstName = $author['first_name'] ?? '';
-            $lastName = $author['last_name'] ?? '';
-            $slug = Slugger::for(trim("$firstName $lastName"));
-
-            return Author::firstOrCreate(['slug' => $slug, 'first_name' => $firstName, 'last_name' => $lastName]);
-        })->all();
     }
 
     /**
@@ -106,16 +98,6 @@ class NewBookController extends Controller
     /**
      * Genres are attached separately, by `GenreService::attachByName`.
      */
-    private function attachModels($book, $authors, $versions)
-    {
-        $authorIds = array_map(function ($author) {
-            return $author->author_id;
-        }, $authors);
-
-        $book->authors()->attach($authorIds);
-        $book->versions()->saveMany($versions);
-    }
-
     /**
      * Create a book and everything hanging off it, or nothing.
      *
@@ -131,11 +113,11 @@ class NewBookController extends Controller
         try {
             // Create the main book record
             $book = BookCreator::create($request->title());
-            $authors = $this->handleAuthors($request->authors());
+            $authors = $this->authorService->attachToBook($book, $request->authors());
             $versions = $this->handleVersions($request->versions(), $book);
             $read_instances = $this->handleReadInstances($request->readInstances(), $book, $versions);
 
-            $this->attachModels($book, $authors, $versions);
+            $book->versions()->saveMany($versions);
 
             $genres = $this->genreService->attachByName($book, $request->genreNames());
 

@@ -35,6 +35,7 @@ class LibrarySortingTest extends TestCase
         $book = Book::factory()->create(['title' => $title]);
 
         $author = Author::factory()->create([
+            'first_name' => $attrs['first_name'] ?? 'Ignored',
             'last_name' => $attrs['last_name'] ?? 'Zzyzx',
         ]);
         $book->authors()->attach($author->author_id, ['author_ordinal' => 1]);
@@ -103,6 +104,60 @@ class LibrarySortingTest extends TestCase
             ['Beta', 'Alpha'],
             $this->titles('/api/books?sort=author&direction=desc')
         );
+    }
+
+    /**
+     * Mononyms and organizations are stored with a first name and an empty
+     * last name, so ordering on `last_name` alone filed all of them under ''
+     * — a clump ahead of A, internally ordered by nothing the reader can see.
+     * They belong in the same sequence as everyone else, under their one name.
+     */
+    public function test_authors_without_a_last_name_file_under_their_first_name(): void
+    {
+        $this->actingAsUser();
+        $this->book('Arendt', ['first_name' => 'Hannah', 'last_name' => 'Arendt']);
+        $this->book('Aristotle', ['first_name' => 'Aristotle', 'last_name' => '']);
+        $this->book('Armstrong', ['first_name' => 'Louis', 'last_name' => 'Armstrong']);
+        $this->book('Plato', ['first_name' => 'Plato', 'last_name' => '']);
+        $this->book('NatGeo', ['first_name' => 'National Geographic', 'last_name' => '']);
+
+        $this->assertSame(
+            ['Arendt', 'Aristotle', 'Armstrong', 'NatGeo', 'Plato'],
+            $this->titles('/api/books?sort=author')
+        );
+    }
+
+    /**
+     * Whitespace-only is the same absence as empty — a stray space in an
+     * import would otherwise sort ahead of every real name.
+     */
+    public function test_a_whitespace_only_last_name_counts_as_absent(): void
+    {
+        $this->actingAsUser();
+        $this->book('Beta', ['first_name' => 'Bede', 'last_name' => '   ']);
+        $this->book('Alpha', ['first_name' => 'Marcus', 'last_name' => 'Aurelius']);
+
+        $this->assertSame(['Alpha', 'Beta'], $this->titles('/api/books?sort=author'));
+    }
+
+    /**
+     * The primary-author rule outranks the filing name: a book whose ordinal-1
+     * author is a mononym sorts under that name, not under a co-author's
+     * surname that happens to sort earlier.
+     */
+    public function test_a_mononym_primary_author_still_beats_a_later_co_author(): void
+    {
+        $this->actingAsUser();
+
+        $collaboration = $this->book('Collaboration', ['first_name' => 'Plato', 'last_name' => '']);
+        $collaboration->authors()->attach(
+            Author::factory()->create(['first_name' => 'Kurt', 'last_name' => 'Anderson'])->author_id,
+            ['author_ordinal' => 2]
+        );
+
+        $this->book('Solo', ['first_name' => 'Philip', 'last_name' => 'Marlowe']);
+
+        $this->assertSame(['Solo', 'Collaboration'], $this->titles('/api/books?sort=author'));
     }
 
     public function test_it_sorts_by_the_primary_authors_last_name_not_the_alphabetical_first(): void
