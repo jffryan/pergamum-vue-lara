@@ -39,7 +39,7 @@ This plan supersedes the original statistics plan, and moved list statistics ser
 
 In rough priority order.
 
-1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — see the matching "surface … stats on the detail page" item in `/feature-plans/authors.md`, `/feature-plans/genres.md`, and `/feature-plans/formats.md`. They are the payoff this plan was built for; do them before anything else here.
+1. **Author / genre / format scopes.** Each is a `ScopeResolver` case plus a surface config now — see the matching "surface … stats on the detail page" item in `/feature-plans/authors.md`, `/feature-plans/genres.md`, and `/feature-plans/formats.md`. They are the payoff this plan was built for; do them before anything else here. The location scope (shipped with `/feature-plans/locations.md`) is the worked example: `Scope::LOCATION`, a `ScopeResolver` case, `Support\LocationQuery` + the `ScopeQuery` dispatcher, and the `locationStatistics` surface config.
 2. **Charts.** Pick a library, add `barChart` / `lineChart` to the widget registry, swap the `widget:` line in the surface configs that want them. `SeriesList` stays for dense surfaces.
 3. **Admin scope** — see `/feature-plans/admin.md`. Needs a scope-level authorization check (admin-only) that `ScopeResolver` can already accommodate; the shape is the same as the list scope's policy call.
 4. **Range-bucketed year queries** in `ReadInstanceQuery::groupedByYear()`, replacing `YEAR()`. One method, every per-year metric benefits.

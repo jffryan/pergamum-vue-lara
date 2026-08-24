@@ -75,83 +75,11 @@
                 @remove="removeItem"
             />
 
-            <!-- Add a book -->
-            <div class="mt-6">
-                <h2 class="text-lg font-semibold mb-2">Add a book</h2>
-                <form
-                    @submit.prevent="searchForBook"
-                    class="flex flex-col sm:flex-row gap-2 mb-3"
-                >
-                    <input
-                        v-model="searchTerm"
-                        type="text"
-                        placeholder="Search by title..."
-                        class="flex-1 bg-zinc-50 border border-gray-400 rounded px-2 py-1"
-                    />
-                    <button
-                        type="submit"
-                        class="bg-slate-900 text-white rounded px-3 py-2 hover:bg-slate-700 sm:py-1"
-                        :disabled="isSearching"
-                    >
-                        Search
-                    </button>
-                </form>
-                <div v-if="searchResults.length > 0">
-                    <div
-                        v-for="result in searchResults"
-                        :key="result.book.book_id"
-                        class="mb-3 border border-gray-200 rounded p-3"
-                    >
-                        <div class="font-medium mb-2">
-                            {{ result.book.title }}
-                            <span
-                                class="text-gray-500 font-normal text-sm"
-                                v-if="primaryAuthor(result)"
-                            >
-                                — {{ primaryAuthor(result) }}
-                            </span>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="version in result.versions"
-                                :key="version.version_id"
-                                @click="addVersion(version)"
-                                :disabled="
-                                    addedVersionIds.has(version.version_id)
-                                "
-                                class="text-sm border rounded px-2 py-1"
-                                :class="
-                                    addedVersionIds.has(version.version_id)
-                                        ? 'border-gray-300 text-gray-400 cursor-default'
-                                        : 'border-slate-900 hover:bg-slate-900 hover:text-white'
-                                "
-                            >
-                                {{ version.format.name }}
-                                <span
-                                    v-if="version.page_count"
-                                    class="text-xs opacity-70"
-                                >
-                                    ({{ version.page_count }}pp)
-                                </span>
-                                <span
-                                    v-if="
-                                        addedVersionIds.has(version.version_id)
-                                    "
-                                    class="text-xs"
-                                >
-                                    ✓ Added
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div
-                    v-else-if="hasSearched && !isSearching"
-                    class="text-gray-500 text-sm"
-                >
-                    No books found.
-                </div>
-            </div>
+            <AddBookSearch
+                class="mt-6"
+                :is-version-added="isVersionAdded"
+                @add="addVersion"
+            />
         </div>
     </div>
 </template>
@@ -164,10 +92,10 @@ import {
     removeItemFromList,
     addItemToList,
 } from "@/api/ListController";
-import { getAllBooks } from "@/api/BookController";
 
 import { useListsStore, useStatisticsStore } from "@/stores";
 
+import AddBookSearch from "@/components/books/AddBookSearch.vue";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import ListItemsTable from "@/components/lists/ListItemsTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -175,6 +103,7 @@ import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndica
 export default {
     name: "ListView",
     components: {
+        AddBookSearch,
         AlertBox,
         ListItemsTable,
         PageLoadingIndicator,
@@ -192,10 +121,6 @@ export default {
             list: null,
             isEditing: false,
             editName: "",
-            searchTerm: "",
-            searchResults: [],
-            isSearching: false,
-            hasSearched: false,
         };
     },
     computed: {
@@ -273,21 +198,8 @@ export default {
                 console.error("Error removing item from list:", error);
             }
         },
-        async searchForBook() {
-            if (!this.searchTerm.trim()) return;
-            this.isSearching = true;
-            this.hasSearched = false;
-            try {
-                const res = await getAllBooks({
-                    search: this.searchTerm.trim(),
-                });
-                this.searchResults = res.data.books || [];
-                this.hasSearched = true;
-            } catch (error) {
-                console.error("Error searching books:", error);
-            } finally {
-                this.isSearching = false;
-            }
+        isVersionAdded(version) {
+            return this.addedVersionIds.has(version.version_id);
         },
         async addVersion(version) {
             try {
@@ -300,11 +212,6 @@ export default {
             } catch (error) {
                 console.error("Error adding item to list:", error);
             }
-        },
-        primaryAuthor(result) {
-            const author = result.authors[0];
-            if (!author) return null;
-            return `${author.first_name || ""} ${author.last_name || ""}`.trim();
         },
     },
     watch: {

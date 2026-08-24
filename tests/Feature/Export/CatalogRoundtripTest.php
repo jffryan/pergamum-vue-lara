@@ -267,7 +267,7 @@ class CatalogRoundtripTest extends TestCase
         $header = strtok($csv, "\n");
 
         $this->assertSame(
-            'title,authors,format,page_count,audio_runtime,version_nickname,genres,date_read,rating,is_discarded,discarded_at,lists',
+            'title,authors,format,page_count,audio_runtime,version_nickname,genres,date_read,rating,is_discarded,discarded_at,location,lists',
             trim($header)
         );
     }

@@ -20,7 +20,7 @@ class AverageRating extends AbstractMetric
 {
     // Supports every scope whose base query {@see ReadInstanceQuery} can
     // narrow — the metric never learns which page asked for it.
-    protected array $scopes = [Scope::USER, Scope::LIST];
+    protected array $scopes = [Scope::USER, Scope::LIST, Scope::LOCATION];
 
     public function key(): string
     {

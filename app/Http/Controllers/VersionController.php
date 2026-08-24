@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\MoveVersionRequest;
 use App\Http\Requests\StoreVersionRequest;
 use App\Models\Version;
+use App\Services\LocationService;
 use Illuminate\Http\Request;
 
 class VersionController extends Controller
 {
+    public function __construct(protected LocationService $locationService) {}
+
     public function addNewVersion(StoreVersionRequest $request)
     {
         $version = Version::create($request->versionAttributes());
@@ -39,6 +43,11 @@ class VersionController extends Controller
             $version->discarded_at = $validated['discarded_at'] ?? null;
         }
 
+        // A copy you no longer own is not on a shelf. Restoring does not
+        // reshelve — the copy comes back "unshelved" and gets placed by hand.
+        $version->location_id = null;
+        $version->shelf_ordinal = null;
+
         $version->save();
 
         return response()->json($version->load('format'));
@@ -58,5 +67,18 @@ class VersionController extends Controller
         ])->save();
 
         return response()->json($version->load('format'));
+    }
+
+    /**
+     * Shelve, reshelve, or unshelve one copy — `location_id: null` unshelves.
+     * The single-FK update is the whole point of locations over lists.
+     */
+    public function setLocation(MoveVersionRequest $request, $version_id)
+    {
+        $version = Version::findOrFail($version_id);
+
+        $this->locationService->shelveVersion($version, $request->locationId(), $request->shelfOrdinal());
+
+        return response()->json($version->load('format', 'location'));
     }
 }

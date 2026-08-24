@@ -5,7 +5,7 @@ namespace App\Statistics\Metrics;
 use App\Statistics\AbstractMetric;
 use App\Statistics\MetricResults;
 use App\Statistics\Scope;
-use App\Statistics\Support\ListQuery;
+use App\Statistics\Support\ScopeQuery;
 
 /**
  * Distinct books on a list the user has read at least once.
@@ -15,7 +15,7 @@ use App\Statistics\Support\ListQuery;
  */
 class CompletedCount extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION];
 
     public function key(): string
     {
@@ -24,7 +24,7 @@ class CompletedCount extends AbstractMetric
 
     public function compute(Scope $scope, MetricResults $results): int
     {
-        return ListQuery::items($scope)
+        return ScopeQuery::items($scope)
             ->whereExists(function ($query) use ($scope) {
                 $query->selectRaw('1')
                     ->from('read_instances')

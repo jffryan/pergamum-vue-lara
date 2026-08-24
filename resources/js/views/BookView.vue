@@ -85,6 +85,7 @@
                         :versions="currentBook.versions"
                         @discard="discardCopy"
                         @restore="restoreCopy"
+                        @move="moveCopy"
                     />
                     <AlertBox
                         v-if="versionActionError"
@@ -161,6 +162,7 @@ import { useBooksStore, useListsStore } from "@/stores";
 import { fetchBookData } from "@/services/BookServices";
 import { getAllLists } from "@/api/ListController";
 import { discardVersion, restoreVersion } from "@/api/VersionController";
+import { setVersionLocation } from "@/api/LocationController";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -298,6 +300,12 @@ export default {
             await this.applyVersionAction(
                 () => restoreVersion(version_id),
                 "Unable to restore this copy. Please try again.",
+            );
+        },
+        async moveCopy({ version_id, location_id }) {
+            await this.applyVersionAction(
+                () => setVersionLocation(version_id, location_id),
+                "Unable to move this copy. Please try again.",
             );
         },
         async applyVersionAction(request, errorMessage) {

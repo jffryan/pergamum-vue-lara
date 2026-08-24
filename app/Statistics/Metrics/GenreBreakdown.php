@@ -5,7 +5,7 @@ namespace App\Statistics\Metrics;
 use App\Statistics\AbstractMetric;
 use App\Statistics\MetricResults;
 use App\Statistics\Scope;
-use App\Statistics\Support\ListQuery;
+use App\Statistics\Support\ScopeQuery;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  */
 class GenreBreakdown extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION];
 
     public function key(): string
     {
@@ -27,7 +27,7 @@ class GenreBreakdown extends AbstractMetric
     {
         return DB::table('book_genre')
             ->join('genres', 'genres.genre_id', '=', 'book_genre.genre_id')
-            ->whereIn('book_genre.book_id', ListQuery::bookIds($scope))
+            ->whereIn('book_genre.book_id', ScopeQuery::bookIds($scope))
             ->groupBy('genres.genre_id', 'genres.name')
             ->orderByDesc(DB::raw('COUNT(DISTINCT book_genre.book_id)'))
             ->orderBy('genres.name')

@@ -19,9 +19,9 @@ Whole-file errors (header validation) return HTTP 422 with a `reason_code`. Per-
 
 ### Backend
 
-- **Route** (`routes/api.php`, `auth:sanctum`): `POST /bulk-upload` → `BulkUploadController::upload`. Accepts a multipart form with field `csv_file` and optional `dry_run` / `list_name` fields.
+- **Route** (`routes/api.php`, `auth:sanctum`): `POST /bulk-upload` → `BulkUploadController::upload`. Accepts a multipart form with field `csv_file` and optional `dry_run` / `list_name` / `create_locations` fields.
 - **Controller**: `BulkUploadController` — thin handler. Validates the request, calls `BulkImportService`, catches `BulkImportFileException` for the 422 path.
-- **Service**: `app/Services/BulkImportService.php` — owns parsing, header validation, per-row processing, transactions, and result aggregation. Public surface is `importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array` plus `validateRow(array $cells, ?Format $format): ImportRow`, which is pure (no file handle, no database) and has its own `tests/Unit` spec.
+- **Service**: `app/Services/BulkImportService.php` — owns parsing, header validation, per-row processing, transactions, and result aggregation. Public surface is `importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null, bool $createLocations = false): array` plus `validateRow(array $cells, ?Format $format): ImportRow`, which is pure (no file handle, no database) and has its own `tests/Unit` spec.
 - **Supporting types** (`app/Services/BulkImport/`): `ImportRow`, a readonly value object carrying one validated row from `validateRow` to the persist step; `ListCollector`, which owns the lazy list creation, the `ordinal` counter, and the per-row dedupe for the `list_name` feature.
 - **Exceptions** (`app/Services/Exceptions/`): abstract `BulkImportException` holds a `reasonCode` and splits on blast radius, not cause. `BulkImportFileException` rejects the whole upload and is what the controller catches (`BulkImportHeaderException`, `BulkImportListNameException`); `BulkImportRowException` fails one row inside the loop and is deliberately *not* caught by the controller, so a row failure can never escape as a 422.
 - **Models**: creates `Book`, `Version`, `ReadInstance`, and — when `list_name` is sent — `BookList` and `ListItem`; finds-or-creates `Author` and `Genre`. `Format` is read-only (existing rows only — no auto-create).
@@ -58,6 +58,7 @@ The "Column required" figure below is about the header only.
 | `rating`          | no       | Decimal 0.5–5 in 0.5 steps. The `ReadInstance` mutator doubles the value on insert (a CSV value of `4.5` is stored as `9`). |
 | `is_discarded`    | no       | Boolean: `1` / `true` / `yes` / `y`, or blank / `0` / `false` / `no` / `n`. Case-insensitive. Anything else fails the row (`is_discarded_invalid`). Applied on version *create* only. |
 | `discarded_at`    | no       | Same date formats as `date_read`. Only meaningful with `is_discarded` set — a date without the flag fails the row (`discarded_at_without_flag`). Blank with the flag set is the "discarded, date unknown" case. |
+| `location`        | no       | One `CODE` or `CODE\|ordinal` entry — a copy has exactly one place, so a `;` fails the row (`location_entry_malformed`). The code is matched to `locations.slug` case-insensitively; an unknown code fails the row (`location_not_found`) unless `create_locations` was sent. Applied on version *create* only. The ordinal is the copy's left-to-right shelf position. |
 | `lists`           | no       | `;`-separated list of `Name` or `Name\|ordinal` entries. Files the row's version onto each named list, owned by the importing user. A non-numeric ordinal or a name that slugs to nothing fails the row (`list_entry_malformed`). |
 
 The column vocabulary lives in `App\Support\CsvContract` and is shared by the
@@ -75,7 +76,7 @@ Each row describes one (book, version, optional read instance). Rows are de-dupe
 1. **Book**: find-or-create by `slug = Slugger::for(title)`. Title on existing books is left alone.
 2. **Authors**: each entry → `AuthorService::attachToBook`, which find-or-creates by `AuthorService::slugFor($first, $last)`, attaches if not already attached, and continues the co-author ordinal from the book's current max. These were the importer's own semantics until the book forms adopted them; they now live in the service and all four doors share them. Whether an entry is *acceptable* — one of the two halves non-empty — is `parseAuthors`, matching `ValidatesAuthorNames` on the form doors.
 3. **Genres**: each entry → find by `LOWER(TRIM(name))` first; if none, create with the trimmed (case-preserved) value. Attached if not already attached.
-4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime`, `page_count`, `is_discarded` and `discarded_at` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits, and an older file can't resurrect a copy you got rid of after writing it).
+4. **Version**: find-or-create by `(book_id, format_id, version_nickname)`. `audio_runtime`, `page_count`, `is_discarded`, `discarded_at`, `location_id` and `shelf_ordinal` are written on create; on existing-version match they are left alone (so re-imports don't overwrite hand edits, an older file can't resurrect a copy you got rid of after writing it, and a stale file can't reshelve a copy you moved). Because the version dedupe tuple is also the copy identity, two rows sharing `(title, format, nickname)` but naming **different** locations describe two physical copies the importer would collapse into one — the later row fails (`ambiguous_copy`); give the copies distinguishing nicknames.
 5. **Read instance**: if `date_read` is non-blank, always create a new `ReadInstance` against the resolved version with `user_id = auth()->id()`. Multiple rows with the same (title, format, nickname) but different dates produce multiple read instances — re-reads roundtrip cleanly.
 6. **List membership**: each `lists` entry → find-or-create a `BookList` by `(user_id, Str::slug(name))`, then append the resolved version if `(list_id, version_id)` isn't already taken. An ordinal in the entry is used verbatim; without one the item appends at `max(ordinal) + 1`. Nothing is written under `dry_run`.
 
@@ -143,9 +144,28 @@ Note this endpoint returns **two different 422 shapes**. Whole-file rejections r
 | `is_discarded_invalid`      | `is_discarded` was not one of the recognized boolean spellings. |
 | `discarded_at_without_flag` | `discarded_at` carried a date while `is_discarded` was blank or false. |
 | `list_entry_malformed`      | An entry in `lists` had a non-numeric ordinal, or a name that slugs to nothing. |
+| `location_entry_malformed`  | `location` held more than one value, an empty code, or a non-numeric ordinal. |
+| `location_not_found`        | `location` named a code no location holds, and `create_locations` was not sent. |
+| `ambiguous_copy`            | The row names a different location than an earlier row with the same `(title, format, version_nickname)` — two copies the version dedupe would collapse. Fix with distinguishing nicknames. |
 | `internal_error`            | An unexpected exception fired inside the row's transaction. The exception is logged via `Log::error`; the response carries a generic message. |
 
 Whole-file codes are returned at 422 and never appear in the per-row `results` array.
+
+## Creating locations on import (`create_locations`)
+
+By default an unknown `location` code fails its row: locations are physical
+places, and a typo must not silently invent a shelf. That default breaks one
+legitimate case — the database reset, where `migrate:fresh` has emptied the
+`locations` table and the export being restored names shelves that no longer
+exist as rows.
+
+Sending `create_locations` (boolean) opts in: an unknown code is created via
+`LocationService::findOrCreateByCode`. A code matching the shelf convention
+(`O1S5`) rebuilds its room → bookcase → shelf chain exactly the way the
+backfill migration did; any other code lands as a root location of kind
+`shelf`, with no structure guessed. Location `name`s ('Office') are not in the
+CSV and come back null — re-enter them after a reset. Creation happens inside
+the row's transaction, so a `dry_run` with the flag writes nothing.
 
 ## Filing an import into a new list
 

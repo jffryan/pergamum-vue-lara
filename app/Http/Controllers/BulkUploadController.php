@@ -19,6 +19,10 @@ class BulkUploadController extends Controller
             // `required` rather than `nullable` so a blank-but-present name is a
             // standard {message, errors} 422 instead of an empty-slug list.
             'list_name' => 'sometimes|required|string|max:255',
+            // Opt-in acknowledgement that unknown `location` codes may create
+            // locations — the database-reset escape hatch. Off, a typo fails
+            // the row rather than inventing a shelf.
+            'create_locations' => 'sometimes|boolean',
         ]);
 
         $dryRun = $request->boolean('dry_run');
@@ -29,6 +33,7 @@ class BulkUploadController extends Controller
                 (int) auth()->id(),
                 $dryRun,
                 $request->input('list_name'),
+                $request->boolean('create_locations'),
             );
         } catch (BulkImportFileException $e) {
             return response()->json([

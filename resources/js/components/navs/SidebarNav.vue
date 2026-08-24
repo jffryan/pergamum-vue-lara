@@ -13,6 +13,11 @@
                         >Genres</router-link
                     >
                 </li>
+                <li>
+                    <router-link :to="{ name: 'locations.index' }"
+                        >Locations</router-link
+                    >
+                </li>
             </div>
             <!-- Actions -->
             <div class="mb-2">

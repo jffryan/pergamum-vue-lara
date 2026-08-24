@@ -5,6 +5,7 @@ import adminRoutes from "./admin-routes";
 import authorRoutes from "./author-routes";
 import bookRoutes from "./book-routes";
 import listRoutes from "./list-routes";
+import locationRoutes from "./location-routes";
 
 const router = createRouter({
     history: createWebHistory("/"),
@@ -45,6 +46,7 @@ const router = createRouter({
         ...bookRoutes,
         ...authorRoutes,
         ...listRoutes,
+        ...locationRoutes,
         // Before I reorganize this, I actually ought to just fix bookshelves to use query parameters and a single template
         {
             path: "/formats/:format",

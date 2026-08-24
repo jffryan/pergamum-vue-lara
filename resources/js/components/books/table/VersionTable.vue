@@ -22,6 +22,7 @@
                 ]"
                 @discard="$emit('discard', $event)"
                 @restore="$emit('restore', $event)"
+                @move="$emit('move', $event)"
             />
         </div>
     </div>
@@ -41,13 +42,13 @@ export default {
     components: {
         VersionTableRow,
     },
-    emits: ["discard", "restore"],
+    emits: ["discard", "restore", "move"],
     data() {
         return {
             columns: [
                 {
                     name: "Format",
-                    span: 3,
+                    span: 2,
                 },
                 {
                     name: "Page Count",
@@ -62,7 +63,14 @@ export default {
                 },
                 {
                     name: "Nickname",
-                    span: 3,
+                    span: 2,
+                    clickHandler: null,
+                    ascending: null,
+                    descending: null,
+                },
+                {
+                    name: "Location",
+                    span: 2,
                     clickHandler: null,
                     ascending: null,
                     descending: null,

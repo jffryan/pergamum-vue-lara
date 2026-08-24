@@ -7,19 +7,19 @@ status: living
 
 ## Scope
 
-Covers the `/admin` SPA surface — the admin landing page (`AdminHome.vue`), the dispatch view (`AdminActionView.vue`) that resolves a route's `meta.component` to a real component, the shared destructive-action confirm (`ConfirmAction.vue`), and the two admin actions wired up today: format management (`FormatsIndex` / `FormatsList` / `CreateFormat`) and genre management (`components/admin/genres/`). The underlying models and endpoints are documented in `formats.md` and `genres.md`; this doc covers the admin shell that wraps them. Things that *could* live under admin but currently don't (author merge, bulk-upload, user management) are tracked in `/feature-plans/admin.md`.
+Covers the `/admin` SPA surface — the admin landing page (`AdminHome.vue`), the dispatch view (`AdminActionView.vue`) that resolves a route's `meta.component` to a real component, the shared destructive-action confirm (`ConfirmAction.vue`), and the three admin actions wired up today: format management (`FormatsIndex` / `FormatsList` / `CreateFormat`), genre management (`components/admin/genres/`), and location management (`components/admin/locations/`). The underlying models and endpoints are documented in `formats.md`, `genres.md` and `locations.md`; this doc covers the admin shell that wraps them. Things that *could* live under admin but currently don't (author merge, bulk-upload, user management) are tracked in `/feature-plans/admin.md`.
 
 ## Summary
 
 The admin surface is a thin SPA-only convention: a `/admin` landing page lists actions, each action is a route under `/admin/...` whose component is `AdminActionView`, and `AdminActionView` reads `route.meta.component` to pick which feature component to mount. The landing page's link list is **derived** from the route table rather than hand-written — a route that declares `meta.adminMenu` shows up on it automatically.
 
-There are two admin actions today (manage formats, manage genres) and no admin-specific authorization — any logged-in user can see the "Admin" link in the header and reach the page. Genre management is the first admin surface that can destroy data, which is what `ConfirmAction` exists for.
+There are three admin actions today (manage formats, manage genres, manage locations) and no admin-specific authorization — any logged-in user can see the "Admin" link in the header and reach the page. Genre management is the first admin surface that can destroy data, which is what `ConfirmAction` exists for.
 
 ## How it's wired
 
 ### Backend
 
-- **Routes**: there is no `/api/admin/*` namespace. Admin actions hit the same endpoints normal flows use — `POST /api/formats` (`FormatController::store`), and the genre CRUD + merge endpoints on `GenreController`. Nothing about those endpoints is admin-only; the new-book flow calls the format one too.
+- **Routes**: there is no `/api/admin/*` namespace. Admin actions hit the same endpoints normal flows use — `POST /api/formats` (`FormatController::store`), the genre CRUD + merge endpoints on `GenreController`, and the location CRUD endpoints on `LocationController`. Nothing about those endpoints is admin-only; the new-book flow calls the format one too.
 - **Controllers / services / models / policies**: nothing admin-specific exists. No admin middleware, no `is_admin` column on `users`, no role / permission table. `GenrePolicy` exists but every ability returns `true` — it is a seam for a future gate, not a working restriction. The only gate is `auth:sanctum`.
 - **Migrations**: none.
 
@@ -32,6 +32,7 @@ There are two admin actions today (manage formats, manage genres) and no admin-s
   - `/admin` (`name: 'admin.home'`) → `views/admin/AdminHome.vue`.
   - `/admin/formats` (`name: 'admin.formats'`) → `views/admin/AdminActionView.vue`, with `meta: { component: 'FormatsIndex', adminMenu: { title, description } }`.
   - `/admin/genres` (`name: 'admin.genres'`) → same view, `meta: { component: 'GenresIndex', adminMenu: { … } }`.
+  - `/admin/locations` (`name: 'admin.locations'`) → same view, `meta: { component: 'LocationsIndex', adminMenu: { … } }`.
 - **Views**:
   - `views/admin/AdminHome.vue` — imports `admin-routes.js` and renders a link plus description for every route carrying `meta.adminMenu`. Nothing is hand-listed.
   - `views/admin/AdminActionView.vue` — reads `route.meta.component`, looks it up in a local `components` map of `defineAsyncComponent` entries, and renders it via `<component :is="…">`.

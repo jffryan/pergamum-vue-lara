@@ -35,6 +35,7 @@ class CsvContract
         'rating',
         'is_discarded',
         'discarded_at',
+        'location',
         'lists',
     ];
 

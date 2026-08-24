@@ -7,6 +7,7 @@ use App\Models\BookList;
 use App\Models\Format;
 use App\Models\Genre;
 use App\Models\ListItem;
+use App\Models\Location;
 use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\BulkImport\ImportRow;
@@ -46,17 +47,42 @@ class BulkImportService
 
     private const FALSEY = ['', '0', 'false', 'no', 'n'];
 
+    /**
+     * Copy-identity tuple -> the location code its first row claimed, for the
+     * file being imported. `resolveVersion` dedupes on (book, format,
+     * nickname), so two rows sharing that tuple but naming different
+     * locations describe two physical copies the importer would collapse into
+     * one — silently losing a shelf assignment. Such a row fails
+     * (`ambiguous_copy`) instead; the fix is a distinguishing nickname.
+     * See /feature-plans/locations.md, "Nickname is the copy discriminator".
+     *
+     * @var array<string, string>
+     */
+    private array $seenCopyLocations = [];
+
+    /**
+     * Whether this import may create locations that unknown `location` codes
+     * name. Off by default — a typo must fail the row, not invent a shelf.
+     * The flag exists for the database-reset round-trip, where the locations
+     * table is empty by construction; see /documentation/database-reset.md.
+     */
+    private bool $createLocations = false;
+
     public function __construct(
         private readonly GenreService $genreService,
         private readonly AuthorService $authorService,
+        private readonly LocationService $locationService,
     ) {}
 
-    public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null): array
+    public function importCsv(UploadedFile $file, int $userId, bool $dryRun = false, ?string $listName = null, bool $createLocations = false): array
     {
         // Deliberately ahead of header validation, so a request that is both
         // name-colliding and header-invalid reports list_name_taken. Nothing has been
         // opened or written at this point, so a collision costs the user nothing.
         $collector = $listName === null ? null : $this->makeListCollector($listName, $userId, $dryRun);
+
+        $this->seenCopyLocations = [];
+        $this->createLocations = $createLocations;
 
         $handle = fopen($file->getPathname(), 'r');
 
@@ -189,7 +215,34 @@ class BulkImportService
             return $this->fail($rowNumber, $title, $e->reasonCode, $e->getMessage());
         }
 
-        return $this->persistRow($row, $rowNumber, $userId, $dryRun, $collector);
+        $location = null;
+        if ($row->location !== null) {
+            // Unlike lists, locations are not find-or-created by default — a
+            // typo would silently invent a shelf. `create_locations` opts in
+            // (the creation itself happens in persistRow, inside the row's
+            // transaction, so a dry run writes nothing). Matching is on the
+            // slug, so 'o1s5' and 'O1S5' name the same place.
+            $locationSlug = Slugger::for($row->location);
+            $location = Location::where('slug', $locationSlug)->first();
+            if ($location === null && ! $this->createLocations) {
+                return $this->fail($rowNumber, $title, 'location_not_found', "location '{$row->location}' does not exist (pass create_locations to create it)");
+            }
+
+            $copyKey = implode('|', [Slugger::for($row->title), $row->format->format_id, $row->nickname ?? '']);
+            $claimed = $this->seenCopyLocations[$copyKey] ?? null;
+            if ($claimed !== null && $claimed !== $locationSlug) {
+                return $this->fail(
+                    $rowNumber,
+                    $title,
+                    'ambiguous_copy',
+                    "this row puts the copy at '{$row->location}' but an earlier row put the same (title, format, nickname) at '{$claimed}' — "
+                    .'two physical copies need distinguishing version_nickname values',
+                );
+            }
+            $this->seenCopyLocations[$copyKey] = $locationSlug;
+        }
+
+        return $this->persistRow($row, $rowNumber, $userId, $dryRun, $collector, $location);
     }
 
     /**
@@ -291,6 +344,8 @@ class BulkImportService
             throw new BulkImportRowException('one or more lists entries are malformed (expected Name or Name|ordinal)', 'list_entry_malformed');
         }
 
+        [$location, $shelfOrdinal] = $this->parseLocation($cells['location'] ?? '');
+
         return new ImportRow(
             title: $title,
             authors: $authors,
@@ -307,7 +362,50 @@ class BulkImportService
             isDiscarded: $isDiscarded,
             discardedAt: $discardedAt,
             lists: $lists,
+            location: $location,
+            shelfOrdinal: $shelfOrdinal,
         );
+    }
+
+    /**
+     * `CODE` or `CODE|ordinal` — the `lists` entry syntax, but exactly one
+     * value: a copy has one place, so a `;` here is a malformed cell rather
+     * than a second location.
+     *
+     * @return array{0: ?string, 1: ?int}
+     *
+     * @throws BulkImportRowException
+     */
+    private function parseLocation(string $raw): array
+    {
+        if ($raw === '') {
+            return [null, null];
+        }
+
+        if (str_contains($raw, ';')) {
+            throw new BulkImportRowException('location holds more than one value — a copy has exactly one place', 'location_entry_malformed');
+        }
+
+        $ordinal = null;
+        $code = $raw;
+
+        if (str_contains($raw, '|')) {
+            [$code, $ordinalRaw] = explode('|', $raw, 2);
+            $code = trim($code);
+            $ordinalRaw = trim($ordinalRaw);
+            if ($ordinalRaw !== '') {
+                if (! ctype_digit($ordinalRaw)) {
+                    throw new BulkImportRowException("location ordinal '{$ordinalRaw}' is not a whole number (expected CODE or CODE|ordinal)", 'location_entry_malformed');
+                }
+                $ordinal = (int) $ordinalRaw;
+            }
+        }
+
+        if ($code === '' || Slugger::for($code) === '') {
+            throw new BulkImportRowException('location code is empty (expected CODE or CODE|ordinal)', 'location_entry_malformed');
+        }
+
+        return [$code, $ordinal];
     }
 
     /** @return bool|null null when the cell is not a recognized boolean */
@@ -372,16 +470,22 @@ class BulkImportService
         return $lists;
     }
 
-    private function persistRow(ImportRow $row, int $rowNumber, int $userId, bool $dryRun, ?ListCollector $collector): array
+    private function persistRow(ImportRow $row, int $rowNumber, int $userId, bool $dryRun, ?ListCollector $collector, ?Location $location = null): array
     {
         $collector?->beginRow();
 
         DB::beginTransaction();
         try {
+            // Deferred to here — inside the transaction — so a dry run's
+            // created locations roll back with everything else.
+            if ($location === null && $row->location !== null && $this->createLocations) {
+                $location = $this->locationService->findOrCreateByCode($row->location);
+            }
+
             $book = $this->resolveBook($row->title);
             $this->attachAuthors($book, $row->authors);
             $this->attachGenres($book, $row->genres);
-            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime, $row->isDiscarded, $row->discardedAt);
+            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime, $row->isDiscarded, $row->discardedAt, $location, $row->shelfOrdinal);
 
             if (! $dryRun) {
                 $this->fileIntoNamedLists($version, $row->lists, $userId);
@@ -564,6 +668,8 @@ class BulkImportService
         ?int $audioRuntime,
         bool $isDiscarded = false,
         ?Carbon $discardedAt = null,
+        ?Location $location = null,
+        ?int $shelfOrdinal = null,
     ): Version {
         $query = Version::where('book_id', $book->book_id)
             ->where('format_id', $format->format_id);
@@ -576,9 +682,10 @@ class BulkImportService
 
         $version = $query->first();
         if ($version) {
-            // Existing fields are left alone on a match, discard state included:
-            // a re-import shouldn't un-discard a copy you got rid of after the
-            // file was written. Same rule as page_count — see
+            // Existing fields are left alone on a match, discard state and
+            // location included: a re-import shouldn't un-discard a copy you
+            // got rid of — or reshelve a copy you moved — after the file was
+            // written. Same rule as page_count — see
             // /documentation/bulk-upload.md.
             return $version;
         }
@@ -591,6 +698,8 @@ class BulkImportService
             'audio_runtime' => $audioRuntime,
             'is_discarded' => $isDiscarded,
             'discarded_at' => $discardedAt,
+            'location_id' => $location?->location_id,
+            'shelf_ordinal' => $location === null ? null : $shelfOrdinal,
         ]);
     }
 

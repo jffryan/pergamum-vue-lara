@@ -14,6 +14,9 @@ const components = {
     GenresIndex: defineAsyncComponent(
         () => import("@/components/admin/genres/GenresIndex.vue"),
     ),
+    LocationsIndex: defineAsyncComponent(
+        () => import("@/components/admin/locations/LocationsIndex.vue"),
+    ),
 };
 
 const currentComponent = computed(() => components[route.meta.component]);

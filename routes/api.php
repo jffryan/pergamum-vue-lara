@@ -9,6 +9,7 @@ use App\Http\Controllers\FormatController;
 use App\Http\Controllers\GenreController;
 use App\Http\Controllers\ListController;
 use App\Http\Controllers\ListItemController;
+use App\Http\Controllers\LocationController;
 use App\Http\Controllers\NewBookController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\VersionController;
@@ -49,6 +50,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/versions', [VersionController::class, 'addNewVersion']);
     Route::patch('/versions/{version}/discard', [VersionController::class, 'discard']);
     Route::patch('/versions/{version}/restore', [VersionController::class, 'restore']);
+    Route::patch('/versions/{version}/location', [VersionController::class, 'setLocation']);
+
+    // Locations bind by slug (`Location::getRouteKeyName`), so `{location}`
+    // is 'o1s5', not an id. The nested books route is declared first, in the
+    // genres-merge style.
+    Route::get('/locations/{location}/books', [LocationController::class, 'books']);
+    Route::apiResource('/locations', LocationController::class);
 
     // Statistics — `scope` defaults to `user`, so /api/statistics still works.
     // Adding an author or genre surface is a ScopeResolver case, not a route.

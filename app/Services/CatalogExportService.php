@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Book;
 use App\Models\BookList;
+use App\Models\Version;
 use App\Support\CsvContract;
 use Generator;
 
@@ -45,6 +46,7 @@ class CatalogExportService
             'authors',
             'genres',
             'versions.format',
+            'versions.location',
             'versions.readInstances',
         ]);
 
@@ -69,6 +71,11 @@ class CatalogExportService
                     'rating' => '',
                     'is_discarded' => $version->is_discarded ? '1' : '0',
                     'discarded_at' => $version->discarded_at?->format('Y-m-d') ?? '',
+                    // A fact of the copy, like is_discarded, so it repeats on
+                    // every row of the version — unlike `lists`, which is a
+                    // membership claim and is blanked after the first row.
+                    // The importer only reads it on version create anyway.
+                    'location' => $this->locationField($version),
                     // Membership belongs to the version, not to any one read of
                     // it. Emitting it on every row of a three-times-read book
                     // would be three identical claims; the importer would
@@ -114,6 +121,23 @@ class CatalogExportService
     private function genreField(Book $book): string
     {
         return $book->genres->sortBy('name')->pluck('name')->implode(';');
+    }
+
+    /**
+     * `CODE` or `CODE|ordinal` — the shelf's stable identity plus the copy's
+     * left-to-right position when one is recorded. Without this column a
+     * reset would silently lose the entire physical layout of the library;
+     * see /feature-plans/locations.md, "Bulk upload and database reset".
+     */
+    private function locationField(Version $version): string
+    {
+        if ($version->location === null) {
+            return '';
+        }
+
+        $code = $version->location->code;
+
+        return $version->shelf_ordinal === null ? $code : $code.'|'.$version->shelf_ordinal;
     }
 
     /**

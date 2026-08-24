@@ -33,6 +33,19 @@ const adminRoutes = [
             },
         },
     },
+    {
+        path: "/admin/locations",
+        name: "admin.locations",
+        component: () => import("@/views/admin/AdminActionView.vue"),
+        meta: {
+            component: "LocationsIndex",
+            adminMenu: {
+                title: "Manage Locations",
+                description:
+                    "Create, rename, move, and delete the rooms, bookcases, and shelves copies live on.",
+            },
+        },
+    },
 ];
 
 export default adminRoutes;

@@ -33,10 +33,10 @@ class ReadInstanceQuery
             ->where('read_instances.user_id', $scope->userId);
 
         // Narrowing by scope happens here rather than in each metric: a list's
-        // average rating is the user's rating of *any* copy of a listed book,
-        // not only of the copy that happens to be on the list.
-        if ($scope->is(Scope::LIST)) {
-            $query->whereIn('read_instances.book_id', ListQuery::bookIds($scope));
+        // (or shelf's) average rating is the user's rating of *any* copy of a
+        // covered book, not only of the copy that happens to sit there.
+        if ($scope->is(Scope::LIST) || $scope->is(Scope::LOCATION)) {
+            $query->whereIn('read_instances.book_id', ScopeQuery::bookIds($scope));
         }
 
         return new self($query);

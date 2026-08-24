@@ -7,6 +7,7 @@ use App\Services\AuthorService;
 use App\Services\BulkImportService;
 use App\Services\Exceptions\BulkImportRowException;
 use App\Services\GenreService;
+use App\Services\LocationService;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -20,7 +21,7 @@ class BulkImportRowValidationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new BulkImportService(new GenreService, new AuthorService);
+        $this->service = new BulkImportService(new GenreService, new AuthorService, new LocationService);
     }
 
     /**

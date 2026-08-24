@@ -5,7 +5,7 @@ namespace App\Statistics\Metrics;
 use App\Statistics\AbstractMetric;
 use App\Statistics\MetricResults;
 use App\Statistics\Scope;
-use App\Statistics\Support\ListQuery;
+use App\Statistics\Support\ScopeQuery;
 
 /**
  * How much shelf a list is, in pages, across every copy on it.
@@ -22,7 +22,7 @@ use App\Statistics\Support\ListQuery;
  */
 class TotalPages extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION];
 
     public function key(): string
     {
@@ -31,6 +31,6 @@ class TotalPages extends AbstractMetric
 
     public function compute(Scope $scope, MetricResults $results): int
     {
-        return (int) ListQuery::items($scope)->sum('versions.page_count');
+        return (int) ScopeQuery::items($scope)->sum('versions.page_count');
     }
 }

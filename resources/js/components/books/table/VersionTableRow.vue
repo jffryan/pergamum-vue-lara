@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from "vue";
 import { calculateRuntime } from "@/services/BookServices";
+import ShelfPicker from "@/components/locations/ShelfPicker.vue";
 
 const props = defineProps({
     version: {
@@ -9,10 +10,16 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(["discard", "restore"]);
+const emit = defineEmits(["discard", "restore", "move"]);
 
 const isConfirmingDiscard = ref(false);
 const discardedAt = ref("");
+const isPickingShelf = ref(false);
+
+const confirmMove = (payload) => {
+    emit("move", payload);
+    isPickingShelf.value = false;
+};
 
 // The row itself is clickable, so status actions need to read as buttons rather
 // than as the status value.
@@ -42,7 +49,7 @@ const confirmDiscard = () => {
 <template>
     <div>
         <div class="grid grid-cols-12">
-            <div class="col-span-3 p-2">
+            <div class="col-span-2 p-2">
                 {{ version.format.name }}
             </div>
             <div class="col-span-2 p-2">
@@ -52,8 +59,31 @@ const confirmDiscard = () => {
                 {{ calculateRuntime(version.audio_runtime) }}
             </div>
             <div v-else class="col-span-2 p-2"></div>
-            <div class="col-span-3 p-2">
+            <div class="col-span-2 p-2">
                 {{ version.nickname }}
+            </div>
+            <div class="col-span-2 p-2">
+                <router-link
+                    v-if="version.location"
+                    :to="{
+                        name: 'locations.show',
+                        params: { slug: version.location.slug },
+                    }"
+                    class="underline hover:no-underline"
+                    @click.stop
+                >
+                    {{ version.location.name || version.location.code }}
+                </router-link>
+                <span v-else-if="!version.is_discarded" class="text-gray-500"
+                    >Unshelved</span
+                >
+                <button
+                    v-if="!isPickingShelf && !version.is_discarded"
+                    :class="['mt-1 block', actionButtonClass]"
+                    @click.stop="isPickingShelf = true"
+                >
+                    {{ version.location ? "Move" : "Shelve" }}
+                </button>
             </div>
             <div class="col-span-2 p-2">
                 <div v-if="version.is_discarded">
@@ -87,6 +117,14 @@ const confirmDiscard = () => {
                     </button>
                 </div>
             </div>
+        </div>
+        <div v-if="isPickingShelf" class="p-2 border-t border-slate-400">
+            <ShelfPicker
+                :version-id="version.version_id"
+                :current-location-id="version.location_id"
+                @move="confirmMove"
+                @cancel="isPickingShelf = false"
+            />
         </div>
         <div v-if="isConfirmingDiscard" class="p-2 border-t border-slate-400">
             <label

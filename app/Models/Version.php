@@ -14,7 +14,7 @@ class Version extends Model
 
     protected $primaryKey = 'version_id';
 
-    protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id', 'nickname', 'is_discarded', 'discarded_at'];
+    protected $fillable = ['page_count', 'audio_runtime', 'format_id', 'book_id', 'nickname', 'is_discarded', 'discarded_at', 'location_id', 'shelf_ordinal'];
 
     protected $casts = [
         'is_discarded' => 'boolean',
@@ -39,6 +39,16 @@ class Version extends Model
     public function format(): BelongsTo
     {
         return $this->belongsTo(Format::class, 'format_id');
+    }
+
+    /**
+     * Where the copy physically is, or null when unshelved. Lives beside
+     * `is_discarded` because both are facts about the object, not the
+     * edition; discarding a copy clears it — see `VersionController::discard`.
+     */
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 
     public function book(): BelongsTo

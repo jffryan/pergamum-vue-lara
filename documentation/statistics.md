@@ -7,11 +7,11 @@ status: living
 
 ## Scope
 
-Covers every statistics surface in the app: the user-wide dashboard at `/statistics`, the post-login summary at `/dashboard`, and per-list statistics at `/lists/:id/statistics`. All three go through one endpoint (`GET /api/statistics/{scope?}/{scopeId?}`), one backend metric registry (`app/Statistics/`), and one frontend widget registry plus grid host. Does **not** cover the year-browse "Completed" surface, which is read-history aggregation — see `read-history.md`.
+Covers every statistics surface in the app: the user-wide dashboard at `/statistics`, the post-login summary at `/dashboard`, per-list statistics at `/lists/:id/statistics`, and per-location statistics at `/locations/:slug/statistics`. All three go through one endpoint (`GET /api/statistics/{scope?}/{scopeId?}`), one backend metric registry (`app/Statistics/`), and one frontend widget registry plus grid host. Does **not** cover the year-browse "Completed" surface, which is read-history aggregation — see `read-history.md`.
 
 ## Summary
 
-A **metric** is one number or one series, computed on demand. A **scope** is what the numbers are about — the requesting user, or one of their lists (authors, genres, formats and an admin scope are the intended next entries). Metrics declare which scopes they support, which other metrics they depend on, and which caveats apply to them; the registry resolves a requested key list into a response.
+A **metric** is one number or one series, computed on demand. A **scope** is what the numbers are about — the requesting user, one of their lists, or a location, whose subtree makes one scope serve shelf, bookcase and room alike (authors, genres, formats and an admin scope are the intended next entries). Metrics declare which scopes they support, which other metrics they depend on, and which caveats apply to them; the registry resolves a requested key list into a response.
 
 On the frontend a **surface** is a plain config object: which widgets, fed by which metrics, with what labels and grid spans. `StatisticsGrid` reads a surface, derives the metric set from it, asks `StatisticsStore` for exactly that set, and renders. Adding a statistics page is writing a config file; adding a chart is registering a widget.
 
@@ -36,7 +36,7 @@ Metrics/*.php              one class per metric
 - **Request**: `App\Http\Requests\StatisticsRequest` resolves the scope (which is also where it gets authorized) and validates `?metrics=` — a comma-separated list — against the keys the resolved scope supports.
 - **Controller**: `StatisticsController::show` is four lines: resolve scope, compute, respond.
 - **Registration**: `config/statistics.php` lists the metric classes and holds the estimate constants. `AppServiceProvider` builds the singleton `MetricRegistry` from it.
-- **Authorization**: `auth:sanctum` covers the user scope. The list scope runs `BookListPolicy::view` through `Gate::authorize`, so someone else's list is a 403 rather than an empty page.
+- **Authorization**: `auth:sanctum` covers the user scope. The list scope runs `BookListPolicy::view` through `Gate::authorize`, so someone else's list is a 403 rather than an empty page. The location scope has no ownership gate — locations are shared catalog — and resolves its identifier as a slug, numeric id as fallback.
 
 ### Frontend
 

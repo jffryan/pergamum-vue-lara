@@ -3,6 +3,7 @@
 namespace App\Statistics;
 
 use App\Models\BookList;
+use App\Models\Location;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -24,8 +25,27 @@ class ScopeResolver
             // own statistics; there is nothing further to check.
             Scope::USER => new Scope(Scope::USER, $userId),
             Scope::LIST => $this->list($id, $userId),
+            Scope::LOCATION => $this->location($id, $userId),
             default => throw new NotFoundHttpException("Unknown statistics scope [{$type}]."),
         };
+    }
+
+    /**
+     * Locations are shared catalog, so unlike lists there is no ownership
+     * gate — `auth:sanctum` on the route is the whole story. The identifier
+     * is the slug (locations are slug-routed throughout), with a numeric id
+     * accepted as a fallback for direct callers.
+     */
+    private function location(?string $id, ?int $userId): Scope
+    {
+        $location = Location::where('slug', $id)->first()
+            ?? (ctype_digit((string) $id) ? Location::find($id) : null);
+
+        if ($location === null) {
+            throw new NotFoundHttpException("Unknown location [{$id}].");
+        }
+
+        return new Scope(Scope::LOCATION, $userId, (int) $location->location_id, $location);
     }
 
     /**

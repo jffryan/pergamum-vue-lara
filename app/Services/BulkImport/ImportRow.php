@@ -31,5 +31,9 @@ readonly class ImportRow
         public bool $isDiscarded = false,
         public ?Carbon $discardedAt = null,
         public array $lists = [],
+        // The shelf `code` ('O1S5') and optional left-to-right position — a
+        // copy has exactly one place, so unlike `lists` this is one value.
+        public ?string $location = null,
+        public ?int $shelfOrdinal = null,
     ) {}
 }

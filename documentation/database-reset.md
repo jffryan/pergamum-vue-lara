@@ -37,6 +37,8 @@ procedure* is whatever the export file carries:
 | Discarded copies and their dates | yes | `is_discarded`, `discarded_at` |
 | Read history, re-reads, ratings | yes | `date_read`, `rating` (one row per read) |
 | Lists, list membership, item order | yes | `lists`, `;`-separated `Name\|ordinal` |
+| Shelf assignments and shelf order | yes | `location`, `CODE` or `CODE\|ordinal` — **requires `create_locations` on the import**, see step 4 |
+| **Location names** (`'Office'`) | **no** | Codes rebuild the tree; names aren't in the CSV. Re-enter them after import |
 | **Users** | **no** | Register before importing — see step 3 |
 
 Primary keys are *not* preserved. Every `book_id`, `version_id`, `list_id` and
@@ -84,11 +86,17 @@ the new user is implicitly an admin.
 ### 4. Dry-run, then import
 
 ```
-POST /api/bulk-upload   csv_file=<export.csv>   dry_run=1
+POST /api/bulk-upload   csv_file=<export.csv>   dry_run=1   create_locations=1
 ```
 
 The dry run surfaces per-row failures without writing. Iterate until the summary
 is clean, then re-post without `dry_run`.
+
+**`create_locations=1` is required for a reset import.** `migrate:fresh` empties
+`locations`, and without the flag every row carrying a `location` code fails
+with `location_not_found` — by design, since on a *populated* database an
+unknown code is a typo, not a missing shelf. The flag rebuilds each shelf
+code's room → bookcase → shelf chain; see `/documentation/bulk-upload.md`.
 
 If the file came from `GET /api/export` it should be clean on the first pass. A
 hand-edited file is where the per-row `reason_code` values in

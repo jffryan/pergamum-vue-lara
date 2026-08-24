@@ -22,6 +22,8 @@ class Scope
 
     public const LIST = 'list';
 
+    public const LOCATION = 'location';
+
     public function __construct(
         public readonly string $type,
         public readonly ?int $userId,

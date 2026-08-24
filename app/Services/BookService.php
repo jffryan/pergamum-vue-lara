@@ -11,7 +11,9 @@ class BookService
     {
         // `readInstances` needs no user predicate — BelongsToCurrentUser is on
         // the model, so the eager load is already the requesting user's.
-        $query = Book::with(['authors', 'versions', 'versions.format', 'genres', 'readInstances']);
+        // `versions.location` feeds the book page's "where is it" line — one
+        // small row per shelved copy, null for unshelved.
+        $query = Book::with(['authors', 'versions', 'versions.format', 'versions.location', 'genres', 'readInstances']);
 
         if ($type === 'slug') {
             $book = $query->where('slug', $identifier)->firstOrFail();
