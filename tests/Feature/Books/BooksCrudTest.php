@@ -120,7 +120,7 @@ class BooksCrudTest extends TestCase
         $this->assertEqualsCanonicalizing(['Fantasy', 'Adventure'], $book->genres->pluck('name')->all());
     }
 
-    public function test_store_with_existing_slug_creates_distinct_book_with_suffix(): void
+    public function test_store_with_existing_slug_creates_distinct_book_filed_under_its_author(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->create(['name' => 'Audiobook']);
@@ -144,8 +144,8 @@ class BooksCrudTest extends TestCase
         $existing->refresh();
         $this->assertCount(1, $existing->versions, 'existing book should not gain a version');
 
-        $this->assertDatabaseHas('books', ['title' => 'Recursion', 'slug' => 'recursion-1']);
-        $created = Book::where('slug', 'recursion-1')->firstOrFail();
+        $this->assertDatabaseHas('books', ['title' => 'Recursion', 'slug' => 'recursion-author']);
+        $created = Book::where('slug', 'recursion-author')->firstOrFail();
         $this->assertCount(1, $created->versions);
         $this->assertCount(1, $created->authors);
         $this->assertDatabaseHas('authors', ['first_name' => 'New', 'last_name' => 'Author']);
@@ -180,5 +180,45 @@ class BooksCrudTest extends TestCase
 
         $this->assertDatabaseHas('authors', ['author_id' => $sharedAuthor->author_id]);
         $this->assertDatabaseHas('books', ['book_id' => $otherBook->book_id]);
+    }
+
+    private function renamePayload(string $title): array
+    {
+        return [
+            'book' => ['title' => $title],
+            'authors' => [],
+            'genres' => [],
+            'readInstances' => [],
+            'versions' => [],
+        ];
+    }
+
+    /**
+     * A disambiguated slug (`ariel-rodo`) must survive a cosmetic retitle —
+     * re-slugging from the title alone would land it back on the `ariel`
+     * another book holds.
+     */
+    public function test_update_keeps_the_slug_when_the_title_slugs_the_same(): void
+    {
+        $this->actingAsUser();
+        Book::factory()->create(['title' => 'Ariel', 'slug' => 'ariel']);
+        $rodo = Book::factory()->create(['title' => 'Ariel', 'slug' => 'ariel-rodo']);
+
+        $this->putJson("/api/books/{$rodo->book_id}", $this->renamePayload('ARIEL'))->assertOk();
+
+        $this->assertDatabaseHas('books', ['book_id' => $rodo->book_id, 'title' => 'ARIEL', 'slug' => 'ariel-rodo']);
+    }
+
+    public function test_update_reslugs_a_real_retitle_and_dodges_a_collision(): void
+    {
+        $this->actingAsUser();
+        Book::factory()->create(['title' => 'The Bell Jar', 'slug' => 'the-bell-jar']);
+        $book = Book::factory()->withAuthors()->create(['title' => 'Ariel', 'slug' => 'ariel']);
+        $surname = Str::slug($book->authors->first()->last_name);
+
+        $this->putJson("/api/books/{$book->book_id}", $this->renamePayload('The Bell Jar'))->assertOk();
+
+        $this->assertDatabaseHas('books', ['book_id' => $book->book_id, 'slug' => "the-bell-jar-{$surname}"]);
+        $this->assertDatabaseHas('books', ['title' => 'The Bell Jar', 'slug' => 'the-bell-jar']);
     }
 }

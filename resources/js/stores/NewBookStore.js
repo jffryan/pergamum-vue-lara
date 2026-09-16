@@ -26,12 +26,17 @@ const useNewBookStore = defineStore("NewBookStore", {
     state: () => ({
         currentBookData: initializeBookData(),
         currentStep: initializeFirstStep(),
+        // Books already carrying the title typed in step 1, each with its
+        // authors — what NewBookVersionConfirmation lists so the user can
+        // pick "add a copy to *that* one" or "no, this is a different book".
+        existingMatches: [],
     }),
     actions: {
         // Store lifecycle and reset
         resetStore() {
             this.currentBookData = initializeBookData();
             this.currentStep = initializeFirstStep();
+            this.existingMatches = [];
         },
         setStep(components, heading = null) {
             this.currentStep.component = components;
@@ -47,14 +52,14 @@ const useNewBookStore = defineStore("NewBookStore", {
             const response = await createOrGetBookByTitle(bookData.title);
             // Cheeky
             const res = response.data;
+            this.currentBookData.book.slug = res.book.slug;
             if (res.exists) {
-                this.setBookFromExisting(res.book);
+                this.existingMatches = res.matches ?? [];
                 this.setStep([
                     "NewBookVersionConfirmation",
                     "NewBookProgressForm",
                 ]);
             } else {
-                this.currentBookData.book.slug = res.book.slug;
                 this.setStep(["NewAuthorsInput", "NewBookProgressForm"]);
             }
         },

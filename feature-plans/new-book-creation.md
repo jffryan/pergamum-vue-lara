@@ -22,7 +22,7 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Data integrity
 
-- **`generateUniqueSlug` is not race-safe on its own,** but `books.slug` is uniquely indexed at the DB level, so a losing race now surfaces as a `QueryException` and rolls back inside the existing transaction rather than silently duplicating. Tracked alongside the broader slug-uniqueness work in `/feature-plans/books.md`.
+- **`BookCreator::slugFor` is not race-safe on its own,** but `books.slug` is uniquely indexed at the DB level, so a losing race now surfaces as a `QueryException` and rolls back inside the existing transaction rather than silently duplicating. Tracked alongside the broader slug-uniqueness work in `/feature-plans/books.md`.
 - ~~**Slug normalization for authors is duplicated three ways.**~~ Fixed for the two book doors, which now call `AuthorService::slugFor` via `attachToBook`. `AuthorController::getOrSetToBeCreatedAuthorsByName` still slugifies the joined `name` — see `/feature-plans/authors.md`.
 - **`handleReadInstances` re-parents version-less reads to `versions[0]`.** Marked with a `// FOR NOW!!!` comment in the controller. Today the SPA always submits exactly one version with the read attached, so this works — but any multi-version create or any client that omits `version_id` will misroute reads silently.
 - **`read_instances` are pulled twice from existing books.** When `createOrGetBookByTitle` matches an existing book, the response includes the user's `readInstances` for each version; `setBookFromExisting` copies them onto `currentBookData.read_instances`. Nothing in the new-book flow today re-submits those, but if any future store action calls `submitNewBook` from the existing-book branch, the controller will insert them as duplicate read history.
@@ -35,7 +35,7 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 
 ### Performance & query shape
 
-- **`createOrGetBookByTitle` eager-loads everything on a hit.** When a title matches, the response includes authors, genres, every version, every version's format, and every user-scoped read-instance. Fine today; the existing-book confirmation screen only needs the book's identity to route the user. Trim the eager-load to what the UI actually needs.
+- ~~**`createOrGetBookByTitle` eager-loads everything on a hit.**~~ Fixed 2026-09-15: the hit response is now `matches: [{ book_id, title, slug, authors }]` — identity plus the authors the confirmation screen needs to tell same-title books apart.
 - **No debounce on title input.** A user typing a title and submitting will only fire once (form submit), but any future "show suggestions as you type" feature would need a debounce — title slugging on every keystroke would be wasteful.
 
 ### Frontend & UX
@@ -59,13 +59,13 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 In rough priority order.
 
 1. **Extract a single slug helper** for books and authors — companion to items in `/feature-plans/books.md` and `/feature-plans/authors.md`. Replace the inline `Str::of(...)->lower()->replaceMatches(...)` in `createOrGetBookByTitle`, `createBook`, and `handleAuthors` with calls into it.
-2. **Trim the `createOrGetBookByTitle` hit response.** The duplicate-title screen needs only `book_id`, `title`, `slug`. Drop the eager-load of authors/genres/versions/format/readInstances, or make it opt-in via a query param.
+2. ~~**Trim the `createOrGetBookByTitle` hit response.**~~ Done — see the gotcha above.
 3. **Persist in-progress new-book state to `localStorage`.** Hydrate `currentBookData` and `currentStep` on `NewBookView.created()` if a draft exists, prompt the user to resume or discard. Cheap UX win.
 4. **Add a "back" affordance to the state machine.** Maintain a step-history stack in `NewBookStore` and add a `goBack()` action; render a Back button in `NewBookProgressForm` (or in each step component).
 5. **Replace stringly-typed step transitions with a registry.** A `steps.js` map of `{ key: Component }` consumed by both `setStep` and `NewBookView`'s component resolution. Typos become import errors, the state machine becomes greppable.
 6. **Rename `NewBookStore` to `BookEditorStore` (or split it).** It's used for create *and* for adding versions / read instances to existing books. Either rename to reflect that, or split into a pure-create store + a current-book store consumed by `AddVersionView` / `AddReadHistoryView` / `UpdateBookReadInstance`. The split is cleaner but touches more callers.
 7. **Fix the read-instance version-routing in `handleReadInstances`.** Drop the `versions[0]` fallback; require `version_id` on every read instance and validate it. Update the SPA to thread the chosen version through `addReadInstanceToNewBookVersion`. Removes the `// FOR NOW!!!`.
-8. **Reword the duplicate-title confirmation.** Either make "Create New Book" much more explicit ("Two distinct books can share a title — create a separate record?") or drop the option entirely and force the user into "add version to existing" / "cancel".
+8. ~~**Reword the duplicate-title confirmation.**~~ Done — it now lists each same-title book with its authors and offers "Add a version" per book plus "Create a different book". Still open: pre-fill the author step from the typed title so the server could apply `BookMatcher::find` and skip the question when the answer is unambiguous.
 9. **Delete or wire the dead `existingBook`/`bookId` props on `NewVersionsInput`.** If `AddVersionView` should use this component, route it. If not, remove the prop branch and the `BooksStore.addVersionToBook` call inside the submit handler.
 10. **Delete `/add-books` (`AddBooksView`).** Nothing links to it; it's a parallel single-form code path that does the same job worse. Keeping it forces every reader to reverse-engineer which path is canonical. If the form is worth keeping for some reason, repurpose `BookCreateEditForm` for edit-only and rename it.
 11. **Surface book-create errors with a toast / banner.** Wire a top-level notification slot so failed submits don't silently no-op.

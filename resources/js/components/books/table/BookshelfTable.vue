@@ -31,8 +31,9 @@
             <div>
                 <BookTableRow
                     v-for="(book, index) in books"
-                    :key="book.book.book_id"
+                    :key="rowKey(book)"
                     :book="book"
+                    :per-copy="perCopy"
                     :class="[
                         index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-200',
                         ' text-black cursor-pointer hover:bg-slate-500 hover:text-white',
@@ -92,6 +93,14 @@ export default {
             required: false,
             default: "asc",
         },
+        // Location pages list copies rather than books, so one book can
+        // appear on several rows (see LocationController::books). Rows then
+        // key on the copy and show what tells copies apart.
+        perCopy: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
     },
     emits: ["sort"],
     data() {
@@ -110,6 +119,11 @@ export default {
         };
     },
     methods: {
+        rowKey(book) {
+            return this.perCopy
+                ? `copy-${book.versions[0]?.version_id ?? book.book.book_id}`
+                : book.book.book_id;
+        },
         isSortable(column) {
             return this.sortable && Boolean(column.sortKey);
         },

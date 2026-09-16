@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import laravel from "laravel-vite-plugin";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
+import { readFileSync } from "node:fs";
+import parseChangelogVersion from "./resources/js/utils/changelogVersion";
 
 const port = Number(process.env.VITE_PORT || 5173);
 
@@ -12,7 +14,21 @@ const port = Number(process.env.VITE_PORT || 5173);
 // is right about `npm run dev`, it just can't tell a test run apart from one.
 const isTest = Boolean(process.env.VITEST);
 
+// The version the SPA shows is the newest `## [x.y.z]` entry in CHANGELOG.md,
+// read here at build time — a release is recorded once, in the changelog, and
+// the home page follows. A changelog with no entry yet builds as "dev".
+const appVersion =
+    parseChangelogVersion(
+        readFileSync(
+            fileURLToPath(new URL("./CHANGELOG.md", import.meta.url)),
+            "utf8",
+        ),
+    ) ?? "dev";
+
 export default defineConfig({
+    define: {
+        __APP_VERSION__: JSON.stringify(appVersion),
+    },
     // `@/…` resolved before this was written down; declaring it keeps that
     // true on purpose rather than by accident.
     resolve: {

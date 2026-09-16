@@ -5,8 +5,6 @@ namespace Tests\Feature\Books;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
-use App\Models\User;
-use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -14,22 +12,29 @@ class NewBookFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_or_get_by_title_returns_existing_book_with_user_scoped_reads(): void
+    /**
+     * The title step can't decide identity on its own — it lists every
+     * same-title book with its authors and the SPA asks the user.
+     */
+    public function test_create_or_get_by_title_lists_every_same_title_book_with_authors(): void
     {
-        $user = $this->actingAsUser();
-        $book = Book::factory()->create(['title' => 'The Stand', 'slug' => 'the-stand']);
-        Version::factory()->for($book, 'book')->withReadInstances(2, ['user_id' => $user->user_id])->create();
+        $this->actingAsUser();
+        $plath = Book::factory()->create(['title' => 'Ariel', 'slug' => 'ariel']);
+        $plath->authors()->attach(Author::factory()->create(['first_name' => 'Sylvia', 'last_name' => 'Plath'])->author_id, ['author_ordinal' => 1]);
+        $rodo = Book::factory()->create(['title' => 'Ariel', 'slug' => 'ariel-rodo']);
+        $rodo->authors()->attach(Author::factory()->create(['first_name' => 'José Enrique', 'last_name' => 'Rodó'])->author_id, ['author_ordinal' => 1]);
+        Book::factory()->create(['title' => "Ariel's Gift", 'slug' => 'ariel-s-gift']);
 
-        $otherUser = User::factory()->create();
-        Version::factory()->for($book, 'book')->withReadInstances(3, ['user_id' => $otherUser->user_id])->create();
+        $response = $this->postJson('/api/create-book/title', ['title' => 'Ariel']);
 
-        $response = $this->postJson('/api/create-book/title', ['title' => 'The Stand']);
-
-        $response->assertOk()->assertJsonPath('exists', true);
-        $this->assertSame($book->book_id, $response->json('book.book_id'));
-
-        $reads = collect($response->json('book.versions'))->flatMap(fn ($v) => $v['read_instances'] ?? []);
-        $this->assertCount(2, $reads, 'read_instances should be scoped to the authenticated user');
+        $response->assertOk()
+            ->assertJsonPath('exists', true)
+            ->assertJsonPath('book.slug', 'ariel')
+            ->assertJsonCount(2, 'matches')
+            ->assertJsonPath('matches.0.slug', 'ariel')
+            ->assertJsonPath('matches.0.authors.0.last_name', 'Plath')
+            ->assertJsonPath('matches.1.slug', 'ariel-rodo')
+            ->assertJsonPath('matches.1.authors.0.last_name', 'Rodó');
     }
 
     public function test_create_or_get_by_title_returns_proposed_payload_for_new_title(): void
@@ -38,7 +43,7 @@ class NewBookFlowTest extends TestCase
 
         $response = $this->postJson('/api/create-book/title', ['title' => 'A Brand New Title!']);
 
-        $response->assertOk()->assertJsonPath('exists', false);
+        $response->assertOk()->assertJsonPath('exists', false)->assertJsonPath('matches', []);
         $this->assertSame('A Brand New Title!', $response->json('book.title'));
         $this->assertSame('a-brand-new-title', $response->json('book.slug'));
         $this->assertDatabaseMissing('books', ['slug' => 'a-brand-new-title']);
@@ -122,7 +127,11 @@ class NewBookFlowTest extends TestCase
         $this->assertDatabaseMissing('books', ['slug' => 'out-of-range']);
     }
 
-    public function test_complete_book_creation_generates_unique_slug_when_title_collides(): void
+    /**
+     * The user chose "create a different book" on the confirmation screen,
+     * so this is a second book by design — filed under its author's surname.
+     */
+    public function test_complete_book_creation_files_a_colliding_title_under_the_authors_surname(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->create();
@@ -146,7 +155,7 @@ class NewBookFlowTest extends TestCase
         $response = $this->postJson('/api/create-book', $payload);
 
         $response->assertOk()->assertJsonPath('success', true);
-        $this->assertDatabaseHas('books', ['title' => 'Dune', 'slug' => 'dune-1']);
+        $this->assertDatabaseHas('books', ['title' => 'Dune', 'slug' => 'dune-herbert']);
     }
 
     public function test_complete_book_creation_reuses_existing_authors_via_slug(): void

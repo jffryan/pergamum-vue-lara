@@ -60,8 +60,9 @@ Book ──< Version ──< ReadInstance
   The corollary is that `auth()->id()` scoping on reads and lists is the *only* thing separating the two users, so it has to be right. The book index eager-loads `readInstances` filtered by `auth()->id()`; replicate that constraint anywhere you surface read history. `AuthorService::getAuthorWithRelations` and `GenreController::show` currently don't — see the authors and genres plans.
 - **`Book` has no completion date of its own.** `date_completed` used to appear in `$fillable` with a formatting accessor, but no such column has ever existed — it was dead code that read as live. Both are gone. "When did I finish this" comes from `read_instances.date_read`; derive it there rather than reintroducing a stored column.
 - **`ReadInstance::serializeDate` returns `Y-m-d`.** JSON responses use ISO date-only for `date_read`; the frontend parses with `Carbon.createFromFormat('Y-m-d', ...)` on the way back in.
-- **Slugs are generated from title at create/update time** via `App\Support\Slugger::for($title)` — a single helper used by `BookController::createOrGetBook`, `BookController::updateBook`, `NewBookController::createOrGetBookByTitle`, and `NewBookController::createBook`. Output is sanitized via `Str::slug()` (lowercase, transliterated, non-alphanumerics → hyphens) and capped at 60 characters; if truncation is needed it cuts at the nearest hyphen boundary ≤ 60 (no `...` suffix). `books.slug` is uniquely indexed at the DB level. `NewBookController::createBook` calls `generateUniqueSlug` to append `-2`/`-3` on collision; `BookController::createOrGetBook` instead treats a slug match as "same book." Author slugs route through `AuthorService::slugFor()`, which normalizes both halves and then calls the same helper — see `authors.md`.
-- **`store` short-circuits on existing books.** `BookController::store` checks `wasRecentlyCreated`; if the slug already exists, it only appends new versions and skips the authors/genres/read-instance branches. The "add a version to an existing book" path is intentionally the same endpoint as create — this is not visible from the route definition.
+- **Book identity is title + an author in common, and `App\Support\BookMatcher` is the one place that rule lives.** Title alone is not identity — Sylvia Plath's *Ariel* and José Enrique Rodó's *Ariel* are two books — and the exact author set isn't either: an edition with a foreword, a translator or an editor adds an author to a book without making it a new one. `BookMatcher::find($title, $authors)` returns the existing book whose title slugs the same *and* whose authors share at least one slug with the given ones, or null. The CSV importer resolves through it. The SPA's title-only first step can't (it has no authors yet), so it lists `BookMatcher::sameTitle()` with each book's authors and lets the user pick — see `new-book-creation.md`. An author-less existing book never matches.
+- **Slugs are generated from title at create/update time** via `App\Support\Slugger::for($title)` — lowercased, transliterated, non-alphanumerics → hyphens, capped at 60 characters cut at a hyphen boundary. `books.slug` is uniquely indexed. The *first* book with a title takes the bare slug; when that's taken, `App\Support\BookCreator` files the new book under the title plus its primary author's surname (`ariel-rodo`; a mononym uses its only name), and only when that is taken too does a numeric suffix appear (`ariel-rodo-1`). Every create door — `BookController::store`, `NewBookController::completeBookCreation`, the importer, `book:split` — goes through `BookCreator::create($title, $authors)`, so pass the authors or the collision falls straight to a number. On rename, `BookController::updateBook` keeps the current slug when the new title slugs to the same base (a cosmetic edit mustn't collapse `ariel-rodo` back onto the `ariel` another book holds) and otherwise re-derives through `BookCreator::slugFor` with the book's own row excluded. Author slugs route through `AuthorService::slugFor()` — see `authors.md`.
+- **`store` always creates.** `BookController::store` runs `BookCreator::create` unconditionally; a colliding title produces a second book with a disambiguated slug, never a version on the existing one. Adding a version to an existing book is `POST /versions`.
 - **`update` does not add new read instances.** It only updates ones that already carry a `read_instance_id` (filtered in the controller). New read entries from an edit form are dropped silently — the dedicated path is `POST /add-read-instance`. Covered by `tests/Feature/Books/UpdateReadInstancesTest.php`.
 - **`update` takes a flat payload** — `book`, `authors`, `genres`, `versions`, `readInstances` as top-level keys. It used to arrive wrapped as `request.formData.…`, an envelope that only ever named a variable in the edit view; `UpdateBookRequest` describes the flat shape now.
 - **Client-side validation mirrors the requests, and gates submission.** `resources/js/utils/validators.js` holds the shared predicates — `validateString`, `validateNumber`, `validateAuthor` (the client half of `ValidatesAuthorNames`: a first name *or* a last name), and `validateVersionLength` (a length field is present, as either the digit string the text inputs produce or the number an edit load carries). `BookCreateEditForm::validateBook` writes a per-field `isValid` tree for the template to render and returns whether *all three* sections passed. It used to return only the book's own fields, so an invalid author or version rendered its error and submitted anyway; the API's 422 was the only thing stopping it. When adding a field, add it to `isValid` and make sure the return value covers its section.
@@ -81,13 +82,27 @@ Book ──< Version ──< ReadInstance
 
 ### Creating a book (typical flow)
 
-1. `POST /create-book/title` with `{ title }` → returns either an existing book (so the UI can branch to "add a version") or a stub indicating a new book should be filled in.
+1. `POST /create-book/title` with `{ title }` → returns the same-title books that already exist, each with its authors (so the UI can offer "add a version to *this* one"), alongside the stub for a new book.
 2. `POST /create-authors` with the author list → returns existing/created author records the UI can confirm.
 3. `POST /create-book` with the full payload (`book`, `authors`, `versions`, `genres`, optional `readInstances`).
 
 ### Adding a version to an existing book
 
-Either `POST /books` with the existing book's title (the slug match triggers the version-only branch) or `POST /versions` with `{ book_id, page_count, format_id, audio_runtime?, nickname? }`. Prefer the latter for clarity in new code.
+`POST /versions` with `{ book_id, page_count, format_id, audio_runtime?, nickname? }`. (`POST /books` with an existing title creates a second book — see the identity note above.)
+
+### Splitting a wrongly merged book
+
+Before identity was author-aware, a second same-title book could be filed as a copy of the first with its authors appended. `book:split` undoes that:
+
+```bash
+docker compose exec php php artisan book:split ariel \
+    --copy=666 \
+    --author=jose-enrique-rodo --author=margaret-sayers-peden \
+    --genre=essay --genre=modernismo \
+    --dry-run
+```
+
+`book` is a book_id or slug; `--copy` (version_id — `--version` is artisan's own flag), `--author` (author_id or slug) and `--genre` (name, case-insensitive) name what belongs to the *other* book and repeat. A new book is created with the same title (`--title` overrides) and a `BookCreator` slug, the named copies move with their read history for every account, the named authors are detached and re-attached with ordinals restarting at 1 in their old order, and the named genres move. List items and shelf locations hang off the version row and need nothing. The command refuses to move every copy or every author (that would leave the original empty), fails before writing if any name matches nothing on the book, and `--dry-run` prints the plan inside a rolled-back transaction. `tests/Feature/Books/SplitBookCommandTest` covers it.
 
 ### Discarding a copy
 

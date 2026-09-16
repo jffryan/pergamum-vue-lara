@@ -54,9 +54,9 @@ class BulkUploadLocationTest extends TestCase
         ]);
     }
 
-    private function row(string $location, string $nickname = '', string $title = 'Dune'): string
+    private function row(string $location, string $nickname = '', string $title = 'Dune', string $authors = 'Frank|Herbert'): string
     {
-        return implode(',', [$title, 'Frank|Herbert', 'Physical', '604', $location, $nickname]);
+        return implode(',', [$title, $authors, 'Physical', '604', $location, $nickname]);
     }
 
     public function test_a_new_version_lands_on_the_named_shelf(): void
@@ -135,6 +135,23 @@ class BulkUploadLocationTest extends TestCase
         $response->assertJsonPath('results.0.status', 'success');
         $response->assertJsonPath('results.1.status', 'failed');
         $response->assertJsonPath('results.1.reason_code', 'ambiguous_copy');
+    }
+
+    /**
+     * Two same-title books by different authors are two books, so their
+     * copies on two shelves are two copies — not an ambiguous one.
+     */
+    public function test_same_title_by_different_authors_on_two_shelves_is_two_copies(): void
+    {
+        $this->actingAsUser();
+
+        $this->upload(
+            $this->row('O1S1', '', 'Ariel', 'Sylvia|Plath'),
+            $this->row('O1S2', '', 'Ariel', 'José Enrique|Rodó'),
+        )->assertOk()->assertJsonPath('summary.failed', 0);
+
+        $this->assertSame(2, Version::count());
+        $this->assertDatabaseHas('versions', ['location_id' => $this->otherShelf->location_id]);
     }
 
     public function test_nicknames_disambiguate_two_copies_on_two_shelves(): void

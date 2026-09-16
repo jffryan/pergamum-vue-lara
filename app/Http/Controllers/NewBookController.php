@@ -10,6 +10,7 @@ use App\Models\Version;
 use App\Services\AuthorService;
 use App\Services\GenreService;
 use App\Support\BookCreator;
+use App\Support\BookMatcher;
 use App\Support\Slugger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,38 +27,34 @@ class NewBookController extends Controller
         $this->authorService = $authorService;
     }
 
+    /**
+     * The SPA's first step: does a book with this title exist already?
+     *
+     * The title is all the user has typed at this point, so this can't apply
+     * `BookMatcher::find` — it returns every same-title book with its authors
+     * and lets the user decide which one, if any, they mean. `book` is the
+     * stub the SPA round-trips; its slug is provisional, since the real one is
+     * settled by `BookCreator` on submit.
+     */
     public function createOrGetBookByTitle(CreateBookTitleRequest $request)
     {
         $title = $request->title();
 
-        $slug = Slugger::for($title);
+        $matches = BookMatcher::sameTitle($title)->map(fn (Book $book) => [
+            'book_id' => $book->book_id,
+            'title' => $book->title,
+            'slug' => $book->slug,
+            'authors' => $book->authors,
+        ])->values();
 
-        // Look for an existing book by the slug
-        $userId = auth()->id();
-        $existingBook = Book::with(['authors', 'genres', 'versions', 'versions.format', 'versions.readInstances' => function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        }])->where('slug', $slug)->first();
-
-        if ($existingBook) {
-            return response()->json(
-                [
-                    'exists' => true,
-                    'book' => $existingBook,
-                ],
-            );
-        }
-
-        $data = [
-            'title' => $title,
-            'slug' => $slug,
-        ];
-
-        return response()->json(
-            [
-                'exists' => false,
-                'book' => $data,
+        return response()->json([
+            'exists' => $matches->isNotEmpty(),
+            'book' => [
+                'title' => $title,
+                'slug' => Slugger::for($title),
             ],
-        );
+            'matches' => $matches,
+        ]);
     }
 
     /**
@@ -112,7 +109,9 @@ class NewBookController extends Controller
 
         try {
             // Create the main book record
-            $book = BookCreator::create($request->title());
+            // Authors go to the creator too: a second book with a taken title
+            // is filed under the primary author's surname, not `-1`.
+            $book = BookCreator::create($request->title(), $request->authors());
             $authors = $this->authorService->attachToBook($book, $request->authors());
             $versions = $this->handleVersions($request->versions(), $book);
             $read_instances = $this->handleReadInstances($request->readInstances(), $book, $versions);

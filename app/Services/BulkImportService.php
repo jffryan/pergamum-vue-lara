@@ -15,6 +15,8 @@ use App\Services\BulkImport\ListCollector;
 use App\Services\Exceptions\BulkImportHeaderException;
 use App\Services\Exceptions\BulkImportListNameException;
 use App\Services\Exceptions\BulkImportRowException;
+use App\Support\BookCreator;
+use App\Support\BookMatcher;
 use App\Support\CsvContract;
 use App\Support\RatingValidator;
 use App\Support\Slugger;
@@ -50,7 +52,8 @@ class BulkImportService
     /**
      * Copy-identity tuple -> the location code its first row claimed, for the
      * file being imported. `resolveVersion` dedupes on (book, format,
-     * nickname), so two rows sharing that tuple but naming different
+     * nickname), with (title, primary author) standing in for the book here
+     * (see processRow), so two rows sharing that tuple but naming different
      * locations describe two physical copies the importer would collapse into
      * one — silently losing a shelf assignment. Such a row fails
      * (`ambiguous_copy`) instead; the fix is a distinguishing nickname.
@@ -228,7 +231,14 @@ class BulkImportService
                 return $this->fail($rowNumber, $title, 'location_not_found', "location '{$row->location}' does not exist (pass create_locations to create it)");
             }
 
-            $copyKey = implode('|', [Slugger::for($row->title), $row->format->format_id, $row->nickname ?? '']);
+            // The primary author is in the key because title alone isn't book
+            // identity (see BookMatcher): two different *Ariel*s in paperback
+            // on two different shelves are two copies, not one ambiguous one.
+            // The full identity rule needs the resolved book, which doesn't
+            // exist yet at this point — the first-listed author is the
+            // pre-persist stand-in, and is stable across the foreword /
+            // translator editions that add a co-author to the same book.
+            $copyKey = implode('|', [Slugger::for($row->title), $row->authors[0]['slug'], $row->format->format_id, $row->nickname ?? '']);
             $claimed = $this->seenCopyLocations[$copyKey] ?? null;
             if ($claimed !== null && $claimed !== $locationSlug) {
                 return $this->fail(
@@ -482,8 +492,9 @@ class BulkImportService
                 $location = $this->locationService->findOrCreateByCode($row->location);
             }
 
-            $book = $this->resolveBook($row->title);
-            $this->attachAuthors($book, $row->authors);
+            $authors = $this->authorEntries($row->authors);
+            $book = $this->resolveBook($row->title, $authors);
+            $this->attachAuthors($book, $authors);
             $this->attachGenres($book, $row->genres);
             $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime, $row->isDiscarded, $row->discardedAt, $location, $row->shelfOrdinal);
 
@@ -619,18 +630,22 @@ class BulkImportService
         return null;
     }
 
-    private function resolveBook(string $title): Book
+    /**
+     * The book this row belongs to: an existing one with the same title and
+     * an author in common, or a new one.
+     *
+     * This used to match on the title slug alone, which is how Rodó's *Ariel*
+     * got filed as a second copy of Plath's — with Rodó and his translator
+     * attached to her book as co-authors. The rule is `BookMatcher`'s now,
+     * and the create side is `BookCreator`'s so a same-title different-author
+     * row gets a slug of its own (`ariel-rodo`) rather than colliding.
+     *
+     * @param  array<int, array<string, mixed>>  $authors  `{first_name, last_name}` rows
+     */
+    private function resolveBook(string $title, array $authors): Book
     {
-        // Slugger for derivation only — deliberately not BookCreator::create, which
-        // suffixes -2/-3 on collision. Here a slug match means "same book" (see
-        // /documentation/bulk-upload.md, Row semantics 1).
-        $slug = Slugger::for($title);
-        $book = Book::where('slug', $slug)->first();
-        if ($book) {
-            return $book;
-        }
-
-        return Book::create(['title' => $title, 'slug' => $slug]);
+        return BookMatcher::find($title, $authors)
+            ?? BookCreator::create($title, $authors);
     }
 
     /**
@@ -640,10 +655,21 @@ class BulkImportService
      */
     private function attachAuthors(Book $book, array $authors): void
     {
-        $this->authorService->attachToBook($book, array_map(
+        $this->authorService->attachToBook($book, $authors);
+    }
+
+    /**
+     * `parseAuthors` keeps the importer's `{first, last, slug}` shape; the
+     * services speak `{first_name, last_name}`.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function authorEntries(array $authors): array
+    {
+        return array_map(
             fn ($entry) => ['first_name' => $entry['first'], 'last_name' => $entry['last']],
             $authors,
-        ));
+        );
     }
 
     /**

@@ -179,6 +179,34 @@ class LocationsCrudTest extends TestCase
         $this->assertSame('O1', $response->json('location.code'));
     }
 
+    /**
+     * Rows are copies: two copies of one book on a shelf are two rows, each
+     * carrying only itself — so the format shown is the copy on the shelf,
+     * not the book's oldest version, which may live somewhere else entirely.
+     */
+    public function test_books_lists_one_row_per_copy_carrying_only_the_copies_here(): void
+    {
+        $this->actingAsUser();
+        [$shelf] = $this->chain();
+        $book = Book::factory()->create(['title' => 'Twice Shelved']);
+
+        // Oldest version (lowest id) is elsewhere — BookListing's default
+        // `versions[0]` would render this one.
+        Version::factory()->for($book, 'book')->create(['nickname' => 'Elsewhere']);
+        Version::factory()->for($book, 'book')
+            ->create(['location_id' => $shelf->location_id, 'shelf_ordinal' => 2, 'nickname' => 'Second']);
+        Version::factory()->for($book, 'book')
+            ->create(['location_id' => $shelf->location_id, 'shelf_ordinal' => 1, 'nickname' => 'First']);
+
+        $response = $this->getJson('/api/locations/o1s1/books');
+
+        $response->assertOk();
+        $response->assertJsonCount(2, 'books');
+        $this->assertSame(['First', 'Second'], collect($response->json('books'))->pluck('versions.0.nickname')->all());
+        $this->assertSame([1, 1], collect($response->json('books'))->map(fn ($row) => count($row['versions']))->all());
+        $this->assertSame(1, $response->json('pagination.total'));
+    }
+
     public function test_a_shelf_lists_its_books_in_shelf_order_by_default(): void
     {
         $this->actingAsUser();

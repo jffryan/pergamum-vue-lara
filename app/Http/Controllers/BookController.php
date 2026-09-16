@@ -173,7 +173,7 @@ class BookController extends Controller
      */
     public function store(StoreBookRequest $request)
     {
-        $book = BookCreator::create($request->title());
+        $book = BookCreator::create($request->title(), $request->authors());
 
         $new_authors = $this->authorService->attachToBook($book, $request->authors());
         $new_versions = $this->prepareVersions($request->versions());
@@ -221,7 +221,7 @@ class BookController extends Controller
             // Update book properties
             $existing_book->fill([
                 'title' => $title,
-                'slug' => Slugger::for($title),
+                'slug' => $this->slugForRename($existing_book, $title),
             ])->save();
 
             // Return a successful response
@@ -230,6 +230,28 @@ class BookController extends Controller
             // Return an error response if something goes wrong
             return ['error' => 'An error occurred while updating the book details. '.$e->getMessage()];
         }
+    }
+
+    /**
+     * The slug a renamed book keeps or moves to.
+     *
+     * A cosmetic edit — casing, punctuation, whitespace — slugs to the same
+     * base as before, and the book keeps whatever slug it has, so the URL of
+     * a disambiguated book (`ariel-rodo`) doesn't collapse back onto the
+     * `ariel` another book holds. A real retitle goes through the same
+     * collision rules as a create, with the book's own row excluded.
+     */
+    private function slugForRename(Book $book, string $title): string
+    {
+        if (Slugger::for($title) === Slugger::for($book->title)) {
+            return $book->slug;
+        }
+
+        $authors = $book->authors()->get()
+            ->map(fn ($a) => $a->only(['first_name', 'last_name']))
+            ->all();
+
+        return BookCreator::slugFor($title, $authors, $book);
     }
 
     /**

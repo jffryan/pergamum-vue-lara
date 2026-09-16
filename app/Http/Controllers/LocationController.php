@@ -80,11 +80,19 @@ class LocationController extends Controller
     }
 
     /**
-     * Paginated book listing for the location's whole subtree — a bookcase is
-     * the union of its shelves, a room of its bookcases. Built on the same
-     * `BookListing` the library and genre pages use; the one addition is the
-     * `shelf` sort (left-to-right physical order), which is the default when
-     * the location is itself a shelf.
+     * Paginated listing for the location's whole subtree — a bookcase is the
+     * union of its shelves, a room of its bookcases. Built on the same
+     * `BookListing` the library and genre pages use, with two departures:
+     *
+     * - The `shelf` sort (left-to-right physical order), the default when the
+     *   location is itself a shelf.
+     * - Rows are *copies*, not books. A location holds physical objects, so
+     *   two copies of one novel on one shelf are two rows (the header's
+     *   "N copies" count and this listing agree), and each row's format and
+     *   page count are the copy that is actually here — not, as the shared
+     *   `versions[0]` convention would have it, the book's oldest version,
+     *   which may be an audiobook shelved nowhere. Pagination is still by
+     *   book, so a page holds at least `limit` rows.
      */
     public function books(Request $request, Location $location): JsonResponse
     {
@@ -93,7 +101,15 @@ class LocationController extends Controller
         $query = BookListing::query()
             ->whereHas('versions', function ($q) use ($subtreeIds) {
                 $q->whereIn('versions.location_id', $subtreeIds);
-            });
+            })
+            // Overrides BookListing's version_id-ordered load of every
+            // version: only the copies in this subtree, in shelf order.
+            ->with(['versions' => function ($q) use ($subtreeIds) {
+                $q->whereIn('versions.location_id', $subtreeIds)
+                    ->orderByRaw('(versions.shelf_ordinal is null) asc')
+                    ->orderBy('versions.shelf_ordinal')
+                    ->orderBy('versions.version_id');
+            }]);
 
         $sort = strtolower((string) $request->input('sort', $location->kind === 'shelf' ? 'shelf' : ''));
 
@@ -119,7 +135,12 @@ class LocationController extends Controller
         $pageSize = $request->input('limit', 20);
         $books = $query->paginate($pageSize);
 
-        $formattedBooks = $this->bookService->getBooksList(collect($books->items()));
+        // One row per copy in the subtree, each carrying only its own version
+        // so the row renders that copy's format and page count.
+        $formattedBooks = $this->bookService->getBooksList(collect($books->items()))
+            ->flatMap(fn (array $row) => collect($row['versions'])
+                ->map(fn (Version $version) => [...$row, 'versions' => [$version]]))
+            ->values();
 
         return response()->json([
             'location' => [

@@ -10,6 +10,7 @@ use App\Models\ReadInstance;
 use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\User;
 use App\Models\Version;
+use App\Services\AuthorService;
 use App\Support\BookCreator;
 use App\Support\Slugger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -285,6 +286,73 @@ class BulkUploadTest extends TestCase
         $this->assertSame(1, $audio->readInstances()->count());
     }
 
+    /**
+     * Title alone isn't identity — this is the *Ariel* merge, as a test.
+     */
+    public function test_same_title_by_a_different_author_is_a_second_book(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+
+        $file = $this->csvFile([
+            $this->row(['title' => 'Ariel', 'authors' => 'Sylvia|Plath', 'format' => 'Paper', 'page_count' => '85', 'genres' => 'poetry']),
+            $this->row(['title' => 'Ariel', 'authors' => 'José Enrique|Rodó;Margaret Sayers|Peden', 'format' => 'Paper', 'page_count' => '156', 'genres' => 'essay']),
+        ]);
+
+        $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk()->assertJsonPath('summary.failed', 0);
+
+        $plath = Book::where('slug', 'ariel')->firstOrFail();
+        $rodo = Book::where('slug', 'ariel-rodo')->firstOrFail();
+
+        $this->assertSame(['sylvia-plath'], $plath->authors->pluck('slug')->all());
+        $this->assertSame(['jose-enrique-rodo', 'margaret-sayers-peden'], $rodo->authors->pluck('slug')->sort()->values()->all());
+        $this->assertSame(['poetry'], $plath->genres->pluck('name')->all());
+        $this->assertSame(['essay'], $rodo->genres->pluck('name')->all());
+        $this->assertCount(1, $plath->versions);
+        $this->assertCount(1, $rodo->versions);
+    }
+
+    /**
+     * ...but a shared author is the same book: an edition that adds a
+     * foreword or a translator gains a co-author, not a duplicate.
+     */
+    public function test_same_title_with_a_shared_author_adds_the_new_author_to_the_same_book(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+        $this->audiobook();
+
+        $file = $this->csvFile([
+            $this->row(['title' => 'Profiles in Courage', 'authors' => 'John F.|Kennedy', 'format' => 'Paper', 'page_count' => '272']),
+            $this->row(['title' => 'Profiles in Courage', 'authors' => 'John F.|Kennedy;Allan|Nevins', 'format' => 'Audiobook', 'audio_runtime' => '300']),
+        ]);
+
+        $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk()->assertJsonPath('summary.failed', 0);
+
+        $this->assertSame(1, Book::count());
+        $book = Book::firstOrFail();
+        $this->assertSame(['john-f-kennedy', 'allan-nevins'], $book->authors->sortBy('pivot.author_ordinal')->pluck('slug')->values()->all());
+        $this->assertCount(2, $book->versions);
+    }
+
+    public function test_a_row_for_an_existing_disambiguated_book_finds_it(): void
+    {
+        $this->actingAsUser();
+        $this->paper();
+        $this->audiobook();
+
+        $file = $this->csvFile([
+            $this->row(['title' => 'Ariel', 'authors' => 'Sylvia|Plath', 'format' => 'Paper', 'page_count' => '85']),
+            $this->row(['title' => 'Ariel', 'authors' => 'José Enrique|Rodó', 'format' => 'Paper', 'page_count' => '156']),
+            $this->row(['title' => 'Ariel', 'authors' => 'José Enrique|Rodó', 'format' => 'Audiobook', 'audio_runtime' => '200']),
+        ]);
+
+        $this->postJson('/api/bulk-upload', ['csv_file' => $file])->assertOk()->assertJsonPath('summary.failed', 0);
+
+        $this->assertSame(2, Book::count());
+        $this->assertCount(2, Book::where('slug', 'ariel-rodo')->firstOrFail()->versions);
+    }
+
     public function test_multi_author_row_attaches_each_author(): void
     {
         $this->actingAsUser();
@@ -352,7 +420,11 @@ class BulkUploadTest extends TestCase
         $this->paper();
 
         $longTitle = str_repeat('Word ', 20).'End';
-        $existing = BookCreator::create($longTitle);
+        $author = ['first_name' => 'A', 'last_name' => 'B'];
+        $existing = BookCreator::create($longTitle, [$author]);
+        // Identity needs an author in common, so the SPA-created book gets its
+        // author the way the SPA would give it one.
+        app(AuthorService::class)->attachToBook($existing, [$author]);
 
         $file = $this->csvFile([
             $this->row(['title' => $longTitle, 'authors' => 'A|B', 'format' => 'Paper', 'page_count' => '100']),

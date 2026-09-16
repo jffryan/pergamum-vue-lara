@@ -77,7 +77,7 @@
                     </router-link>
                 </div>
             </div>
-            <BookshelfTable :books="books" />
+            <BookshelfTable :books="books" per-copy />
 
             <!-- Only leaves are shelvable (see ShelfPicker) — a bookcase's
                  copies live on its shelves, never on the bookcase itself. -->
@@ -101,8 +101,10 @@ import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 
 /**
- * One location: breadcrumb up, children down, and a paginated book listing
- * of the whole subtree (a bookcase page is the union of its shelves). A
+ * One location: breadcrumb up, children down, and a paginated listing of
+ * the whole subtree (a bookcase page is the union of its shelves). Rows are
+ * copies, not books — two copies of one novel here are two rows, so the
+ * table agrees with the "N copies" count above it. A
  * shelf's listing arrives in physical left-to-right order — the server
  * defaults shelf-kind locations to the `shelf` sort. Leaf locations also get
  * an AddBookSearch so copies can be shelved from the shelf page itself.

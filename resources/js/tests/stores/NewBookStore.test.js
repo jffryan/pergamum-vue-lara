@@ -83,24 +83,58 @@ describe("NewBookStore", () => {
         ]);
     });
 
-    it("should handle an existing book correctly", async () => {
+    it("should list every same-title match when the title exists", async () => {
+        const matches = [
+            {
+                book_id: 1,
+                title: "Ariel",
+                slug: "ariel",
+                authors: [{ first_name: "Sylvia", last_name: "Plath" }],
+            },
+            {
+                book_id: 2,
+                title: "Ariel",
+                slug: "ariel-rodo",
+                authors: [{ first_name: "José Enrique", last_name: "Rodó" }],
+            },
+        ];
         createOrGetBookByTitle.mockResolvedValue({
             data: {
                 exists: true,
-                book: {
-                    book_id: 1,
-                    title: "Existing Book",
-                    slug: "existing-slug",
-                },
+                book: { title: "Ariel", slug: "ariel" },
+                matches,
             },
         });
 
-        await store.beginBookCreation({ title: "Existing Book" });
+        await store.beginBookCreation({ title: "Ariel" });
 
-        expect(store.currentBookData.book.title).toBe("Existing Book");
-        expect(store.currentBookData.book.slug).toBe("existing-slug");
+        expect(store.currentBookData.book.title).toBe("Ariel");
+        expect(store.currentBookData.book.slug).toBe("ariel");
+        expect(store.existingMatches).toEqual(matches);
         expect(store.currentStep.component).toEqual([
             "NewBookVersionConfirmation",
+            "NewBookProgressForm",
+        ]);
+    });
+
+    it("should clear the matches when the user opts for a different book", async () => {
+        createOrGetBookByTitle.mockResolvedValue({
+            data: {
+                exists: true,
+                book: { title: "Ariel", slug: "ariel" },
+                matches: [
+                    { book_id: 1, title: "Ariel", slug: "ariel", authors: [] },
+                ],
+            },
+        });
+        await store.beginBookCreation({ title: "Ariel" });
+
+        store.resetToAuthors();
+
+        expect(store.existingMatches).toEqual([]);
+        expect(store.currentBookData.book.title).toBe("Ariel");
+        expect(store.currentStep.component).toEqual([
+            "NewAuthorsInput",
             "NewBookProgressForm",
         ]);
     });

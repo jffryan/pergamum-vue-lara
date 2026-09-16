@@ -11,6 +11,9 @@
                 >
                     {{ bookData.title }}
                 </router-link>
+                <span v-if="copyNickname" class="text-sm opacity-70">
+                    · {{ copyNickname }}</span
+                >
             </div>
             <div class="text-sm text-slate-500 mt-0.5">
                 <router-link
@@ -48,6 +51,14 @@
                     class="block h-full w-full"
                 >
                     {{ bookData.title }}
+                    <!-- Muted via opacity, not a fixed colour, so it follows
+                         the row's hover:text-white instead of vanishing
+                         against hover:bg-slate-500. -->
+                    <span
+                        v-if="copyNickname"
+                        class="block text-sm opacity-70"
+                        >{{ copyNickname }}</span
+                    >
                 </router-link>
             </div>
             <div class="col-span-2 p-2">
@@ -99,10 +110,22 @@ export default {
             type: Object,
             required: true,
         },
+        // When the row is one copy (location pages), its nickname is what
+        // distinguishes it from the same book's other copies. Off elsewhere:
+        // versions[0] is then just the oldest version, not a chosen copy.
+        perCopy: {
+            type: Boolean,
+            required: false,
+            default: false,
+        },
     },
     computed: {
         bookData() {
             return this.book.book;
+        },
+        copyNickname() {
+            if (!this.perCopy) return "";
+            return this.book.versions?.[0]?.nickname || "";
         },
         authorInfo() {
             const authorResponse = this.book.authors[0];

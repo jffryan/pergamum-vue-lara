@@ -33,7 +33,7 @@ Tracks rough edges and follow-up work for the Books domain (Book / Version / Rea
 - **Book creation still lives on two controllers** (`BookController::store` and `NewBookController::completeBookCreation`). They share `App\Support\BookCreator` for the book row and the same collision strategy, but still own divergent request shapes and divergent author/genre/version/read-instance handling.
 - **`BookController::update` silently drops new read instances.** Rows with no `read_instance_id` are filtered out before the update runs. The UI has no affordance for adding one from the edit view, so this is invisible today — but if the form is ever wired to send new entries, they vanish.
 - **`BookController::getBooksByFormat` is dead code.** Not in `routes/api.php`, and uses `$format->id` instead of `$format->format_id`, so it would 500 if called.
-- **`POST /books` accepting "create or add-version" by slug match is undocumented** from the route shape. Callers reading `routes/api.php` would not guess this branch exists.
+- ~~**`POST /books` accepting "create or add-version" by slug match is undocumented**~~ Moot as of 2026-09-15: `store` always creates (through `BookCreator`), and book identity is `BookMatcher`'s title-plus-shared-author rule. Adding a copy is `POST /versions`.
 
 ### Frontend
 

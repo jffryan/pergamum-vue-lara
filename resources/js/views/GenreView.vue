@@ -9,24 +9,14 @@
         <div v-else>
             <h1 class="capitalize">{{ genre.name }}</h1>
             <div class="mb-4">
-                <div
-                    v-for="page in pagination"
-                    :key="page.label"
-                    class="inline mr-2"
-                >
-                    <router-link
-                        v-if="page.url"
-                        :to="page.url"
-                        :class="page.active ? 'font-bold underline' : ''"
-                    >
+                <div v-for="page in pagination" :key="page.label" class="inline mr-2">
+                    <router-link v-if="page.url" :to="page.url" :class="page.active ? 'font-bold underline' : ''">
                         {{ page.label }}
                     </router-link>
                 </div>
-                <router-link :to="{ name: 'library.index' }"
-                    >Back to Library</router-link
-                >
+                <router-link :to="{ name: 'library.index' }">Back to Library</router-link>
             </div>
-            <BookshelfTable :books="books" />
+            <BookshelfTable :books="books" per-copy />
         </div>
     </div>
 </template>

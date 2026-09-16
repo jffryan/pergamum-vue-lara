@@ -65,11 +65,19 @@ but are no longer how shelving works).
 - **Books listing**: `LocationController::books` builds on
   `App\Support\BookListing` (the third consumer) filtered by
   `whereIn('versions.location_id', $subtreeIds)` — a bookcase or room page is
-  the union of its subtree. One addition: a `shelf` sort (min
-  `shelf_ordinal` among the book's copies in the subtree, nulls last), the
-  default when the location's kind is `shelf`; it lives in the controller,
-  not `BookListing::SORTABLE`, because it only means something inside one
-  subtree.
+  the union of its subtree. Two departures from the library shape. A `shelf`
+  sort (min `shelf_ordinal` among the book's copies in the subtree, nulls
+  last), the default when the location's kind is `shelf`; it lives in the
+  controller, not `BookListing::SORTABLE`, because it only means something
+  inside one subtree. And **rows are copies, not books**: the `versions`
+  eager load is overridden to only the subtree's copies (shelf order), and
+  each paginated book is flattened to one row per copy carrying `versions:
+  [that copy]`, so two copies of a novel on one shelf are two rows and the
+  format/page count shown is the copy that is here — not the book's oldest
+  version, which `BookListing`'s `versions[0]` convention would otherwise
+  pick even when it is shelved elsewhere. Pagination stays per book
+  (`pagination.total` counts books; `subtree_versions_count` on `show`
+  counts copies), so a page holds at least `limit` rows.
 - **Authorization**: `LocationPolicy`, all-true — the same admin-gate seam as
   `GenrePolicy`, for the same shared-catalog reason.
 - **Discard flow**: `VersionController::discard` clears `location_id` and
@@ -102,7 +110,9 @@ but are no longer how shelving works).
   `locations.show` (`/locations/:slug`), `locations.statistics`.
 - **Views**: `LocationsView` (room → bookcase → shelf browse with recursive
   subtree counts), `LocationView` (breadcrumb, child chips, paginated
-  `BookshelfTable` of the subtree), `LocationStatisticsView`
+  `BookshelfTable` of the subtree with `per-copy` set — rows key on the
+  copy and `BookTableRow` shows its nickname under the title, which is what
+  tells two copies of one book apart), `LocationStatisticsView`
   (`StatisticsGrid` + the `locationStatistics` surface config). On leaf
   locations, `LocationView` also renders
   `components/books/AddBookSearch.vue` — the list page's title-search /
