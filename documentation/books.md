@@ -47,8 +47,21 @@ Book ──< Version ──< ReadInstance
 - **Stores**: `BooksStore` (catalog/list state), `NewBookStore` (multi-step creation form). Read history and version edits flow through `BooksStore`.
 - **Service**: `resources/js/services/BookServices.js` orchestrates creation/edit flows (validation, error surfacing) across stores.
 - **Routes**: `router/book-routes.js`. Detail pages route by slug (`/book/{slug}`); the numeric-ID endpoint exists but the SPA does not use it.
-- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views. `LibraryView` reads `?discarded=` off the route query and renders an "On the shelf" / "Discarded" toggle; the mode is threaded into the API call, the pagination links, and a watcher (page stays at 1 when toggling, so `currentPage` alone won't refetch).
+- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views. `LibraryView` is the catalog browse page — see [The library page](#the-library-page) below.
+- **Library components** in `components/library/`: `LibraryToolbar` (search, sort, shelf / status chips, format select), `LibraryBookRow` (one book), `LibraryPagination` (range, windowed page links, page size). The list-shaping rules they share — sort menu, section grouping, page window, summary sentence — are pure functions in `utils/libraryList.js`, tested in `tests/utils/libraryList.test.js`. The other listings (author, genre, format, location, completed, list statistics) still render `BookshelfTable` / `BookTableRow`.
 - **Components**: `VersionTable` / `VersionTableRow` render a book's copies. The row owns the discard affordance — a "Discard" button that reveals an inline, optional date input, and a "Restore" button once discarded. Both emit up through `VersionTable` to `BookView`, which calls the API and merges the response via `BooksStore.replaceVersion(bookId, version)`.
+
+### The library page
+
+`/library` is a browse page over `GET /books`, not a table of it. Everything that changes what the query returns lives in the URL (`?search=`, `?sort=`, `?direction=`, `?discarded=`, `?read=`, `?format=`, `?page=`, `?limit=`), `LibraryView` reads the URL back into one `state` object, and one deep watcher over the derived request options fetches — so a navigation that changes two keys at once (any sort resets the page) fetches once. Defaults stay out of the URL: the sort direction is dropped when it is the one the sort implies, so `?sort=rating` stays `?sort=rating`.
+
+**The sort key decides the grouping.** `utils/libraryList.js` keeps a `SORT_OPTIONS` registry — one entry per `BookListing::SORTABLE` key — carrying the menu label, the direction choosing that sort fresh gives you (names A→Z, everything numeric biggest-first), and a `group(book)` function. `groupBooks` folds a page of server-ordered rows into headed sections by runs of equal headings: author → filing-name initial (last name, or first when there is none — the same value `sort_author` ranks on), title → initial, date read → year, rating → star value, length → page bands, format → name. It never reorders, so it can only produce sensible sections when the grouping matches the sort — which is why grouping is derived from the sort key rather than being a separate control. Read-but-undated and never-read books share one heading under date read ("No date read") because both sort null and would otherwise alternate one-row sections.
+
+**Rows show what is there.** A row is title, then a muted line of primary author (`+N` for co-authors), format and page count, then up to three genres with a `+N`, then a status slot: `★ rating · Mon YYYY` for the latest read, or nothing. Most of the library has never been read; a blank is a better rendering of that than an empty cell. On the discarded shelf the status slot shows `Discarded Mon YYYY` (latest `discarded_at` across discarded copies) instead. Author and version fallbacks are shaped objects (`{ name: "Unknown author", slug: null }`, `null`), so a book with no authors or no copies renders text rather than a broken link.
+
+**Search is live.** The toolbar debounces typing (300 ms) and commits a settled term with `router.replace`, so the URL stays the source of truth without history collecting one entry per keystroke; Enter commits at once with a push. The page keeps its current rows while a later fetch is in flight (`aria-busy`), rather than swapping the list for a spinner on every keystroke.
+
+**Pagination is a range plus a window.** "Showing 1–50 of 676", previous / next, first / last and two pages either side of the current one (`pageWindow`, which shows a page rather than eliding a run of one), and a page-size select (20 / 50 / 100, default 50 — bigger than the server's 20 so a heading covers more than one row). Page links are `router-link`s built through the same query builder, so they carry the sort, search and filters they were reached under.
 
 ## Non-obvious decisions and gotchas
 
@@ -122,9 +135,11 @@ Both return the same shape; pick based on what the caller has.
 
 ### Listing / searching
 
-`GET /books` paginates (default 20, `?limit=` to override) and accepts `?sort=` / `?direction=`, `?search=` (matches title or author name), `?format=` (filters by format name), and `?discarded=`. All four compose — search, filter and sort are applied to one query, not to separate branches.
+`GET /books` paginates (default 20, `?limit=` to override) and accepts `?sort=` / `?direction=`, `?search=` (matches title or author name), `?format=` (filters by format name), `?discarded=`, and `?read=`. All of them compose — search, filters and sort are applied to one query, not to separate branches.
 
 `?discarded=` takes `exclude` (the default — hides books whose every version is discarded), `only` (just those books, i.e. the "Discarded" shelf), or `all` (no filtering). `0`/`false` alias to `exclude` and `1`/`true` to `only`; anything unrecognized falls back to `exclude`.
+
+`?read=` takes `read` (books with at least one read instance) or `unread` (none); anything else, including absent, applies no constraint. "Read" means read *by the current user*: the filter goes through the `readInstances` relation, which carries `BelongsToCurrentUser`, so another account's reads don't count — the same reason the `date_read` and `rating` sorts are per-user. Pinned by `tests/Feature/Books/ReadStatusFilterTest`.
 
 #### Sorting
 

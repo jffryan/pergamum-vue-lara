@@ -61,6 +61,7 @@ class BookController extends Controller
         }
 
         $this->applyDiscardedFilter($query, $request);
+        $this->applyReadFilter($query, $request);
 
         // Unrecognized keys fall back to the default rather than erroring — a
         // stale bookmark should render the library, not a 422.
@@ -126,6 +127,23 @@ class BookController extends Controller
             'all' => null,
             'only' => $query->fullyDiscarded(),
             default => $query->onShelf(),
+        };
+    }
+
+    /**
+     * Constrain a books query by whether the current user has read it.
+     *
+     * `?read=` accepts `read` or `unread`; anything else (including absent)
+     * means no constraint. "Read" is "has at least one read instance" —
+     * `readInstances` carries `BelongsToCurrentUser`, so `whereHas` counts
+     * only this account's reads, the same way the sort subqueries do.
+     */
+    private function applyReadFilter($query, Request $request): void
+    {
+        match (strtolower((string) $request->input('read'))) {
+            'read' => $query->whereHas('readInstances'),
+            'unread' => $query->whereDoesntHave('readInstances'),
+            default => null,
         };
     }
 
