@@ -50,7 +50,10 @@ class VersionController extends Controller
 
         $version->save();
 
-        return response()->json($version->load('format'));
+        // `location` and not just `format`: the SPA merges this response over
+        // the copy it already holds, so a response that omits the relation
+        // leaves the shelf it was just taken off of sitting in the payload.
+        return response()->json($version->load('format', 'location'));
     }
 
     /**
@@ -66,7 +69,7 @@ class VersionController extends Controller
             'discarded_at' => null,
         ])->save();
 
-        return response()->json($version->load('format'));
+        return response()->json($version->load('format', 'location'));
     }
 
     /**

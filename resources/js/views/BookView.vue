@@ -1,369 +1,348 @@
-<template>
-    <div v-if="isLoading">
-        <PageLoadingIndicator />
-    </div>
-    <div v-else-if="showErrorMessage">
-        <AlertBox :message="error" alert-type="danger" />
-    </div>
-    <div v-else>
-        <div class="grid grid-cols-1 lg:grid-cols-2">
-            <div class="mb-12">
-                <div class="mb-4">
-                    <router-link :to="{ name: 'library.index' }" class="block"
-                        >Back to Library</router-link
-                    >
-                </div>
-                <h1>{{ currentBook.book.title }}</h1>
-                <h2>
-                    <span
-                        v-for="author in currentAuthors"
-                        :key="author.author_id"
-                        ><router-link
-                            :to="{
-                                name: 'authors.show',
-                                params: { slug: author.slug },
-                            }"
-                            class="hover:underline"
-                            >{{ author.name }}</router-link
-                        ><span
-                            v-if="
-                                author !==
-                                currentAuthors[currentAuthors.length - 1]
-                            "
-                            >,
-                        </span>
-                    </span>
-                </h2>
-                <p>
-                    <span class="font-bold">Genres: </span>
-                    <router-link
-                        v-for="(genre, index) in currentGenres"
-                        :key="genre.genre_id"
-                        :to="{
-                            name: 'genres.show',
-                            params: { id: genre.genre_id },
-                        }"
-                        class="capitalize hover:underline"
-                    >
-                        {{ genre.name
-                        }}<span v-if="index < currentGenres.length - 1"
-                            >,
-                        </span>
-                    </router-link>
-                </p>
-            </div>
-            <div class="lg:pl-12">
-                <div class="mb-8 flex items-center flex-wrap gap-2">
-                    <router-link
-                        class="btn btn-secondary text-center mr-4"
-                        :to="{
-                            name: 'books.edit',
-                            params: { slug: currentBook.book.slug },
-                        }"
-                        >Edit book</router-link
-                    >
-                    <router-link
-                        class="btn btn-secondary text-center mr-4"
-                        :to="{
-                            name: 'books.add-read-history',
-                            params: { slug: currentBook.book.slug },
-                        }"
-                        >Add read history</router-link
-                    >
-                    <router-link
-                        class="btn btn-secondary text-center mr-4"
-                        :to="{
-                            name: 'books.add-version',
-                            params: { slug: currentBook.book.slug },
-                        }"
-                        >Add version</router-link
-                    >
-                </div>
-                <div class="mb-8">
-                    <h3>Versions</h3>
-                    <VersionTable
-                        :versions="currentBook.versions"
-                        @discard="discardCopy"
-                        @restore="restoreCopy"
-                        @move="moveCopy"
-                    />
-                    <AlertBox
-                        v-if="versionActionError"
-                        :message="versionActionError"
-                        alert-type="danger"
-                        class="mt-2"
-                    />
-                </div>
-                <div v-if="bookHasBeenCompleted">
-                    <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
-                        <h3 class="mb-0">Read History</h3>
-                    </div>
-
-                    <div class="p-4 rounded-b-md bg-slate-200">
-                        <div
-                            v-for="readInstance in readHistory"
-                            :key="readInstance.id"
-                        >
-                            <p>
-                                <span class="text-zinc-600">Date read: </span
-                                >{{ readInstance.date_read ?? "Date unknown" }}
-                            </p>
-                            <p>
-                                <span class="text-zinc-600">Version: </span
-                                >{{ readInstance.version }}
-                            </p>
-                            <p>
-                                <span class="text-zinc-600">Rating: </span
-                                >{{ readInstance.rating }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div v-if="listsContainingBook.length > 0" class="mt-8">
-                    <div class="p-4 rounded-t-md bg-slate-900 text-slate-200">
-                        <h3 class="mb-0">In Your Lists</h3>
-                    </div>
-                    <div class="p-4 rounded-b-md bg-slate-200">
-                        <ul>
-                            <li
-                                v-for="list in listsContainingBook"
-                                :key="list.list_id"
-                            >
-                                <router-link
-                                    :to="{
-                                        name: 'lists.show',
-                                        params: { id: list.list_id },
-                                    }"
-                                    class="hover:underline"
-                                    >{{ list.name }}</router-link
-                                >
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div v-if="authorRelatedBooks.length > 0" class="mt-12">
-            <h3 class="mb-4">Other books by this author</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <BookCard
-                    v-for="authorRelatedBook in authorRelatedBooks"
-                    :key="authorRelatedBook.book.book_id"
-                    :book="authorRelatedBook"
-                />
-            </div>
-        </div>
-    </div>
-</template>
-
-<script>
+<script setup>
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { useBooksStore, useListsStore } from "@/stores";
-
 import { fetchBookData } from "@/services/BookServices";
 import { getAllLists } from "@/api/ListController";
 import { discardVersion, restoreVersion } from "@/api/VersionController";
 import { setVersionLocation } from "@/api/LocationController";
-
+import {
+    authorList,
+    copySummary,
+    listsHolding,
+    orderedCopies,
+    readingLine,
+    readsByCopy,
+    readsFor,
+} from "@/utils/bookDetail";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
-import VersionTable from "@/components/books/table/VersionTable.vue";
-import BookCard from "@/components/books/BookCard.vue";
+import LibraryBookRow from "@/components/library/LibraryBookRow.vue";
+import BookCopyRow from "@/components/books/detail/BookCopyRow.vue";
+import BookReadRow from "@/components/books/detail/BookReadRow.vue";
 
-export default {
-    name: "BookView",
-    setup() {
-        const BooksStore = useBooksStore();
-        const ListsStore = useListsStore();
+const route = useRoute();
+const booksStore = useBooksStore();
+const listsStore = useListsStore();
 
-        return {
-            BooksStore,
-            ListsStore,
-        };
-    },
-    components: {
-        AlertBox,
-        PageLoadingIndicator,
-        VersionTable,
-        BookCard,
-    },
-    data() {
-        return {
-            isLoading: true,
-            showErrorMessage: false,
-            error: "",
-            flagChanges: false,
-            versionActionError: "",
-        };
-    },
-    computed: {
-        currentSlug() {
-            return this.$route.params.slug;
-        },
-        currentBook() {
-            return this.BooksStore.allBooks.find(
-                (b) => b.book.slug === this.$route.params.slug,
-            );
-        },
-        bookHasBeenCompleted() {
-            if (!this.currentBook || !this.currentBook.readInstances) {
-                return false;
-            }
-            return this.currentBook.readInstances.length > 0;
-        },
-        currentAuthors() {
-            if (this.currentBook) {
-                return this.currentBook.authors.map((author) => {
-                    const firstName = author.first_name || "";
-                    const lastName = author.last_name || "";
-                    const slug = author.slug || "";
-                    return { name: `${firstName} ${lastName}`.trim(), slug };
-                });
-            }
-            return [];
-        },
-        currentGenres() {
-            if (this.currentBook) {
-                return this.currentBook.genres;
-            }
-            return [];
-        },
-        readHistory() {
-            if (!this.bookHasBeenCompleted) return "";
+// --- Data -------------------------------------------------------------------
 
-            // Loop through all read instances and return an array in MM/DD/YYYY format
-            const { readInstances } = this.currentBook;
-            const formattedReadInstances = [];
+const hasLoaded = ref(false);
+const error = ref("");
+const versionActionError = ref("");
 
-            for (let i = 0; i < readInstances.length; i += 1) {
-                // Grab the instance
-                const readInstance = readInstances[i];
-                // Format date
-                const unformattedDate = readInstance.date_read;
-                let formattedDateRead;
-                if (unformattedDate) {
-                    const [year, month, day] = unformattedDate.split("-");
-                    formattedDateRead = `${month}/${day}/${year}`;
-                } else {
-                    formattedDateRead = null;
-                }
-                // Find the version
-                const readInstanceVersion = this.findReadInstanceVersion(
-                    readInstance.version_id,
-                );
-                // Grab the version's format name
-                const versionFormatName = readInstanceVersion
-                    ? readInstanceVersion.format.name
-                    : null;
-                // The API sends the display scale; 0 means "never rated".
-                let { rating } = readInstance;
-                if (rating === 0) {
-                    rating = null;
-                }
-                // Format the read instance
-                const formattedReadInstance = {
-                    id: readInstance.read_instance_id,
-                    date_read: formattedDateRead,
-                    version: versionFormatName,
-                    rating,
-                };
-                formattedReadInstances.push(formattedReadInstance);
-            }
-            // MM/DD/YYYY
+const slug = computed(() => route.params.slug);
 
-            return formattedReadInstances;
-        },
-        authorRelatedBooks() {
-            if (!this.currentBook || !this.currentBook.authorRelatedBooks)
-                return [];
-            return this.currentBook.authorRelatedBooks;
-        },
-        listsContainingBook() {
-            if (!this.currentBook) return [];
-            const versionIds = new Set(
-                this.currentBook.versions.map((v) => v.version_id),
-            );
-            return this.ListsStore.allLists.filter(
-                (list) =>
-                    list.items &&
-                    list.items.some((item) => versionIds.has(item.version_id)),
-            );
-        },
-    },
-    methods: {
-        async discardCopy({ version_id, discarded_at }) {
-            await this.applyVersionAction(
-                () => discardVersion(version_id, discarded_at),
-                "Unable to discard this copy. Please try again.",
-            );
-        },
-        async restoreCopy(version_id) {
-            await this.applyVersionAction(
-                () => restoreVersion(version_id),
-                "Unable to restore this copy. Please try again.",
-            );
-        },
-        async moveCopy({ version_id, location_id }) {
-            await this.applyVersionAction(
-                () => setVersionLocation(version_id, location_id),
-                "Unable to move this copy. Please try again.",
-            );
-        },
-        async applyVersionAction(request, errorMessage) {
-            this.versionActionError = "";
-            try {
-                const res = await request();
-                this.BooksStore.replaceVersion(
-                    this.currentBook.book.book_id,
-                    res.data,
-                );
-            } catch (error) {
-                console.error("Error updating version:", error);
-                this.versionActionError = errorMessage;
-            }
-        },
-        findReadInstanceVersion(version_id) {
-            return this.currentBook.versions.find(
-                (version) => version.version_id === version_id,
-            );
-        },
-        async fetchListsIfNeeded() {
-            if (this.ListsStore.allLists.length > 0) return;
-            try {
-                const res = await getAllLists();
-                this.ListsStore.setAllLists(res.data);
-            } catch (error) {
-                console.error("Error fetching lists:", error);
-            }
-        },
-        async setBookData() {
-            // This repeats the isLoading logic a lot. LibraryView is cleaner in that regard
-            if (this.currentBook && "authorRelatedBooks" in this.currentBook) {
-                this.isLoading = false;
-                return;
-            }
-            const bookData = await fetchBookData(this.currentSlug);
-            if (bookData instanceof Error) {
-                this.showErrorMessage = true;
-                this.error = bookData;
-                this.isLoading = false;
-                return;
-            }
-            if (this.currentBook) {
-                this.BooksStore.updateBook(bookData);
-            } else {
-                this.BooksStore.addBook(bookData);
-            }
-            this.isLoading = false;
-        },
-    },
-    async mounted() {
-        await this.fetchListsIfNeeded();
-    },
-    watch: {
-        currentSlug: {
-            immediate: true,
-            handler: "setBookData",
-        },
-    },
+/**
+ * The store holds two shapes of book: the card-shaped rows a library page
+ * leaves behind, and the full detail payload. Only the second can render this
+ * page, and `authorRelatedBooks` is the key only the second has — so the page
+ * gates on it rather than on "is this book in the store", which is what let
+ * the old view render a half-loaded neighbour and throw on `book.title`.
+ */
+const detail = computed(() => {
+    const entry = booksStore.allBooks.find((b) => b.book.slug === slug.value);
+
+    return entry && "authorRelatedBooks" in entry ? entry : null;
+});
+
+const load = async () => {
+    const requested = slug.value;
+
+    error.value = "";
+    versionActionError.value = "";
+
+    if (detail.value) {
+        hasLoaded.value = true;
+        return;
+    }
+
+    hasLoaded.value = false;
+
+    try {
+        const data = await fetchBookData(requested);
+
+        // `fetchBookData` rejects on failure; the old view tested its return
+        // value with `instanceof Error`, a branch that could never be taken,
+        // so a failed load sat on the spinner forever.
+        if (slug.value !== requested) return;
+
+        if (booksStore.allBooks.some((b) => b.book.slug === requested)) {
+            booksStore.updateBook(data);
+        } else {
+            booksStore.addBook(data);
+        }
+    } catch (e) {
+        console.error("Error fetching book data:", e);
+
+        if (slug.value === requested) {
+            error.value = "Unable to load this book. Please try again later.";
+        }
+    } finally {
+        if (slug.value === requested) {
+            hasLoaded.value = true;
+        }
+    }
 };
+
+// Immediate, and re-runs on every slug change: "More by this author" links to
+// another book page, which is the same component with different params.
+watch(slug, load, { immediate: true });
+
+// Lists gate one section, not the page — it renders without them and gains the
+// section when they arrive. The store keeps them for the session.
+onMounted(async () => {
+    if (listsStore.allLists.length > 0) return;
+
+    try {
+        const res = await getAllLists();
+        listsStore.setAllLists(res.data);
+    } catch (e) {
+        console.error("Error fetching lists:", e);
+    }
+});
+
+// --- Presentation -----------------------------------------------------------
+
+const title = computed(() => detail.value?.book.title ?? "");
+const authors = computed(() => authorList(detail.value));
+const genres = computed(() => detail.value?.genres ?? []);
+
+const reading = computed(() => readingLine(detail.value));
+const reads = computed(() => readsFor(detail.value));
+
+const copies = computed(() => orderedCopies(detail.value?.versions));
+const copyCount = computed(() => copySummary(detail.value?.versions));
+const copyReads = computed(() => readsByCopy(detail.value));
+
+const lists = computed(() => listsHolding(detail.value, listsStore.allLists));
+// Lists reference a copy, not a book, so naming the copy only earns its space
+// once there is more than one copy to tell apart.
+const showListCopies = computed(() => copies.value.length > 1);
+
+const related = computed(() => detail.value?.authorRelatedBooks ?? []);
+const relatedHeading = computed(() =>
+    authors.value.length === 1
+        ? `More by ${authors.value[0].name}`
+        : "More by these authors",
+);
+
+// --- Version actions --------------------------------------------------------
+
+const applyVersionAction = async (request, message) => {
+    versionActionError.value = "";
+
+    try {
+        const res = await request();
+        booksStore.replaceVersion(detail.value.book.book_id, res.data);
+    } catch (e) {
+        console.error("Error updating version:", e);
+        versionActionError.value = message;
+    }
+};
+
+const discardCopy = ({ version_id, discarded_at }) =>
+    applyVersionAction(
+        () => discardVersion(version_id, discarded_at),
+        "Unable to discard this copy. Please try again.",
+    );
+
+const restoreCopy = (version_id) =>
+    applyVersionAction(
+        () => restoreVersion(version_id),
+        "Unable to restore this copy. Please try again.",
+    );
+
+const moveCopy = ({ version_id, location_id }) =>
+    applyVersionAction(
+        () => setVersionLocation(version_id, location_id),
+        "Unable to move this copy. Please try again.",
+    );
 </script>
+
+<template>
+    <div>
+        <PageLoadingIndicator v-if="!hasLoaded" />
+        <AlertBox v-else-if="error" :message="error" alert-type="danger" />
+
+        <template v-else-if="detail">
+            <router-link
+                :to="{ name: 'library.index' }"
+                class="text-sm text-zinc-500 underline hover:no-underline"
+            >
+                &larr; Library
+            </router-link>
+
+            <!-- Identity: what the book is, and what you can do to it. The
+                 actions are a quiet run of links rather than three filled
+                 buttons — nothing here is the page's primary purpose. -->
+            <div
+                class="mt-2 flex flex-wrap items-baseline justify-between gap-x-6"
+            >
+                <h1 class="mb-1">{{ title }}</h1>
+                <p class="mb-1 text-sm text-zinc-500">
+                    <router-link
+                        :to="{ name: 'books.edit', params: { slug } }"
+                        class="underline hover:no-underline"
+                        >Edit</router-link
+                    >
+                    &middot;
+                    <router-link
+                        :to="{
+                            name: 'books.add-read-history',
+                            params: { slug },
+                        }"
+                        class="underline hover:no-underline"
+                        >Add a read</router-link
+                    >
+                    &middot;
+                    <router-link
+                        :to="{ name: 'books.add-version', params: { slug } }"
+                        class="underline hover:no-underline"
+                        >Add a copy</router-link
+                    >
+                </p>
+            </div>
+
+            <p class="mb-0 text-zinc-600">
+                <template
+                    v-for="(author, index) in authors"
+                    :key="author.author_id"
+                >
+                    <router-link
+                        v-if="author.slug"
+                        :to="{
+                            name: 'authors.show',
+                            params: { slug: author.slug },
+                        }"
+                        class="hover:underline"
+                        >{{ author.name }}</router-link
+                    ><span v-else>{{ author.name }}</span
+                    ><span v-if="index < authors.length - 1">, </span>
+                </template>
+                <span v-if="!authors.length" class="text-zinc-400"
+                    >Unknown author</span
+                >
+            </p>
+
+            <p
+                v-if="genres.length"
+                class="mb-0 text-sm capitalize text-zinc-500"
+            >
+                <template
+                    v-for="(genre, index) in genres"
+                    :key="genre.genre_id"
+                >
+                    <router-link
+                        :to="{
+                            name: 'genres.show',
+                            params: { id: genre.genre_id },
+                        }"
+                        class="hover:underline"
+                        >{{ genre.name }}</router-link
+                    ><span v-if="index < genres.length - 1">, </span>
+                </template>
+            </p>
+
+            <!-- The answer the page exists to give, in one line. -->
+            <p class="mb-8 mt-3 tabular-nums">{{ reading }}</p>
+
+            <section v-if="reads.length" class="mb-8">
+                <h2
+                    class="mb-1 border-b border-zinc-200 pb-1 text-base font-bold text-zinc-500"
+                >
+                    Reading history
+                </h2>
+                <ul class="divide-y divide-zinc-200">
+                    <BookReadRow
+                        v-for="read in reads"
+                        :key="read.read_instance_id"
+                        :read="read"
+                    />
+                </ul>
+            </section>
+
+            <section class="mb-8">
+                <h2
+                    class="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 border-b border-zinc-200 pb-1 text-base font-bold text-zinc-500"
+                >
+                    Copies
+                    <span class="font-normal">{{ copyCount }}</span>
+                </h2>
+
+                <p v-if="!copies.length" class="py-2.5 text-zinc-500">
+                    No copies recorded.
+                    <router-link
+                        :to="{ name: 'books.add-version', params: { slug } }"
+                        class="underline hover:no-underline"
+                        >Add one</router-link
+                    >.
+                </p>
+                <ul v-else class="divide-y divide-zinc-200">
+                    <BookCopyRow
+                        v-for="copy in copies"
+                        :key="copy.version_id"
+                        :version="copy"
+                        :read-count="copyReads.get(copy.version_id) ?? 0"
+                        @discard="discardCopy"
+                        @restore="restoreCopy"
+                        @move="moveCopy"
+                    />
+                </ul>
+
+                <AlertBox
+                    v-if="versionActionError"
+                    :message="versionActionError"
+                    alert-type="danger"
+                    class="mt-2"
+                />
+            </section>
+
+            <section v-if="lists.length" class="mb-8">
+                <h2
+                    class="mb-1 border-b border-zinc-200 pb-1 text-base font-bold text-zinc-500"
+                >
+                    In your lists
+                </h2>
+                <ul class="divide-y divide-zinc-200">
+                    <li
+                        v-for="entry in lists"
+                        :key="entry.list.list_id"
+                        class="flex flex-wrap items-baseline justify-between gap-x-6 py-2.5"
+                    >
+                        <router-link
+                            :to="{
+                                name: 'lists.show',
+                                params: { id: entry.list.list_id },
+                            }"
+                            class="hover:underline"
+                            >{{ entry.list.name }}</router-link
+                        >
+                        <span
+                            v-if="showListCopies"
+                            class="text-sm text-zinc-500"
+                            >{{ entry.copies.join(", ") }}</span
+                        >
+                    </li>
+                </ul>
+            </section>
+
+            <!-- Related books render as library rows: the same component, the
+                 same shape, so a book reads the same wherever you meet it. -->
+            <section v-if="related.length">
+                <h2
+                    class="mb-1 border-b border-zinc-200 pb-1 text-base font-bold text-zinc-500"
+                >
+                    {{ relatedHeading }}
+                </h2>
+                <ul class="divide-y divide-zinc-200">
+                    <LibraryBookRow
+                        v-for="entry in related"
+                        :key="entry.book.book_id"
+                        :book="entry"
+                    />
+                </ul>
+            </section>
+        </template>
+    </div>
+</template>

@@ -6,7 +6,10 @@ import { useLocationsStore } from "@/stores";
  * Pick a place for one copy. Options are the tree's leaves — anything not
  * further subdivided is shelvable — labelled with their ancestor path so
  * 'O1S5' reads as 'Office / O1 / O1S5'. Emits; the owning view calls the
- * API, mirroring how discard flows through the version table.
+ * API, mirroring how discard flows through the book page's copy row.
+ *
+ * `BookCopyRow` is the only consumer, which is why the controls are styled as
+ * that page's quiet text links rather than as standalone buttons.
  */
 const props = defineProps({
     versionId: {
@@ -41,10 +44,10 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-3 text-sm">
         <select
             v-model="selectedId"
-            class="bg-zinc-50 border border-gray-400 rounded px-2 py-1 text-black text-sm"
+            class="rounded border border-zinc-400 bg-zinc-50 px-2 py-1 text-black"
         >
             <option :value="null">— Unshelved —</option>
             <option
@@ -56,7 +59,8 @@ onMounted(() => {
             </option>
         </select>
         <button
-            class="inline-block text-xs px-2 py-0.5 rounded border border-slate-500 bg-white text-slate-900 hover:bg-slate-900 hover:text-white transition-colors"
+            type="button"
+            class="underline hover:no-underline"
             @click.stop="
                 emit('move', {
                     version_id: versionId,
@@ -67,7 +71,8 @@ onMounted(() => {
             Confirm
         </button>
         <button
-            class="inline-block text-xs px-2 py-0.5 rounded border border-slate-500 bg-white text-slate-900 hover:bg-slate-900 hover:text-white transition-colors"
+            type="button"
+            class="text-zinc-500 underline hover:no-underline"
             @click.stop="emit('cancel')"
         >
             Cancel

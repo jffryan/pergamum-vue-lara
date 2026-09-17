@@ -7,13 +7,33 @@ use App\Models\ReadInstance;
 
 class BookService
 {
+    /**
+     * How many "more by this author" books the detail payload carries. The
+     * page renders them as library rows rather than cards, so a handful reads
+     * as a shelf without pushing the book's own history off the screen.
+     */
+    private const RELATED_BOOK_LIMIT = 6;
+
     public function getBookWithRelations($identifier, $type = 'id')
     {
         // `readInstances` needs no user predicate — BelongsToCurrentUser is on
         // the model, so the eager load is already the requesting user's.
         // `versions.location` feeds the book page's "where is it" line — one
         // small row per shelved copy, null for unshelved.
-        $query = Book::with(['authors', 'versions', 'versions.format', 'versions.location', 'genres', 'readInstances']);
+        //
+        // Ordered for the same reason `BookListing::query()` orders its own:
+        // the detail page reads `authors[0]` as the primary author and
+        // `readInstances[0]` as the latest read, so the order has to be a
+        // promise rather than whatever the pivot happened to return. Copies
+        // go oldest-first, matching the library's `versions[0]`.
+        $query = Book::with([
+            'authors' => fn ($q) => $q->orderBy('book_author.author_ordinal'),
+            'versions' => fn ($q) => $q->orderBy('versions.version_id'),
+            'versions.format',
+            'versions.location',
+            'genres' => fn ($q) => $q->orderBy('genres.name'),
+            'readInstances' => fn ($q) => $q->orderByDesc('date_read'),
+        ]);
 
         if ($type === 'slug') {
             $book = $query->where('slug', $identifier)->firstOrFail();
@@ -24,12 +44,21 @@ class BookService
         $bookAttributes = $book->only(['book_id', 'title', 'slug']);
 
         $authorIds = $book->authors->pluck('author_id');
-        $authorRelatedBooks = Book::with(['authors', 'genres'])
+
+        // `whereHas` keeps this one row per book however many authors it
+        // shares, and the title order makes the set stable — an unordered
+        // `limit(6)` returned a different three books on consecutive requests,
+        // so the "more by this author" block flickered on every reload.
+        $authorRelatedBooks = Book::with([
+            'authors' => fn ($q) => $q->orderBy('book_author.author_ordinal'),
+            'genres' => fn ($q) => $q->orderBy('genres.name'),
+        ])
             ->whereHas('authors', function ($q) use ($authorIds) {
                 $q->whereIn('authors.author_id', $authorIds);
             })
             ->where('book_id', '!=', $book->book_id)
-            ->limit(3)
+            ->orderBy('books.title')
+            ->limit(self::RELATED_BOOK_LIMIT)
             ->get()
             ->map(fn ($b) => [
                 'book' => $b->only(['book_id', 'title', 'slug']),

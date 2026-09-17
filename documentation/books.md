@@ -47,9 +47,9 @@ Book ──< Version ──< ReadInstance
 - **Stores**: `BooksStore` (catalog/list state), `NewBookStore` (multi-step creation form). Read history and version edits flow through `BooksStore`.
 - **Service**: `resources/js/services/BookServices.js` orchestrates creation/edit flows (validation, error surfacing) across stores.
 - **Routes**: `router/book-routes.js`. Detail pages route by slug (`/book/{slug}`); the numeric-ID endpoint exists but the SPA does not use it.
-- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views. `LibraryView` is the catalog browse page — see [The library page](#the-library-page) below.
+- **Views**: book list, book detail (slug-routed), book create, book edit, plus completed-by-year views. `LibraryView` is the catalog browse page — see [The library page](#the-library-page) below; `BookView` is one book's own page — see [The book page](#the-book-page).
 - **Library components** in `components/library/`: `LibraryToolbar` (search, sort, shelf / status chips, format select), `LibraryBookRow` (one book), `LibraryPagination` (range, windowed page links, page size). The list-shaping rules they share — sort menu, section grouping, page window, summary sentence — are pure functions in `utils/libraryList.js`, tested in `tests/utils/libraryList.test.js`. The other listings (author, genre, format, location, completed, list statistics) still render `BookshelfTable` / `BookTableRow`.
-- **Components**: `VersionTable` / `VersionTableRow` render a book's copies. The row owns the discard affordance — a "Discard" button that reveals an inline, optional date input, and a "Restore" button once discarded. Both emit up through `VersionTable` to `BookView`, which calls the API and merges the response via `BooksStore.replaceVersion(bookId, version)`.
+- **Book-page components** in `components/books/detail/`: `BookCopyRow` (one copy, and the two transitions it can make — shelve/move via `ShelfPicker`, discard/restore via an inline optional date input) and `BookReadRow` (one read). Both are presentational; `BookCopyRow` emits `discard` / `restore` / `move` up to `BookView`, which calls the API and merges the response via `BooksStore.replaceVersion(bookId, version)`. The detail-shaping rules are pure functions in `utils/bookDetail.js`, tested in `tests/utils/bookDetail.test.js`. (These replaced `VersionTable` / `VersionTableRow` and `BookCard`, all now deleted.)
 
 ### The library page
 
@@ -62,6 +62,25 @@ Book ──< Version ──< ReadInstance
 **Search is live.** The toolbar debounces typing (300 ms) and commits a settled term with `router.replace`, so the URL stays the source of truth without history collecting one entry per keystroke; Enter commits at once with a push. The page keeps its current rows while a later fetch is in flight (`aria-busy`), rather than swapping the list for a spinner on every keystroke.
 
 **Pagination is a range plus a window.** "Showing 1–50 of 676", previous / next, first / last and two pages either side of the current one (`pageWindow`, which shows a page rather than eliding a run of one), and a page-size select (20 / 50 / 100, default 50 — bigger than the server's 20 so a heading covers more than one row). Page links are `router-link`s built through the same query builder, so they carry the sort, search and filters they were reached under.
+
+### The book page
+
+`/books/{slug}` answers three questions about one book — have I read it, what copies do I own, and where are they — from the one `GET /book/{slug}` payload. It is a single column of headed sections, not a two-column grid with a table in it.
+
+**The page leads with an answer.** Under the title, author and genres sits one line built by `readingLine`: `Unread`, or `Read three times · ★ 4.3 average · Jun 2008 – Mar 2022`. A single rating is never called an "average", a range whose ends fall in the same month collapses to one date, and reads with no date say so (`Read twice, dates unknown`) rather than rendering a blank. Unrated reads are left out of the average instead of counted as zero — most of the historical library was read long before ratings were recorded.
+
+**Reads and copies refer to each other.** `read_instances.version_id` has always been in the payload; the page now uses it. Each read names the copy it happened on (nickname, falling back to format) and marks it `(no longer owned)` when that copy has been discarded, and each copy says how many times it has been read. A read also carries how long after the previous one it came — `8 years later` — with the unit stepping up from days to months to years as the gap grows.
+
+**A copy states what it has.** Format, then length in the unit its *format declares* — `412 pp` or `21h 8m`, read from `expects_page_count` / `expects_audio_runtime`, the same config every write path reduces through — then nickname, then shelf or `Unshelved`, then its transitions. A copy whose format declares pages but records none shows nothing rather than falling through to a runtime the medium cannot have. Copies still owned sort ahead of discarded ones; that is the only place the page reorders anything.
+
+**Lists name the copy they hold.** Lists reference `version_id`, not `book_id`, so a list can point at the audiobook while you are looking at the paperback. The copy is named whenever the book has more than one.
+
+**"More by this author" renders `LibraryBookRow`.** The related-books payload is the same card-shaped projection a library row takes, so a book reads identically wherever you meet it rather than through a second card component.
+
+**The payload's order is a promise.** `BookService::getBookWithRelations` orders authors by `author_ordinal`, copies oldest-first and reads newest-first (undated last), matching what `BookListing::query()` guarantees the library — `utils/bookDetail.js` reads positionally and does no sorting of its own. Pinned by `tests/Feature/Books/BookDetailPayloadTest`.
+
+**The page gates on the full payload.** `BooksStore` holds two shapes of book: card-shaped library rows and full detail payloads. `BookView` renders only when the entry for the current slug carries `authorRelatedBooks`, the key only the detail payload has. Gating on "is this book in the store" is what used to let a click on a related book render a half-loaded neighbour.
+
 
 ## Non-obvious decisions and gotchas
 
@@ -119,7 +138,7 @@ docker compose exec php php artisan book:split ariel \
 
 ### Discarding a copy
 
-`PATCH /versions/{version_id}/discard` with an optional body `{ discarded_at: 'Y-m-d' | null }`. Omit the key (or send `null`) when the date isn't known — that is the expected case for anything got rid of before tracking started. Sending the key explicitly always writes it, including `null`, which clears a previously-recorded date; omitting the key on a re-discard preserves whatever is already there. Returns the updated version with `format` loaded. `PATCH /versions/{version_id}/restore` clears both the flag and the date. Neither endpoint takes a policy — versions are global, like the rest of the catalog.
+`PATCH /versions/{version_id}/discard` with an optional body `{ discarded_at: 'Y-m-d' | null }`. Omit the key (or send `null`) when the date isn't known — that is the expected case for anything got rid of before tracking started. Sending the key explicitly always writes it, including `null`, which clears a previously-recorded date; omitting the key on a re-discard preserves whatever is already there. Returns the updated version with `format` **and `location`** loaded — the SPA merges the response over the copy it already holds, so an omitted relation would leave the shelf the copy was just taken off of sitting in the payload. `PATCH /versions/{version_id}/restore` clears both the flag and the date. Neither endpoint takes a policy — versions are global, like the rest of the catalog.
 
 ### Recording a read
 
@@ -131,7 +150,9 @@ Always go through `BookService::getBookWithRelations`. The two entrypoints:
 - `GET /books/{book_id}` — numeric ID.
 - `GET /book/{slug}` — slug. This is what the SPA uses for detail pages.
 
-Both return the same shape; pick based on what the caller has.
+Both return the same shape; pick based on what the caller has: `book`, `authors`, `versions` (each with `format` and `location`), `genres`, `readInstances`, `authorRelatedBooks`.
+
+Every relation is ordered, and the book page reads positionally off that: `authors` by `author_ordinal` (so `authors[0]` is the primary author), `versions` by `version_id` (oldest first, matching the library's `versions[0]`), `readInstances` by `date_read` descending (newest first; MySQL sorts `NULL` lowest, so an undated read lands at the end of the history rather than the top). `authorRelatedBooks` is title-ordered and capped at `BookService::RELATED_BOOK_LIMIT` — it used to be an unordered `limit()`, which returned a different set on consecutive requests and made the block flicker. Preserve the ordering when adding a relation here; `tests/Feature/Books/BookDetailPayloadTest` pins it.
 
 ### Listing / searching
 

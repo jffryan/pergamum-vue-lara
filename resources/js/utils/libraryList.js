@@ -10,6 +10,8 @@
 
 import { letterFor } from "@/utils/genreList";
 
+// Shared with `utils/bookDetail.js`, which renders the same months in a
+// day-precise form — one month table in the app.
 const MONTHS = [
     "Jan",
     "Feb",
@@ -308,6 +310,7 @@ const summarize = ({ total, search, read, discarded }) => {
 };
 
 export {
+    MONTHS,
     SORT_OPTIONS,
     DEFAULT_SORT,
     PAGE_SIZES,
