@@ -5,20 +5,39 @@ namespace App\Http\Controllers;
 use App\Http\Requests\MoveVersionRequest;
 use App\Http\Requests\StoreVersionRequest;
 use App\Models\Version;
+use App\Services\Exceptions\CopyDiscardedException;
 use App\Services\LocationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class VersionController extends Controller
 {
     public function __construct(protected LocationService $locationService) {}
 
+    /**
+     * Add a copy to an existing book, optionally shelving it as it's made.
+     *
+     * Shelving goes through `LocationService::shelveVersion` — the picker's
+     * call, and the new-book door's — inside the same transaction as the
+     * insert, so a copy is never left half-made on a bad shelf. A fresh copy
+     * is never discarded, so the service's discarded-copy refusal can't fire.
+     */
     public function addNewVersion(StoreVersionRequest $request)
     {
-        $version = Version::create($request->versionAttributes());
+        $version = DB::transaction(function () use ($request) {
+            $version = Version::create($request->versionAttributes());
 
-        // refresh() so DB-side defaults (is_discarded) are in the payload —
-        // the version table in the SPA reads them.
-        return response()->json($version->refresh(), 201);
+            if ($request->locationId() !== null) {
+                $this->locationService->shelveVersion($version, $request->locationId());
+            }
+
+            return $version;
+        });
+
+        // refresh() so DB-side defaults (is_discarded) are in the payload,
+        // and `format` / `location` because the book page's copy row renders
+        // both — the SPA appends this response to the book it holds.
+        return response()->json($version->refresh()->load('format', 'location'), 201);
     }
 
     /**
@@ -43,8 +62,11 @@ class VersionController extends Controller
             $version->discarded_at = $validated['discarded_at'] ?? null;
         }
 
-        // A copy you no longer own is not on a shelf. Restoring does not
-        // reshelve — the copy comes back "unshelved" and gets placed by hand.
+        // A copy you no longer own is not on a shelf: it moves to the
+        // virtual "Discarded" location, which is derived from `is_discarded`
+        // (see `VirtualLocations`), and `shelveVersion` refuses to put it
+        // back on one while it stays discarded. Restoring does not reshelve
+        // — the copy comes back "unshelved" and gets placed by hand.
         $version->location_id = null;
         $version->shelf_ordinal = null;
 
@@ -74,13 +96,21 @@ class VersionController extends Controller
 
     /**
      * Shelve, reshelve, or unshelve one copy — `location_id: null` unshelves.
-     * The single-FK update is the whole point of locations over lists.
+     * The single-FK update is the whole point of locations over lists. A
+     * discarded copy is a 422: it is in the discarded pile, not on a shelf.
      */
     public function setLocation(MoveVersionRequest $request, $version_id)
     {
         $version = Version::findOrFail($version_id);
 
-        $this->locationService->shelveVersion($version, $request->locationId(), $request->shelfOrdinal());
+        try {
+            $this->locationService->shelveVersion($version, $request->locationId(), $request->shelfOrdinal());
+        } catch (CopyDiscardedException $e) {
+            return response()->json([
+                'reason_code' => $e->reasonCode,
+                'reason' => $e->getMessage(),
+            ], 422);
+        }
 
         return response()->json($version->load('format', 'location'));
     }

@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-import { addVersionToBookService } from "@/services/BookServices";
 
 const useBooksStore = defineStore("BooksStore", {
     // Ordering is not state here. The library listing is paginated, so its
@@ -27,19 +26,6 @@ const useBooksStore = defineStore("BooksStore", {
                 existingBook.versions = Array.from(mergedVersions.values());
             } else {
                 this.allBooks.push(book);
-            }
-        },
-        async addVersionToBook(bookId, version) {
-            try {
-                const index = this.allBooks.findIndex(
-                    (b) => b.book.book_id === bookId,
-                );
-                if (index === -1) throw new Error("Book not found");
-
-                await addVersionToBookService(bookId, version);
-                this.allBooks[index].versions.push(version);
-            } catch (error) {
-                console.error("Failed to add version:", error);
             }
         },
         replaceVersion(bookId, version) {

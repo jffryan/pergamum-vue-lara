@@ -41,7 +41,7 @@ Format ─< Version >─ Book        (Format::books() is a through-versions belo
 - **Service**: none.
 - **Routes**: `/formats/:format` (`formats.show`) is registered directly in `router/index.js` (no `format-routes.js` file). The param is the format slug. The admin route `/admin/formats` lives in `router/admin-routes.js` and dispatches to `FormatsIndex` via the `meta.component` indirection on `AdminActionView`.
 - **Views**: `views/FormatView.vue` (browse books for one format) and `views/admin/AdminHome.vue` (single link to `admin.formats`). There is no `views/admin/FormatsView.vue` — the admin route renders `views/admin/AdminActionView.vue`, which mounts the `FormatsIndex` *component* by name.
-- **Components**: `components/admin/FormatsIndex.vue` (wraps the list + create form in a `<Suspense>` boundary), `components/admin/FormatsList.vue` (top-level `await configStore.checkForFormats()` — relies on the parent Suspense), `components/admin/CreateFormat.vue` (single-input form that calls `ConfigStore.createFormat`). The format `<select>` on book / version forms is duplicated across `components/newBook/NewVersionsInput.vue` and `components/books/forms/BookCreateEditForm.vue`; both read from `ConfigStore.books.formats` and call `ConfigStore.checkForFormats()` on mount.
+- **Components**: `components/admin/FormatsIndex.vue` (wraps the list + create form in a `<Suspense>` boundary), `components/admin/FormatsList.vue` (top-level `await configStore.checkForFormats()` — relies on the parent Suspense), `components/admin/CreateFormat.vue` (single-input form that calls `ConfigStore.createFormat`). The format `<select>` on book / version forms lives in `components/books/CopyFields.vue` (the new-book and add-a-copy pages) and `EditBookView`; both read from `ConfigStore.books.formats` and call `ConfigStore.checkForFormats()` on mount.
 
 ## Non-obvious decisions and gotchas
 
@@ -73,7 +73,7 @@ Format ─< Version >─ Book        (Format::books() is a through-versions belo
 ]
 ```
 
-Called once per session by `ConfigStore.checkForFormats()`. The `<select>` controls in `NewVersionsInput.vue` and `BookCreateEditForm.vue` both call `checkForFormats()` on mount and read `ConfigStore.books.formats`. There is no invalidation: a format created via the admin UI in the same session is appended to the cached list by `createFormat`, but a format created in a *different* session won't be visible until the page is reloaded.
+Called once per session by `ConfigStore.checkForFormats()`. `CopyFields.vue` and `EditBookView.vue` call `checkForFormats()` on mount and read `ConfigStore.books.formats`. There is no invalidation: a format created via the admin UI in the same session is appended to the cached list by `createFormat`, but a format created in a *different* session won't be visible until the page is reloaded.
 
 ### Creating a format (admin)
 
@@ -91,7 +91,7 @@ The SPA links into `/formats/:slug` from any `BookTableRow` whose primary versio
 
 ### Selecting a format in book / version forms
 
-The format `<select>` is bound to either the full format object (new-book wizard, `NewVersionsInput`) or the `format_id` integer (`BookCreateEditForm`). Backend handlers normalize: `BookController::prepareVersions` reads `$version_data['format']` as a `format_id`, while `NewBookController::handleVersions` and `VersionController::addNewVersion` expect a `version.format.format_id` shape. The two handlers are not interchangeable.
+The create pages' format `<select>` holds the `format_id` integer and `utils/copyForm.js` wraps it as `format: { format_id }` for both `POST /create-book` and `POST /versions`. Backend handlers normalize: `BookController::prepareVersions` reads `$version_data['format']` as a `format_id`, while `NewBookController::handleVersions` and `VersionController::addNewVersion` expect a `version.format.format_id` shape. The two handlers are not interchangeable.
 
 ## Related
 

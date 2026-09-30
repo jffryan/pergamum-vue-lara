@@ -47,6 +47,20 @@ const shelf = {
     versions_count: 12,
 };
 
+// The index payload carries the virtual locations after the real rows,
+// flagged so the store can split them off.
+const unshelved = {
+    location_id: null,
+    parent_id: null,
+    code: "UNSHELVED",
+    name: "Unshelved",
+    kind: "virtual",
+    slug: "unshelved",
+    virtual: true,
+    description: "Copies you own that have not been placed on a shelf yet.",
+    versions_count: 4,
+};
+
 describe("LocationsStore", () => {
     let store;
 
@@ -58,7 +72,23 @@ describe("LocationsStore", () => {
 
     it("should have the correct initial state", () => {
         expect(store.allLocations).toEqual([]);
+        expect(store.virtualLocations).toEqual([]);
         expect(store.currentLocation).toBeNull();
+    });
+
+    it("splits virtual locations out of the tree", async () => {
+        getAllLocations.mockResolvedValue({
+            data: [room, bookcase, shelf, unshelved],
+        });
+
+        await store.fetchAllLocations();
+
+        expect(store.allLocations).toHaveLength(3);
+        expect(store.virtualLocations).toEqual([unshelved]);
+        expect(store.roots).toEqual([room]);
+        expect(store.leaves).toEqual([shelf]);
+        expect(store.bySlug("unshelved")).toBeNull();
+        expect(store.virtualBySlug("unshelved")).toEqual(unshelved);
     });
 
     it("should populate allLocations from the API once and cache", async () => {
@@ -103,6 +133,26 @@ describe("LocationsStore", () => {
         // The room and bookcase both have children, so the shelf is the one
         // shelvable target.
         expect(store.leaves).toEqual([shelf]);
+    });
+
+    it("offers the leaves as path-labelled select options, sorted by path", async () => {
+        const later = {
+            ...shelf,
+            location_id: 4,
+            code: "B1S1",
+            slug: "b1s1",
+            parent_id: null,
+        };
+        getAllLocations.mockResolvedValue({
+            data: [room, bookcase, shelf, later, unshelved],
+        });
+        await store.fetchAllLocations();
+
+        // Virtual places never appear: "unshelved" is the select's null.
+        expect(store.shelfOptions).toEqual([
+            { location_id: 4, label: "B1S1" },
+            { location_id: 3, label: "Office / O1 / O1S1" },
+        ]);
     });
 
     it("stores the show payload as currentLocation", async () => {

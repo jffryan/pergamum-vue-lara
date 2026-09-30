@@ -13,6 +13,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\NewBookController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\VersionController;
+use App\Support\VirtualLocations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/versions/{version}/discard', [VersionController::class, 'discard']);
     Route::patch('/versions/{version}/restore', [VersionController::class, 'restore']);
     Route::patch('/versions/{version}/location', [VersionController::class, 'setLocation']);
+
+    // The virtual locations (`unshelved`, `discarded`) are not rows, so they
+    // go before the slug-bound resource routes and are pinned to their
+    // slugs — `LocationService` refuses to create a real location under
+    // either, which is what keeps this ordering honest.
+    Route::get('/locations/{virtual}/books', [LocationController::class, 'virtualBooks'])
+        ->where('virtual', VirtualLocations::routePattern());
+    Route::get('/locations/{virtual}', [LocationController::class, 'showVirtual'])
+        ->where('virtual', VirtualLocations::routePattern());
 
     // Locations bind by slug (`Location::getRouteKeyName`), so `{location}`
     // is 'o1s5', not an id. The nested books route is declared first, in the

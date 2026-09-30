@@ -1,56 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-    addVersionToBookService,
     calculateRuntime,
     fetchBookData,
     formatDateRead,
     splitAndNormalizeGenres,
 } from "@/services/BookServices";
 import { getOneBookFromSlug } from "@/api/BookController";
-import { createVersion } from "@/api/VersionController";
 
 // Mock API calls
 vi.mock("@/api/BookController", () => ({
     getOneBookFromSlug: vi.fn(),
 }));
 
-vi.mock("@/api/VersionController", () => ({
-    createVersion: vi.fn(),
-}));
-
 describe("BookServices", () => {
-    // ----------------------------
-    //  addVersionToBookService
-    // ----------------------------
-    describe("addVersionToBookService", () => {
-        it("should throw an error if bookId is invalid", async () => {
-            await expect(addVersionToBookService(null, {})).rejects.toThrow(
-                "Invalid book ID",
-            );
-        });
-
-        it("should call createVersion with correct parameters", async () => {
-            createVersion.mockResolvedValue({ success: true });
-
-            const version = { format: "Hardcover", page_count: 300 };
-            const response = await addVersionToBookService(1, version);
-
-            expect(createVersion).toHaveBeenCalledWith({
-                book_id: 1,
-                ...version,
-            });
-            expect(response).toEqual({ success: true });
-        });
-
-        it("should throw an error if the API call fails", async () => {
-            createVersion.mockRejectedValue(new Error("API Error"));
-
-            await expect(
-                addVersionToBookService(1, { format: "Hardcover" }),
-            ).rejects.toThrow("Failed to add version: API Error");
-        });
-    });
-
     // ----------------------------
     //  calculateRuntime
     // ----------------------------

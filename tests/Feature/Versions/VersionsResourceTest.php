@@ -4,6 +4,7 @@ namespace Tests\Feature\Versions;
 
 use App\Models\Book;
 use App\Models\Format;
+use App\Models\Location;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,6 +41,63 @@ class VersionsResourceTest extends TestCase
             'format_id' => $format->format_id,
             'page_count' => 250,
         ]);
+    }
+
+    /**
+     * Same door shape as `POST /create-book`: the copy is placed by the
+     * service the picker uses, and the response carries what the book
+     * page's copy row renders.
+     */
+    public function test_add_new_version_shelves_the_copy_on_the_named_location(): void
+    {
+        $this->actingAsUser();
+        $book = Book::factory()->create();
+        $format = Format::factory()->print()->create();
+        $shelf = Location::factory()->create(['code' => 'O1S5', 'slug' => 'o1s5']);
+
+        $response = $this->postJson('/api/versions', ['version' => [
+            'book_id' => $book->book_id,
+            'page_count' => 250,
+            'format' => ['format_id' => $format->format_id],
+            'location_id' => $shelf->location_id,
+        ]]);
+
+        $response->assertCreated()
+            ->assertJsonPath('location_id', $shelf->location_id)
+            ->assertJsonPath('location.slug', 'o1s5')
+            ->assertJsonPath('format.format_id', $format->format_id)
+            ->assertJsonPath('shelf_ordinal', null);
+        $this->assertSame($shelf->location_id, $book->versions()->sole()->location_id);
+    }
+
+    public function test_add_new_version_without_a_location_is_unshelved(): void
+    {
+        $this->actingAsUser();
+        $book = Book::factory()->create();
+        $format = Format::factory()->print()->create();
+
+        $this->postJson('/api/versions', ['version' => [
+            'book_id' => $book->book_id,
+            'page_count' => 250,
+            'format' => ['format_id' => $format->format_id],
+            'location_id' => null,
+        ]])->assertCreated()->assertJsonPath('location', null);
+    }
+
+    public function test_add_new_version_rejects_an_unknown_location_and_writes_nothing(): void
+    {
+        $this->actingAsUser();
+        $book = Book::factory()->create();
+        $format = Format::factory()->print()->create();
+
+        $this->postJson('/api/versions', ['version' => [
+            'book_id' => $book->book_id,
+            'page_count' => 250,
+            'format' => ['format_id' => $format->format_id],
+            'location_id' => 999999,
+        ]])->assertStatus(422)->assertJsonValidationErrors('version.location_id');
+
+        $this->assertSame(0, $book->versions()->count());
     }
 
     public function test_missing_required_fields_returns_validation_error(): void

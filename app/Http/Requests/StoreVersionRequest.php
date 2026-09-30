@@ -24,7 +24,22 @@ class StoreVersionRequest extends ApiFormRequest
             'version.nickname' => ['nullable', 'string', 'max:255'],
             'version.page_count' => ['nullable', 'integer', 'min:0'],
             'version.audio_runtime' => ['nullable', 'integer', 'min:0'],
+            // Same rule as `MoveVersionRequest` and the new-book door: any
+            // real location row, or null for unshelved.
+            'version.location_id' => ['nullable', 'integer', 'exists:locations,location_id'],
         ];
+    }
+
+    /**
+     * The shelf to place the new copy on, if any. Kept out of
+     * {@see versionAttributes()} on purpose: placement goes through
+     * `LocationService::shelveVersion`, not a mass-assigned column.
+     */
+    public function locationId(): ?int
+    {
+        $value = $this->validated()['version']['location_id'] ?? null;
+
+        return $value === null ? null : (int) $value;
     }
 
     /**

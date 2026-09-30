@@ -229,6 +229,20 @@ class BulkImportRowValidationTest extends TestCase
         $this->assertRejects('rating_out_of_range', $this->cells(['rating' => '3.7']), $this->format('Paper'));
     }
 
+    /**
+     * The discard endpoint takes a copy off its shelf; a CSV row saying a copy
+     * is both discarded and shelved contradicts that rule rather than
+     * describing a state the app can hold.
+     */
+    public function test_a_discarded_copy_with_a_location_is_rejected(): void
+    {
+        $this->assertRejects(
+            'location_on_discarded_copy',
+            $this->cells(['is_discarded' => 'true', 'location' => 'O1S1']),
+            $this->format('Paper'),
+        );
+    }
+
     public function test_unparseable_date_is_rejected(): void
     {
         $this->assertRejects('date_parse_failed', $this->cells(['date_read' => '01-2024-03']), $this->format('Paper'));

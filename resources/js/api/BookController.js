@@ -30,10 +30,6 @@ const getBooksByYear = async (year) => {
     return makeRequest("get", buildUrl(`completed/${year}`));
 };
 
-// CREATE
-const createBook = async (book) =>
-    makeRequest("post", buildUrl("books"), { book });
-
 // UPDATE
 // The payload is flat: book, authors, genres, versions, readInstances at the
 // top level. It used to be wrapped as { request: { formData } }, an envelope
@@ -86,7 +82,6 @@ export {
     getBooksByFormat,
     getCompletedYears,
     getBooksByYear,
-    createBook,
     updateBook,
     removeGenreInstance,
     removeAuthorInstance,

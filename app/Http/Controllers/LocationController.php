@@ -8,11 +8,16 @@ use App\Models\Location;
 use App\Models\Version;
 use App\Services\BookService;
 use App\Services\Exceptions\LocationCodeConflictException;
+use App\Services\Exceptions\LocationCodeReservedException;
 use App\Services\Exceptions\LocationCycleException;
 use App\Services\Exceptions\LocationHasChildrenException;
 use App\Services\Exceptions\LocationInUseException;
 use App\Services\LocationService;
 use App\Support\BookListing;
+use App\Support\VirtualLocations;
+use Closure;
+use Illuminate\Contracts\Database\Query\Builder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,6 +33,11 @@ class LocationController extends Controller
     /**
      * The whole tree, flat — a couple of dozen rows, so the SPA fetches it
      * once and builds the hierarchy from `parent_id` client-side.
+     *
+     * The virtual locations (`unshelved`, `discarded`) ride along at the
+     * end, flagged `virtual: true` with `location_id: null`, so the same
+     * fetch that refreshes every shelf's count refreshes the holding pen's.
+     * The store splits them off before the tree getters see them.
      */
     public function index(): JsonResponse
     {
@@ -37,7 +47,10 @@ class LocationController extends Controller
             ->orderBy('code')
             ->get();
 
-        return response()->json($locations);
+        return response()->json([
+            ...$locations->toArray(),
+            ...VirtualLocations::toIndexRows(),
+        ]);
     }
 
     public function store(StoreLocationRequest $request): JsonResponse
@@ -46,6 +59,8 @@ class LocationController extends Controller
             $location = $this->locationService->create($request->locationAttributes());
         } catch (LocationCodeConflictException $e) {
             return $this->conflictResponse($e);
+        } catch (LocationCodeReservedException $e) {
+            return $this->reservedResponse($e);
         }
 
         return response()->json($location->loadCount('versions'), 201);
@@ -80,6 +95,27 @@ class LocationController extends Controller
     }
 
     /**
+     * {@see show()} for a virtual location — same payload shape, so the SPA's
+     * location page renders the holding pen and the pile without a second
+     * view. No ancestors and no children: a virtual location is a root with
+     * nothing under it, and nothing can be shelved onto it.
+     */
+    public function showVirtual(string $virtual): JsonResponse
+    {
+        $location = VirtualLocations::find($virtual);
+        abort_if($location === null, 404);
+
+        $count = $location->constrain(Version::query())->count();
+
+        return response()->json([
+            'location' => $location->toArray($count),
+            'ancestors' => [],
+            'children' => [],
+            'subtree_versions_count' => $count,
+        ]);
+    }
+
+    /**
      * Paginated listing for the location's whole subtree — a bookcase is the
      * union of its shelves, a room of its bookcases. Built on the same
      * `BookListing` the library and genre pages use, with two departures:
@@ -97,19 +133,9 @@ class LocationController extends Controller
     public function books(Request $request, Location $location): JsonResponse
     {
         $subtreeIds = $location->subtreeIds();
+        $inSubtree = fn (Builder $q) => $q->whereIn('versions.location_id', $subtreeIds);
 
-        $query = BookListing::query()
-            ->whereHas('versions', function ($q) use ($subtreeIds) {
-                $q->whereIn('versions.location_id', $subtreeIds);
-            })
-            // Overrides BookListing's version_id-ordered load of every
-            // version: only the copies in this subtree, in shelf order.
-            ->with(['versions' => function ($q) use ($subtreeIds) {
-                $q->whereIn('versions.location_id', $subtreeIds)
-                    ->orderByRaw('(versions.shelf_ordinal is null) asc')
-                    ->orderBy('versions.shelf_ordinal')
-                    ->orderBy('versions.version_id');
-            }]);
+        $query = $this->copiesListing($inSubtree);
 
         $sort = strtolower((string) $request->input('sort', $location->kind === 'shelf' ? 'shelf' : ''));
 
@@ -132,24 +158,76 @@ class LocationController extends Controller
             BookListing::sort($query, $request->input('sort'), $request->input('direction'));
         }
 
+        return $this->copiesResponse($query, $request, [
+            'location_id' => $location->location_id,
+            'code' => $location->code,
+            'name' => $location->name,
+            'kind' => $location->kind,
+            'slug' => $location->slug,
+        ]);
+    }
+
+    /**
+     * {@see books()} for a virtual location: the same one-row-per-copy
+     * listing, narrowed by the virtual location's own constraint instead of
+     * a subtree. There is no shelf order to default to — nothing here is on
+     * a shelf — so the standard `BookListing` sorts apply.
+     */
+    public function virtualBooks(Request $request, string $virtual): JsonResponse
+    {
+        $location = VirtualLocations::find($virtual);
+        abort_if($location === null, 404);
+
+        $query = $this->copiesListing(fn (Builder $q) => $location->constrain($q));
+
+        BookListing::sort($query, $request->input('sort'), $request->input('direction'));
+
+        return $this->copiesResponse($query, $request, [
+            'location_id' => null,
+            'code' => $location->code,
+            'name' => $location->name,
+            'kind' => VirtualLocations::KIND,
+            'slug' => $location->slug,
+            'virtual' => true,
+        ]);
+    }
+
+    /**
+     * A `BookListing` over the books with at least one copy matching
+     * `$copies`, eager-loading only those copies (shelf order, unshelved
+     * last) — the override that makes each row the copy that is here.
+     *
+     * @param  Closure(Builder): Builder  $copies  narrows a `versions` query to the copies in this place
+     */
+    private function copiesListing(Closure $copies): EloquentBuilder
+    {
+        return BookListing::query()
+            ->whereHas('versions', $copies)
+            // Overrides BookListing's version_id-ordered load of every
+            // version: only the copies in this place, in shelf order.
+            ->with(['versions' => fn ($q) => $copies($q)
+                ->orderByRaw('(versions.shelf_ordinal is null) asc')
+                ->orderBy('versions.shelf_ordinal')
+                ->orderBy('versions.version_id'),
+            ]);
+    }
+
+    /**
+     * Paginate and flatten to one row per copy, each carrying only its own
+     * version so the row renders that copy's format and page count.
+     */
+    private function copiesResponse(EloquentBuilder $query, Request $request, array $location): JsonResponse
+    {
         $pageSize = $request->input('limit', 20);
         $books = $query->paginate($pageSize);
 
-        // One row per copy in the subtree, each carrying only its own version
-        // so the row renders that copy's format and page count.
         $formattedBooks = $this->bookService->getBooksList(collect($books->items()))
             ->flatMap(fn (array $row) => collect($row['versions'])
                 ->map(fn (Version $version) => [...$row, 'versions' => [$version]]))
             ->values();
 
         return response()->json([
-            'location' => [
-                'location_id' => $location->location_id,
-                'code' => $location->code,
-                'name' => $location->name,
-                'kind' => $location->kind,
-                'slug' => $location->slug,
-            ],
+            'location' => $location,
             'books' => $formattedBooks,
             'pagination' => [
                 'total' => $books->total(),
@@ -168,6 +246,8 @@ class LocationController extends Controller
             $location = $this->locationService->update($location, $request->locationAttributes());
         } catch (LocationCodeConflictException $e) {
             return $this->conflictResponse($e);
+        } catch (LocationCodeReservedException $e) {
+            return $this->reservedResponse($e);
         } catch (LocationCycleException $e) {
             return response()->json([
                 'reason_code' => $e->reasonCode,
@@ -202,6 +282,14 @@ class LocationController extends Controller
         }
 
         return response()->json(['deleted' => true]);
+    }
+
+    private function reservedResponse(LocationCodeReservedException $e): JsonResponse
+    {
+        return response()->json([
+            'reason_code' => $e->reasonCode,
+            'reason' => $e->getMessage(),
+        ], 422);
     }
 
     private function conflictResponse(LocationCodeConflictException $e): JsonResponse

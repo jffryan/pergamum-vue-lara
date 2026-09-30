@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Models\Location;
 use App\Models\Version;
+use App\Services\Exceptions\CopyDiscardedException;
 use App\Services\Exceptions\LocationCodeConflictException;
+use App\Services\Exceptions\LocationCodeReservedException;
 use App\Services\Exceptions\LocationCycleException;
 use App\Services\Exceptions\LocationHasChildrenException;
 use App\Services\Exceptions\LocationInUseException;
 use App\Support\Slugger;
+use App\Support\VirtualLocations;
 
 /**
  * Single owner of the location rules: code identity, tree integrity, and
@@ -47,10 +50,13 @@ class LocationService
      * @param  array{code: string, name?: ?string, kind: string, parent_id?: ?int, ordinal?: ?int}  $attributes
      *
      * @throws LocationCodeConflictException
+     * @throws LocationCodeReservedException
      */
     public function create(array $attributes): Location
     {
         $code = self::normalizeCode($attributes['code']);
+
+        $this->guardReserved($code);
 
         $conflict = $this->findConflict($code);
         if ($conflict !== null) {
@@ -76,12 +82,15 @@ class LocationService
      * @param  array<string, mixed>  $attributes  only keys present are applied
      *
      * @throws LocationCodeConflictException
+     * @throws LocationCodeReservedException
      * @throws LocationCycleException
      */
     public function update(Location $location, array $attributes): Location
     {
         if (array_key_exists('code', $attributes)) {
             $code = self::normalizeCode((string) $attributes['code']);
+
+            $this->guardReserved($code);
 
             $conflict = $this->findConflict($code, $location);
             if ($conflict !== null) {
@@ -119,10 +128,14 @@ class LocationService
      * recover the tree's shape from the CSV alone; anything else lands as a
      * root location so no structure is guessed. Names ('Office') are not in
      * the CSV and come back null.
+     *
+     * @throws LocationCodeReservedException
      */
     public function findOrCreateByCode(string $code): Location
     {
         $code = self::normalizeCode($code);
+
+        $this->guardReserved($code);
 
         $existing = $this->findConflict($code);
         if ($existing !== null) {
@@ -161,6 +174,20 @@ class LocationService
             'kind' => 'shelf',
             'slug' => Slugger::for($code),
         ]);
+    }
+
+    /**
+     * The virtual locations (`unshelved`, `discarded`) own their slugs — see
+     * {@see VirtualLocations}. Their routes are matched before the resource
+     * routes, so a real row under one of those slugs would be unreachable.
+     *
+     * @throws LocationCodeReservedException
+     */
+    private function guardReserved(string $code): void
+    {
+        if (VirtualLocations::isReserved(Slugger::for($code))) {
+            throw new LocationCodeReservedException($code);
+        }
     }
 
     /**
@@ -204,9 +231,21 @@ class LocationService
     /**
      * Put a copy somewhere (or nowhere — null unshelves). Reshelving is a
      * single FK update; that being cheap is half the reason locations exist.
+     *
+     * A discarded copy is refused: it sits in the discarded pile (a virtual
+     * location derived from `is_discarded`) and a shelf at the same time
+     * would be two places. The discard flow clears the location on the way
+     * in; this is the guard on the way back. Unshelving (`null`) is allowed
+     * regardless — it can only make the row more consistent.
+     *
+     * @throws CopyDiscardedException
      */
     public function shelveVersion(Version $version, ?int $locationId, ?int $shelfOrdinal = null): Version
     {
+        if ($locationId !== null && $version->is_discarded) {
+            throw new CopyDiscardedException;
+        }
+
         $version->fill([
             'location_id' => $locationId,
             // An ordinal is a position *on a shelf*; without a shelf it is

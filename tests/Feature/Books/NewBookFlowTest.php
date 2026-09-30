@@ -5,6 +5,8 @@ namespace Tests\Feature\Books;
 use App\Models\Author;
 use App\Models\Book;
 use App\Models\Format;
+use App\Models\Location;
+use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -220,6 +222,79 @@ class NewBookFlowTest extends TestCase
         $this->assertDatabaseMissing('authors', ['first_name' => 'Some', 'last_name' => 'One']);
     }
 
+    /**
+     * The form carries a shelf so a new copy doesn't have to be created and
+     * then placed from the book page. It is placed by the same service call
+     * the picker makes, so it lands exactly as a picker move would.
+     */
+    public function test_complete_book_creation_shelves_a_new_copy_on_the_named_location(): void
+    {
+        $this->actingAsUser();
+        $format = Format::factory()->create();
+        $shelf = Location::factory()->create(['code' => 'O1S5', 'slug' => 'o1s5']);
+
+        $response = $this->postJson('/api/create-book', $this->shelvedPayload('Shelved On Arrival', [
+            'format' => ['format_id' => $format->format_id],
+            'page_count' => 250,
+            'location_id' => $shelf->location_id,
+        ]));
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $version = Book::where('slug', 'shelved-on-arrival')->firstOrFail()->versions()->sole();
+        $this->assertSame($shelf->location_id, $version->location_id);
+        $this->assertNull($version->shelf_ordinal);
+    }
+
+    public function test_complete_book_creation_leaves_a_copy_with_no_location_unshelved(): void
+    {
+        $this->actingAsUser();
+        $format = Format::factory()->create();
+
+        $this->postJson('/api/create-book', $this->shelvedPayload('Left In The Pen', [
+            'format' => ['format_id' => $format->format_id],
+            'page_count' => 120,
+            'location_id' => null,
+        ]))->assertOk();
+
+        $this->assertNull(Book::where('slug', 'left-in-the-pen')->firstOrFail()->versions()->sole()->location_id);
+    }
+
+    public function test_complete_book_creation_rejects_an_unknown_location_and_writes_nothing(): void
+    {
+        $this->actingAsUser();
+        $format = Format::factory()->create();
+
+        $response = $this->postJson('/api/create-book', $this->shelvedPayload('Nowhere To Go', [
+            'format' => ['format_id' => $format->format_id],
+            'page_count' => 120,
+            'location_id' => 999999,
+        ]));
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('bookData.versions.0.location_id');
+        $this->assertDatabaseMissing('books', ['slug' => 'nowhere-to-go']);
+    }
+
+    /**
+     * An existing copy already has a place; moving it is the location
+     * endpoint's job, so naming one here is refused rather than ignored.
+     */
+    public function test_complete_book_creation_refuses_a_location_on_an_existing_copy(): void
+    {
+        $this->actingAsUser();
+        $existing = Version::factory()->create();
+        $shelf = Location::factory()->create();
+
+        $response = $this->postJson('/api/create-book', $this->shelvedPayload('Borrowed Copy', [
+            'version_id' => $existing->version_id,
+            'location_id' => $shelf->location_id,
+        ]));
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('bookData.versions.0.version_id');
+        $this->assertNull($existing->fresh()->location_id);
+    }
+
     public function test_create_authors_returns_existing_author_for_known_slug(): void
     {
         $this->actingAsUser();
@@ -249,5 +324,19 @@ class NewBookFlowTest extends TestCase
         $this->assertNull($response->json('authors.0.author_id'));
         $this->assertSame('new-person', $response->json('authors.0.slug'));
         $this->assertDatabaseMissing('authors', ['slug' => 'new-person']);
+    }
+
+    /** @param  array<string, mixed>  $version */
+    private function shelvedPayload(string $title, array $version): array
+    {
+        return [
+            'bookData' => [
+                'book' => ['title' => $title],
+                'authors' => [['first_name' => 'Some', 'last_name' => 'Author']],
+                'genres' => [],
+                'versions' => [$version],
+                'read_instances' => [],
+            ],
+        ];
     }
 }

@@ -74,11 +74,11 @@ For each method: assert the URL shape, HTTP verb, payload shape, and that errors
 
 Pattern from existing tests: `vi.mock("@/api/<X>Controller")`, `setActivePinia` per test, assert state mutations and that the right API method was called with the right args.
 
-**Services (`tests/services/`)** — `BookServices.js` is the only service today. Existing test covers `addVersionToBookService`; extend to the rest of its exports. As new services land (`AuthService.js`, `ListService.js`, etc. — flagged as a layering gap in `documentation/auth.md`, `read-history.md`, `statistics.md`), add their files alongside.
+**Services (`tests/services/`)** — `BookServices.js` is the only service today. `addVersionToBookService` was deleted with its caller (2026-09-29); the existing test covers the remaining exports. As new services land (`AuthService.js`, `ListService.js`, etc. — flagged as a layering gap in `documentation/auth.md`, `read-history.md`, `statistics.md`), add their files alongside.
 
 **Components (`tests/components/`)** — by risk, not by exhaustiveness:
 
-1. Forms with validation: `UserLoginForm.vue` (CSRF preflight + login + redirect), `BookCreateEditForm.vue`, `NewBookProgressForm.vue`, the `newBook/*Input.vue` family (these own most of the user-facing validation surface).
+1. Forms with validation: `UserLoginForm.vue` (CSRF preflight + login + redirect), `NewBookView.vue` and `AddVersionView.vue` with `CopyFields.vue` (their rules are already covered through `utils/newBookForm.js` / `utils/copyForm.js`; the component tests are for the wiring), `EditBookView.vue`.
 2. Table rows + interactive components: `BookshelfTable.vue` + `BookTableRow.vue`, `VersionTable.vue` + `VersionTableRow.vue`, `ListItemsTable.vue` (sortablejs drag-reorder is the bug-prone seam — assert that reorder emits the right payload, mock sortablejs).
 3. Nav/auth UI: `HeaderNav.vue` and `SidebarNav.vue` branching on `authStore.isLoggedIn`.
 
@@ -132,7 +132,7 @@ Skip pure-presentation components (svgs, `AlertBox.vue`, `PageLoadingIndicator.v
 - ~~**CI integration**~~ — resolved. `.github/workflows/ci.yml` runs `npm run test:run` (plus eslint and a production build) on every push to `main` and every PR. `npm test` still starts Vitest in watch mode for local work; `test:run` is the single-shot script CI calls. Anything added to this plan must pass in both.
 - **Snapshot testing** — Vitest supports it via `toMatchSnapshot()`. Same risks as on the backend (over-broad assertions, cosmetic-change churn). Default: skip; assert on specific properties / rendered text instead.
 - **MSW (Mock Service Worker)** — an alternative to per-test axios mocks; intercepts at the network layer and gives one shared "fake API" across the suite. More setup, more fidelity. Default: stick with `vi.mock` for now; revisit if axios-mocking duplication grows painful.
-- **Component testing scope creep** — the `newBook/*Input.vue` family is 8 files of overlapping form logic. Worth deciding whether to test each in isolation or to test the parent (`NewBookProgressForm`) end-to-end and let the children ride along. Lean toward the parent test + targeted child tests for the two or three with non-trivial validation.
+- ~~**Component testing scope creep** — the `newBook/*Input.vue` family.~~ Moot as of 2026-09-29: the wizard's step components were replaced by one `NewBookView` whose validation and payload logic lives in the tested `utils/newBookForm.js`.
 - **Sortablejs in tests** — drag-and-drop isn't exercisable from happy-dom. Mock `sortablejs-vue3`'s emitted `update` event rather than simulating real drags; assert the resulting `ListController.reorder` call.
 
 ---

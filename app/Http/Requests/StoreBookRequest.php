@@ -7,8 +7,10 @@ use App\Http\Requests\Concerns\ValidatesAuthorNames;
 use App\Rules\Rating;
 
 /**
- * `POST /api/books` — the legacy single-form create path behind
- * `BookCreateEditForm`.
+ * `POST /api/books` — the legacy single-form create path. Its SPA caller
+ * (`/add-books` → `BookCreateEditForm`) was deleted 2026-09-29; the new-book
+ * page posts to `/create-book`, so nothing in the app calls this endpoint
+ * any more. It stays until the two create doors are consolidated.
  *
  * Note the double nesting (`book.book.title`): the outer key is the envelope
  * the SPA sends, the inner one is the book's own fields alongside its

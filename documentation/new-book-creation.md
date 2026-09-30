@@ -7,65 +7,58 @@ status: living
 
 ## Scope
 
-Covers the multi-step "New book" flow rooted at `/new-book/` (`NewBookView` + `NewBookStore` + `components/newBook/*` + `NewBookController`). This is the primary path users take to add a book via the SPA. The single-form `/add-books` route (`AddBooksView` → `BookCreateEditForm`, posting to `BookController::store`) is a separate, older code path covered in `books.md`. The "add a version to an existing book" path (`/books/:slug/new-version` → `AddVersionView`) and the "add read history to an existing book" path (`/books/:slug/add-read-history` → `AddReadHistoryView`) reuse `NewBookStore` but are described in `books.md` and `read-history.md` respectively.
+Covers the "New book" page at `/new-book/` (`NewBookView` + `utils/newBookForm.js` + `NewBookController`) — the SPA's only way to create a book since the legacy `/add-books` form was deleted (2026-09-29). Its copy fields are the shared `components/books/CopyFields.vue` + `utils/copyForm.js`, which the add-a-copy page (`/books/:slug/new-version` → `AddVersionView` → `POST /versions`) also uses; that page is described in `books.md`. The "add read history" path (`/books/:slug/add-read-history` → `AddReadHistoryView`) is in `read-history.md`.
 
 ## Summary
 
-A two-request flow with a client-side state machine in between. Step 1 sends just the title to the backend, which slugs it and looks for existing books with the same title. The response branches the SPA into one of two paths — "this is a new book, collect authors/genres/versions/read-instances and submit it all at once" or "books with this title exist — here they are with their authors; add a version to one of them, or this is a different book with the same title". The store drives step transitions by swapping which components the route renders; components don't navigate, they push data to the store and let the store pick the next step.
+One page, one book, the copy in hand. The form has three sections — **Book** (title, authors, genres), **Your copy** (format, the length that format carries, shelf, nickname) and **Reading** (an "I've read this copy" box that opens a finished date and a rating) — and one submit, which posts the whole graph to `POST /api/create-book` and lands on the new book's page. Leaving the title field asks the server whether books with that title already exist; if so, they're listed under the field with an "Add a copy to this one" link each, and the user can carry on regardless.
+
+It replaced (2026-09-29) a seven-step wizard — title → same-title confirmation → authors → genres → copy → read → review — whose steps were separate forms swapped in by `NewBookStore`. The wizard had no back button, lost everything on a reload, swallowed submit failures, and couldn't set a shelf; see the changelog for 0.1.23.
 
 ## How it's wired
 
 ### Backend
 
 - **Routes** (`routes/api.php`, all under `auth:sanctum`):
-  - `POST /create-book/title` → `NewBookController::createOrGetBookByTitle` — slug-and-lookup via `BookMatcher::sameTitle`. Returns `{ exists: bool, book: { title, slug }, matches: [{ book_id, title, slug, authors }] }`. `book` is always the unsaved stub the SPA round-trips (its slug is provisional — `BookCreator` settles the real one on submit); `matches` is every existing book whose title slugs the same, each with its authors, so the confirmation screen can tell Plath's *Ariel* from Rodó's.
-  - `POST /create-book` → `NewBookController::completeBookCreation` — accepts the full `bookData` payload (`book`, `authors`, `genres`, `versions`, `read_instances`) and persists everything inside a single `DB::transaction`.
-- **Controllers**: `NewBookController` is *not* thin — it holds slug normalization, unique-slug generation, and per-relation `handle*` helpers inline rather than delegating to a service.
-- **Services**: `GenreService` for genres and `AuthorService` for authors — the create path resolves and attaches authors through `AuthorService::attachToBook`, so it shares the name rules and the `author_ordinal` semantics with every other ingest door. `BookService` is not involved; book slugs come from `BookCreator` / `Slugger`.
-- **Models**: creates `Book`, attaches `Author` and `Genre` rows (via `firstOrCreate`), creates `Version` rows (with `format_id` resolved from the request payload), and creates `ReadInstance` rows scoped to `auth()->id()`. All custom `_id` PKs apply (see `books.md`).
-- **Policies / authorization**: none beyond `auth:sanctum`. Anyone authenticated can create a book and the global taxonomy rows it spawns.
-- **Migrations**: no migrations specific to this flow — it writes the same tables documented in `books.md`, `authors.md`, `genres.md`, `formats.md`.
+  - `POST /create-book/title` → `NewBookController::createOrGetBookByTitle` — slug-and-lookup via `BookMatcher::sameTitle`. Returns `{ exists: bool, book: { title, slug }, matches: [{ book_id, title, slug, authors }] }`. Read-only: a miss creates nothing. The page uses only `matches`.
+  - `POST /create-book` → `NewBookController::completeBookCreation` — validates through `CompleteBookCreationRequest`, then persists the book, authors, copies (shelving any that name a location), reads and genres inside one `DB::transaction`.
+- **Controller**: `NewBookController` delegates the book row to `BookCreator`, authors to `AuthorService::attachToBook`, genres to `GenreService::attachByName`, and shelving to `LocationService::shelveVersion`. Copy and read creation are still inline `handle*` helpers.
+- **Request**: `CompleteBookCreationRequest` — author-name rules shared with the other doors (`ValidatesAuthorNames`), read dates normalized to `Y-m-d` (`NormalizesReadDates`), ratings through `App\Rules\Rating`. `versions()` splits rows into `existing` ids and `new` rows of `{ attributes, location_id }`, with the length fields already reduced to what the format carries.
+- **Models / tables**: creates `Book`, attaches `Author` and `Genre` rows, creates `Version` rows (and sets `location_id` on them via the service), creates `ReadInstance` rows scoped to `auth()->id()`. No migrations specific to this flow.
+- **Authorization**: none beyond `auth:sanctum` — the catalog is shared by design.
 
 ### Frontend
 
-- **API layer**: `resources/js/api/BookController.js` — `createOrGetBookByTitle(title)` → `POST /api/create-book/title` and `submitNewBook(bookData)` → `POST /api/create-book`. Both use `makeRequest` + `buildUrl`.
-- **Stores**: `NewBookStore` (`stores/NewBookStore.js`). Holds `currentBookData` (book/authors/genres/read_instances/versions) and `currentStep` (`{ heading, component: [string, …] }`). Despite the name, this store is also reused by `AddVersionView`, `AddReadHistoryView`, and `UpdateBookReadInstance` — see Non-obvious decisions.
-- **Service**: none for the create flow. `services/BookServices.js` exists but only exposes utilities (`addVersionToBookService`, `calculateRuntime`, `fetchBookData`, `formatDateRead`, `splitAndNormalizeGenres`); none are used by the new-book flow.
-- **Routes**: `router/book-routes.js` — `/new-book/` (named `books.new`) is the entrypoint linked from `SidebarNav`. `/add-books` (named `books.create`) is a *different* legacy route that renders `BookCreateEditForm`; it is not part of this flow.
-- **Views**: `views/NewBookView.vue` — a thin shell that reads `NewBookStore.currentStep` and renders the listed components dynamically with `<component :is>`.
-- **Components** (`resources/js/components/newBook/`):
-  - `NewBookTitleInput` — step 1, posts to `/create-book/title`.
-  - `NewBookVersionConfirmation` — only rendered when the title hits an existing book.
-  - `NewAuthorsInput` — multi-row author entry.
-  - `NewGenresInput` + `GenreTagInput` — tag-style genre entry; see `genres.md`.
-  - `NewVersionsInput` — format/page count/audio runtime/nickname + an `is_read` toggle that branches the next step.
-  - `NewReadInstanceInput` — date + rating; only shown when `is_read` is true.
-  - `NewBookSubmitControls` — final review + submit.
-  - `NewBookProgressForm` — read-only summary of `currentBookData` rendered alongside most steps so the user sees their progress.
+- **View**: `views/NewBookView.vue` (`<script setup>`) holds the draft in a local `ref` — no store — and does layout and wiring only. Styled like the book page: a `← Library` link, quiet `border-b` section headings, muted labels, text-link secondary actions, `AlertBox` for a failed submit.
+- **Logic**: `utils/newBookForm.js`, pure and unit-tested (`tests/utils/newBookForm.test.js`):
+  - `emptyDraft()` — `{ title, authors: [{first_name, last_name}], genres, copy: { format_id, page_count, audio_runtime, nickname, location_id }, read: { has_read, date_read, rating } }`.
+  - `validateDraft(draft, formats)` → `{ field: message }`, empty when submittable. Mirrors the request: a non-blank title, at least one named author, a format, and the length field that format expects. Genres, shelf, nickname, date and rating are optional.
+  - `toPayload(draft, formats)` → the `bookData` body. Blank author rows dropped, names trimmed, lengths the format doesn't carry sent as null, the read included only when the box is ticked.
+  - `namedAuthors`, `canAddAuthor`, `matchAuthorLine`, `submitErrorMessage`, `RATINGS` (0.5–5 in half steps, the server's scale).
+- **Copy fields**: `components/books/CopyFields.vue` renders format, length, shelf and nickname as a controlled component (`copy` in, `update:copy` out); `utils/copyForm.js` (`emptyCopy`, `validateCopy`, `copyPayload`, `saveErrorMessage`) holds their rules and version-row payload. `newBookForm.js` composes them into the book-level draft. The add-a-copy page uses the same pair, so a copy is entered and validated identically through both doors.
+- **Shelf select**: options come from `LocationsStore.shelfOptions` — the tree's leaves labelled with their ancestor path (`Office / O1 / O1S5`), sorted by it. `ShelfPicker` on the book page reads the same getter, so a shelf is offered and named identically in both places. The null option is "— Unshelved —".
+- **Genres**: `components/genres/GenreTagInput.vue`, shared with `EditBookView`; see `genres.md`.
+- **Formats**: `ConfigStore.checkForFormats()` on mount; which length field shows is read from the format's capability flags through `utils/formats.js`, never from its name.
+- **API layer**: `api/BookController.js` — `createOrGetBookByTitle(title)` and `submitNewBook(bookData)`.
+- **Route**: `router/book-routes.js` — `/new-book/` (named `books.new`), linked from `SidebarNav`.
 
 ## Non-obvious decisions and gotchas
 
-- **Two unrelated "create book" routes coexist.** `/new-book/` (this flow) and `/add-books` (a single-form `BookCreateEditForm` posting to `POST /books`) are both reachable, share no code, and produce books in different ways. Only `/new-book/` is linked from the sidebar; `/add-books` is effectively dead UI but still routed. Don't assume changes to one path apply to the other.
-- **The store, not the components, drives navigation.** `NewBookView` renders `currentStep.component` (an array of component names) via `<component :is>`. Each form component submits to a `NewBookStore` action which mutates `currentBookData` and then calls `setStep([...])` to advance. There's no `<router-view>` and no per-step URLs — the back button does *not* return to a previous step, it leaves the flow entirely. If a user reloads mid-flow, state is lost (`created()` calls `resetStore`).
-- **`NewBookStore` is misnamed — it's also the "current book being mutated" store.** `AddReadHistoryView` and `AddVersionView` call `setBookFromExisting(currentBook)` to load an existing book into it; `UpdateBookReadInstance` calls `addReadInstanceToExistingBookVersion`. Renaming or splitting it requires touching those callers.
-- **The two-step backend handshake is not idempotent.** `POST /create-book/title` only reads (it returns a stub on miss, no row is created). `POST /create-book` is what writes. If the user advances past the title step, drops the network, and retries, the second `POST /create-book` will run `BookCreator::create` again and dodge the collision by slug — producing a second book with the same title and author, filed under `title-surname`. There's no client-side guard.
-- **`BookCreator::slugFor` does a `LIKE 'base-%'` scan, not a unique-constraint check.** It pulls every slug with the title's prefix, tries the bare slug, then `title-surname`, then the next free `-N`. Cheap at current scale; not safe under concurrent inserts (two simultaneous creates can both compute the same suffix), but `books.slug` is uniquely indexed, so the loser gets a `QueryException` inside its transaction rather than a duplicate.
-- **`resetToAuthors` sets a random 5-7 char slug to "avoid conflicts".** When the user picks "Create a different book" on the duplicate-title screen, the store assigns a `Math.random().toString(36).substring(7)` slug instead of the title-derived one. It's harmless: `completeBookCreation` ignores the client slug entirely and files a colliding title under the author's surname (`BookCreator`). Don't rely on the client-supplied slug anywhere.
-- **Title alone is not book identity, so the title step can't decide.** `BookMatcher` needs authors, and at step 1 there are none — hence `matches` and a human choice. The importer, which has both title and authors per row, decides on its own; see `bulk-upload.md`.
-- ~~**Three slug normalizers for authors, none shared.**~~ Fixed. Author resolution for this flow is `AuthorService::attachToBook`, the same call the other three ingest doors make. `AuthorController::getOrSetToBeCreatedAuthorsByName` still derives its slug from the joined `name` rather than the two parts — see `authors.md`.
-- **`handleReadInstances` silently re-parents reads to `versions[0]`.** If a `read_instance` in the payload has no `version_id`, the controller assigns it `versions[0]->version_id` regardless of which version the user actually checked off. The client today always pushes the read-instance into the most recently added version (see `addReadInstanceToNewBookVersion`), and that version is also the only one in `currentBookData.versions` at submit time, so this happens to work — but the `// FOR NOW!!!` comment marks it as load-bearing. Adding multi-version creates without fixing this will misroute read history.
-- **`handleVersions` accepts `version_id` to mean "use existing".** If a payload version carries a `version_id`, the controller does `Version::find($id)` and skips creation. Only the `setBookFromExisting` path populates `version_id` today (and it's not currently submittable from the new-book flow), so this branch is exercised by the existing-book flows that share the store rather than by `/new-book/`. Treat it as a contract: anything carrying `version_id` will not be re-created.
-- **`completeBookCreation` always returns HTTP 200, even on failure.** The catch block returns `{ success: false, message, trace }` with no `response()->setStatusCode`. Callers must inspect `data.success`; relying on HTTP status will silently treat failures as successes. The same response also leaks the full PHP stack trace via `$e->getTrace()`.
-- **The submit handler doesn't surface errors.** `NewBookSubmitControls::submitBook` only navigates on `res.data.success === true`; on failure it does nothing — no toast, no console error, no retry. The form just sits there.
-- **`NewVersionsInput` has dead `existingBook` / `bookId` props.** When `existingBook` is true the component routes through `BooksStore.addVersionToBook` instead of the new-book flow. Nothing in the codebase passes these props — the existing-version path uses `AddVersionView`, which renders its own form. Either delete the branch or wire it up; today it's confusion bait.
-- **`is_read` on a version is a step branch, not a persisted field.** It only decides whether the next step is `NewReadInstanceInput` or `NewBookSubmitControls`; the version row itself has no `is_read` column.
-- **Existing read-instances are loaded on the duplicate-title path.** `setBookFromExisting` populates `read_instances` from the existing book payload (already user-scoped by the controller). Submitting from there does not re-create them — `addReadInstanceToNewBookVersion` only fires on the new-book branch — but anything that *did* call `submitNewBook` with prefilled `read_instances` would re-insert them as duplicates. The current UI doesn't do that, but it's a sharp edge if someone wires a "merge changes back into existing book" flow off this store.
+- **The shelf is set through `LocationService::shelveVersion`, not a mass-assigned column.** The locations work deliberately kept placement to one write path so form doors couldn't drift from the picker. This door honours that: the request keeps `location_id` out of the `Version::create()` attributes, and the controller calls the same service method the book page's picker does, inside the create transaction. A copy created on a shelf is indistinguishable from one created and then shelved. `shelf_ordinal` is left null — position on the shelf is still the CSV's and the shelve endpoint's business.
+- **An existing copy can't be given a location here.** A version row carrying `version_id` and `location_id` is a 422 (`prohibits`) rather than a silently ignored field — moving a copy is `PATCH /versions/{version}/location`. The page never sends existing rows; the rule is for other callers.
+- **The same-title check is advice, not a gate.** Title alone is not book identity (Plath's *Ariel* and Rodó's), and at the title field there are no authors yet for `BookMatcher::find` to decide with. So matches are shown with their authors and an "Add a copy to this one" link, and submitting anyway creates a second book filed under its author's surname by `BookCreator`. The check fires on the title's `change` event (blur), skips a title it has already checked, drops a response for a title that's since changed, and on failure logs and carries on — it must never block creation.
+- **Validation messages appear after the first submit attempt,** then track every edit. An empty form on arrival shows no errors.
+- **The submit button disables while saving.** The create endpoint is not idempotent — a retried `POST /create-book` makes a second book under a disambiguated slug — so a double click must not send twice. A failure re-enables it and shows the first field error of a 422, or a generic line otherwise.
+- **A read names no copy.** The copy doesn't exist until the request runs, so `read_instances[0]` goes without a `version_id` and `handleReadInstances` files it against the payload's first — here, only — copy. The form only ever sends one copy, which is what keeps that fallback correct; see the plan.
+- **An unknown finish date is a read, not an error.** "Finished (blank if unknown)" sends `date_read: null`, the same convention as discarding a copy with no date.
+- **`NewBookStore` is no longer part of this flow.** What remains of it (`currentBookData`, `setBookFromExisting`, `addReadInstanceToExistingBookVersion`) serves `AddReadHistoryView` and `UpdateBookReadInstance`. The name is now purely historical.
+- **`completeBookCreation` answers 200 with `success: true`, or 500 with `success: false`.** Validation failures are 422s from the request before the transaction opens. The page relies on axios rejecting non-2xx, not on `success`.
 
 ## Usage notes
 
-### Step 1 — title check
+### Title check
 
-`POST /api/create-book/title` body `{ title }`. Response:
+`POST /api/create-book/title` body `{ title }`:
 
 ```
 // new title
@@ -75,35 +68,22 @@ A two-request flow with a client-side state machine in between. Step 1 sends jus
 { exists: true, book: { title, slug }, matches: [{ book_id, title, slug, authors: [{ author_id, first_name, last_name, slug, … }] }, …] }
 ```
 
-The SPA stores `book.slug` for round-trip submission and either advances to `NewAuthorsInput` (new) or `NewBookVersionConfirmation` (existing), keeping `matches` in `NewBookStore.existingMatches`.
+### Submit
 
-### Step 2 — submit
+`POST /api/create-book` body `{ bookData: { book, authors, genres, versions, read_instances } }`:
 
-`POST /api/create-book` body `{ bookData: { book, authors, genres, versions, read_instances } }`. Each sub-array shape:
+- `book`: `{ title }` (a client `slug` is accepted and ignored — `BookCreator` settles the real one).
+- `authors[i]`: `{ first_name, last_name }`; at least one of the two per row.
+- `genres[i]`: `{ name }` (matched / created by name; blank names dropped).
+- `versions[i]`: `{ format: { format_id }, page_count, audio_runtime, nickname, location_id }` for a new copy — `location_id` optional, null for unshelved, any real location id — or `{ version_id }` to reuse an existing one (no `location_id` allowed).
+- `read_instances[i]`: `{ date_read, rating }`, `version_id` optional (falls back to `versions[0]`).
 
-- `authors[i]`: `{ first_name, last_name }` (slug computed server-side).
-- `genres[i]`: `{ name }` (matched / created by `name`, not slug).
-- `versions[i]`: `{ format: { format_id }, page_count, audio_runtime, nickname }` for new versions, or `{ version_id }` to reuse an existing one.
-- `read_instances[i]`: `{ date_read, rating }`. `version_id` is optional and falls back to `versions[0]` if missing (see gotchas).
-
-Response on success: `{ success: true, book, authors, genres, versions, read_instances }`. Response on failure: `{ success: false, message, trace }` — still HTTP 200.
-
-The SPA navigates to `{ name: 'books.show', params: { slug: data.book.slug } }` on success.
-
-### Existing-book branch
-
-When the title check returns `exists: true`, `NewBookVersionConfirmation` lists every match as "*title* — *authors*" with a choice per row, plus one for none of them:
-
-- **Add a version** (per match) — `<router-link>` to `books.add-version` (`AddVersionView`) for that book's slug, a separate flow against `POST /api/versions`. The new-book store is not used past this point.
-- **Create a different book** — calls `resetToAuthors`, which keeps the title, clears the matches, and re-enters the standard new-book pipeline. The user ends up with a second book sharing the title, filed under its author's surname by `BookCreator`.
-
-### Cancel / abort
-
-`NewBookSubmitControls` "Cancel" calls `resetStore()`, which clears `currentBookData` and resets the step to `NewBookTitleInput`. Navigating away mid-flow also discards state — `NewBookView.created()` calls `resetStore` on entry.
+Success: `{ success: true, book, authors, genres, versions, read_instances }`; the page routes to `{ name: 'books.show', params: { slug: data.book.slug } }`.
 
 ## Related
 
 - Plan file: `/feature-plans/new-book-creation.md` — known limitations and future improvements.
-- `/documentation/books.md` — the `BookController::store` path used by `/add-books`, the `Book` / `Version` / `ReadInstance` shapes this flow writes to, and the orphan-prune behavior on book delete.
-- `/documentation/authors.md`, `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached during creation. Slug normalizer drift is documented in `authors.md`.
-- `/documentation/read-history.md` (planned) — covers the standalone "add read history" path that reuses `NewBookStore`.
+- `/documentation/books.md` — the add-a-copy page, the now caller-less `POST /books`, and the `Book` / `Version` / `ReadInstance` shapes this flow writes.
+- `/documentation/locations.md` — `LocationService::shelveVersion`, the shelf tree, and the virtual Unshelved location a copy with no shelf lands in.
+- `/documentation/authors.md`, `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached during creation.
+- `/documentation/read-history.md` — the standalone "add read history" path.

@@ -9,6 +9,7 @@ use App\Models\ReadInstance;
 use App\Models\Version;
 use App\Services\AuthorService;
 use App\Services\GenreService;
+use App\Services\LocationService;
 use App\Support\BookCreator;
 use App\Support\BookMatcher;
 use App\Support\Slugger;
@@ -21,10 +22,13 @@ class NewBookController extends Controller
 
     protected $authorService;
 
-    public function __construct(GenreService $genreService, AuthorService $authorService)
+    protected $locationService;
+
+    public function __construct(GenreService $genreService, AuthorService $authorService, LocationService $locationService)
     {
         $this->genreService = $genreService;
         $this->authorService = $authorService;
+        $this->locationService = $locationService;
     }
 
     /**
@@ -62,13 +66,25 @@ class NewBookController extends Controller
      *
      * The request has already reduced each new row to the length fields its
      * format carries, so an audiobook can't arrive here carrying a page count.
+     *
+     * A new copy with a `location_id` is shelved through
+     * `LocationService::shelveVersion` — the same call the book page's picker
+     * makes — so placing a copy still has one owner, and a copy created here
+     * is indistinguishable from one created and then shelved. A fresh copy is
+     * never discarded, so the service's discarded-copy refusal can't fire.
      */
     private function handleVersions(array $versions, Book $book)
     {
         $existing = Version::whereIn('version_id', $versions['existing'])->get()->all();
 
-        $created = collect($versions['new'])->map(function ($attributes) use ($book) {
-            return Version::create($attributes + ['book_id' => $book->book_id]);
+        $created = collect($versions['new'])->map(function ($row) use ($book) {
+            $version = Version::create($row['attributes'] + ['book_id' => $book->book_id]);
+
+            if ($row['location_id'] !== null) {
+                $this->locationService->shelveVersion($version, $row['location_id']);
+            }
+
+            return $version;
         })->all();
 
         return array_merge($existing, $created);

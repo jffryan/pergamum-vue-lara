@@ -1,12 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import useBooksStore from "@/stores/BooksStore";
-import { addVersionToBookService } from "@/services/BookServices";
-
-// Mock the API call
-vi.mock("@/services/BookServices", () => ({
-    addVersionToBookService: vi.fn(),
-}));
 
 describe("BooksStore", () => {
     let store;
@@ -73,32 +67,6 @@ describe("BooksStore", () => {
             { version_id: 2 },
             { version_id: 3 },
         ]);
-    });
-
-    // ------------------------
-    // addVersionToBook
-    // ------------------------
-    it("should add a version to an existing book and call API", async () => {
-        const book = { book: { book_id: 1 }, versions: [] };
-        store.addBook(book);
-
-        const version = { version_id: 101 };
-        await store.addVersionToBook(1, version);
-
-        expect(store.allBooks[0].versions).toContainEqual(version);
-        expect(addVersionToBookService).toHaveBeenCalledWith(1, version);
-    });
-
-    it("should handle error when adding a version to a non-existent book", async () => {
-        console.error = vi.fn();
-
-        const version = { version_id: 101 };
-        await store.addVersionToBook(99, version); // Book ID 99 doesn't exist
-
-        expect(console.error).toHaveBeenCalledWith(
-            "Failed to add version:",
-            new Error("Book not found"),
-        );
     });
 
     // ------------------------

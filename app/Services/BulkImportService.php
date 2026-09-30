@@ -20,6 +20,7 @@ use App\Support\BookMatcher;
 use App\Support\CsvContract;
 use App\Support\RatingValidator;
 use App\Support\Slugger;
+use App\Support\VirtualLocations;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -226,6 +227,10 @@ class BulkImportService
             // transaction, so a dry run writes nothing). Matching is on the
             // slug, so 'o1s5' and 'O1S5' name the same place.
             $locationSlug = Slugger::for($row->location);
+            if (VirtualLocations::isReserved($locationSlug)) {
+                return $this->fail($rowNumber, $title, 'location_reserved', "location '{$row->location}' is a built-in location, not a shelf — leave the column blank to file the copy as unshelved");
+            }
+
             $location = Location::where('slug', $locationSlug)->first();
             if ($location === null && ! $this->createLocations) {
                 return $this->fail($rowNumber, $title, 'location_not_found', "location '{$row->location}' does not exist (pass create_locations to create it)");
@@ -355,6 +360,14 @@ class BulkImportService
         }
 
         [$location, $shelfOrdinal] = $this->parseLocation($cells['location'] ?? '');
+
+        // A discarded copy lives in the virtual Discarded location and
+        // nowhere else — the same rule the discard endpoint enforces by
+        // clearing the shelf. A row claiming both is a contradiction, not a
+        // shelf to silently drop.
+        if ($isDiscarded && $location !== null) {
+            throw new BulkImportRowException('location is set but is_discarded is true — a discarded copy is not on a shelf', 'location_on_discarded_copy');
+        }
 
         return new ImportRow(
             title: $title,

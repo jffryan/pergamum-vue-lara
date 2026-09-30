@@ -232,7 +232,7 @@ import { formatExpects } from "@/utils/formats";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
-import GenreTagInput from "@/components/newBook/GenreTagInput.vue";
+import GenreTagInput from "@/components/genres/GenreTagInput.vue";
 
 export default {
     name: "EditBookView",

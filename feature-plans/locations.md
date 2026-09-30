@@ -5,7 +5,8 @@ status: living
 
 # Locations (physical shelving)
 
-Shipped 2026-08-22 (CHANGELOG 0.1.17); the descriptive content lives in
+Shipped 2026-08-22 (CHANGELOG 0.1.17); the virtual `unshelved` / `discarded`
+locations followed 2026-09-17 (0.1.22). The descriptive content lives in
 `/documentation/locations.md`. Decisions taken at implementation, for the
 record: `restrict` + refuse-non-empty delete (force only unshelves a leaf's
 copies), one `location` statistics scope rather than shelf/bookcase pairs,
@@ -51,16 +52,29 @@ derivation, or the shelf-code convention has to hold for both doors.
 8. **Tags as a genre `kind`** — the other half of the "three ways to group
    books" question that prompted this plan. Owned by
    `/feature-plans/genres.md`; noted here only for the cross-reference.
+9. **Statistics for the virtual locations.** `Scope::$model` is typed
+   `?Model`, so `ScopeResolver::location` can't hand a `VirtualLocation` to
+   `LocationQuery`. "What have I discarded, by genre" is the interesting one;
+   loosening the scope's model type (or a `virtual_location` scope) and a
+   `constrain()` arm in `LocationQuery::items` would do it. The SPA hides
+   the link until then.
+10. **Bulk actions on the pen.** The unshelved page places one copy at a
+    time. Once real unshelved backlogs appear (a box of new arrivals), a
+    "shelve all selected to …" over the listing would be the next ask —
+    the per-row `#actions` slot on `BookshelfTable` is the seam.
+11. **More virtual places** — "lent out", "boxed" — would each need a
+    column to derive from (the whole point is that they are not rows), so
+    they are a schema decision first. `VirtualLocations` is one entry per
+    place once the column exists.
 
 ## Known limitations
 
-- **Book create/edit forms don't carry a shelf picker.** Deliberate:
-  shelving has one write path (`PATCH /versions/{version}/location`, used by
-  the picker on the book page's version rows) rather than becoming a fifth
-  field the three book-payload doors must keep agreeing on. A copy created
-  through a form lands unshelved and is placed from the book page. Revisit
-  only with a shape that keeps `LocationService::shelveVersion` the sole
-  owner.
+- **The edit form doesn't carry a shelf picker.** Both copy-creating
+  forms do (2026-09-29): the new-book page (`POST /create-book`) and the
+  add-a-copy page (`POST /versions`) take an optional `location_id` and
+  call `LocationService::shelveVersion`, so the service stays the sole
+  owner. Moving an existing copy is the book page's picker, deliberately
+  not a field on the edit form.
 - **Nothing enforces the nickname-as-copy-discriminator rule at create
   time.** The importer fails ambiguous rows (`ambiguous_copy`), but the book
   form can still create a second nickname-less version of the same
@@ -71,4 +85,10 @@ derivation, or the shelf-code convention has to hold for both doors.
   treats NULLs as distinct there); the unique slug is what actually stops two
   roots sharing a code.
 - **Discarding silently unshelves.** Correct per the plan, but there is no
-  undo that restores the old shelf — restore comes back unshelved by design.
+  undo that restores the old shelf — restore comes back in the unshelved
+  pen by design, and is placed from there (or from the book page).
+- **Shelving from the book page bypasses the store.** `BookView::moveCopy`
+  calls `setVersionLocation` directly, so `LocationsStore.allLocations`
+  counts go stale until something force-refetches. `LocationsView` now
+  does on mount, which covers the page where it shows; the picker's own
+  option list never carries counts, so nothing else notices.

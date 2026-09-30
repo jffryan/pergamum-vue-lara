@@ -50,7 +50,7 @@ Start with **HTTP fire-and-forget** for the synchronous ISBN-lookup case (the ne
 
 ### Frontend integration
 
-- `components/newBook/` — add "Enter ISBN" step calling `api/EnrichmentController.js` wrapper. Pre-fills the form. Manual path stays; ISBN is optional.
+- `views/NewBookView.vue` — add an optional ISBN field above Title calling an `api/EnrichmentController.js` wrapper; a hit pre-fills the draft (`utils/newBookForm.js`). Manual path stays.
 - `views/BookView` — render `cover_url`, `description`, `published_date` when present; degrade gracefully when null.
 - `stores/BooksStore.js` — extend book shape to include new fields. No new store needed.
 
@@ -94,7 +94,7 @@ Follow existing data-flow rule (`views -> services/stores -> api/<Domain>Control
 - **`NewBookController`** (`createOrGetBookByTitle`, `completeBookCreation`) — both methods get new code paths.
 - **`BookController`** / book detail routes — may need to expose new fields.
 - **`BooksStore.js`** — book shape extends with enrichment fields.
-- **`components/newBook/`** — new ISBN step in the creation flow.
+- **`views/NewBookView.vue`** — ISBN field on the new-book page.
 - **`compose.yml`** — new service added.
 - **`books` and `versions` tables** — new columns via migration.
 

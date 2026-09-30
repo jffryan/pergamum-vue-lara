@@ -22,7 +22,7 @@
                 ref="input"
                 v-model="inputText"
                 type="text"
-                class="flex-1 min-w-[8rem] bg-transparent outline-none text-sm py-0.5 capitalize"
+                class="flex-1 min-w-[8rem] bg-transparent outline-none text-sm !border-0 !p-0 !py-0.5 capitalize"
                 placeholder="Type a genre..."
                 @keydown.enter.prevent="handleEnter"
                 @keydown.down.prevent="moveDown"

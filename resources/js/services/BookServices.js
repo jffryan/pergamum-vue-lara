@@ -1,17 +1,4 @@
 import { getOneBookFromSlug } from "@/api/BookController";
-import { createVersion } from "@/api/VersionController";
-
-const addVersionToBookService = async (bookId, version) => {
-    if (!bookId) throw new Error("Invalid book ID");
-
-    try {
-        const newVersion = { book_id: bookId, ...version };
-        return await createVersion(newVersion);
-    } catch (error) {
-        console.error("Failed to add version:", error.message);
-        throw new Error(`Failed to add version: ${error.message}`);
-    }
-};
 
 function calculateRuntime(runtime) {
     if (!Number.isFinite(runtime) || runtime < 0) return "0h 0m";
@@ -58,7 +45,6 @@ const splitAndNormalizeGenres = (genres) => {
 };
 
 export {
-    addVersionToBookService,
     calculateRuntime,
     fetchBookData,
     formatDateRead,

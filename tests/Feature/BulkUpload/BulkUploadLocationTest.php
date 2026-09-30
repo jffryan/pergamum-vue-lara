@@ -121,6 +121,22 @@ class BulkUploadLocationTest extends TestCase
     }
 
     /**
+     * The virtual locations are views over version state, not shelves —
+     * naming one in the CSV is refused even with `create_locations`, which
+     * would otherwise mint a real row that the virtual routes then hide.
+     */
+    public function test_a_virtual_location_slug_is_refused_as_a_shelf(): void
+    {
+        $this->actingAsUser();
+
+        $this->uploadWith(['create_locations' => true], $this->row('Unshelved'))
+            ->assertJsonPath('results.0.reason_code', 'location_reserved');
+
+        $this->assertDatabaseMissing('locations', ['slug' => 'unshelved']);
+        $this->assertSame(0, Version::count());
+    }
+
+    /**
      * The copy-collapse guard: two rows sharing (title, format, nickname) but
      * naming different shelves describe two physical copies `resolveVersion`
      * would fold into one, silently losing a shelf assignment. The later row

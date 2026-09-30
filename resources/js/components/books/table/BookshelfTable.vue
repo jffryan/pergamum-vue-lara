@@ -38,7 +38,14 @@
                         index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-200',
                         ' text-black cursor-pointer hover:bg-slate-500 hover:text-white',
                     ]"
-                />
+                >
+                    <!-- Scoped so the parent can act on the row's copy
+                         (`book.versions[0]` under per-copy). Only forwarded
+                         when supplied, so rows elsewhere render no strip. -->
+                    <template v-if="$slots.actions" #actions>
+                        <slot name="actions" :book="book" />
+                    </template>
+                </BookTableRow>
             </div>
         </div>
     </div>

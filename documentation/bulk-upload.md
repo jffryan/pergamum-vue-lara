@@ -58,7 +58,7 @@ The "Column required" figure below is about the header only.
 | `rating`          | no       | Decimal 0.5–5 in 0.5 steps. The `ReadInstance` mutator doubles the value on insert (a CSV value of `4.5` is stored as `9`). |
 | `is_discarded`    | no       | Boolean: `1` / `true` / `yes` / `y`, or blank / `0` / `false` / `no` / `n`. Case-insensitive. Anything else fails the row (`is_discarded_invalid`). Applied on version *create* only. |
 | `discarded_at`    | no       | Same date formats as `date_read`. Only meaningful with `is_discarded` set — a date without the flag fails the row (`discarded_at_without_flag`). Blank with the flag set is the "discarded, date unknown" case. |
-| `location`        | no       | One `CODE` or `CODE\|ordinal` entry — a copy has exactly one place, so a `;` fails the row (`location_entry_malformed`). The code is matched to `locations.slug` case-insensitively; an unknown code fails the row (`location_not_found`) unless `create_locations` was sent. Applied on version *create* only. The ordinal is the copy's left-to-right shelf position. |
+| `location`        | no       | One `CODE` or `CODE\|ordinal` entry — a copy has exactly one place, so a `;` fails the row (`location_entry_malformed`). The code is matched to `locations.slug` case-insensitively; an unknown code fails the row (`location_not_found`) unless `create_locations` was sent, and the virtual slugs `unshelved` / `discarded` are refused (`location_reserved`). Must be blank when `is_discarded` is set (`location_on_discarded_copy`). Applied on version *create* only. The ordinal is the copy's left-to-right shelf position. |
 | `lists`           | no       | `;`-separated list of `Name` or `Name\|ordinal` entries. Files the row's version onto each named list, owned by the importing user. A non-numeric ordinal or a name that slugs to nothing fails the row (`list_entry_malformed`). |
 
 The column vocabulary lives in `App\Support\CsvContract` and is shared by the
@@ -146,6 +146,8 @@ Note this endpoint returns **two different 422 shapes**. Whole-file rejections r
 | `list_entry_malformed`      | An entry in `lists` had a non-numeric ordinal, or a name that slugs to nothing. |
 | `location_entry_malformed`  | `location` held more than one value, an empty code, or a non-numeric ordinal. |
 | `location_not_found`        | `location` named a code no location holds, and `create_locations` was not sent. |
+| `location_reserved`         | `location` named a virtual location (`unshelved`, `discarded`) — those are derived from version state, not shelves. Leave the column blank to file the copy as unshelved. Refused even with `create_locations`. |
+| `location_on_discarded_copy` | `location` was set while `is_discarded` was true. A discarded copy is not on a shelf — see `/documentation/locations.md`, Virtual locations. |
 | `ambiguous_copy`            | The row names a different location than an earlier row with the same `(title, primary author, format, version_nickname)` — two copies the version dedupe would collapse. Fix with distinguishing nicknames. |
 | `internal_error`            | An unexpected exception fired inside the row's transaction. The exception is logged via `Log::error`; the response carries a generic message. |
 

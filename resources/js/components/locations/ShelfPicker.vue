@@ -27,14 +27,7 @@ const emit = defineEmits(["move", "cancel"]);
 const LocationsStore = useLocationsStore();
 const selectedId = ref(props.currentLocationId);
 
-const options = computed(() =>
-    LocationsStore.leaves
-        .map((location) => ({
-            location_id: location.location_id,
-            label: LocationsStore.pathLabel(location),
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-);
+const options = computed(() => LocationsStore.shelfOptions);
 
 onMounted(() => {
     LocationsStore.fetchAllLocations().catch((error) => {

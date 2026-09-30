@@ -38,7 +38,7 @@ The admin surface exists because loose data entry produces near-duplicates — `
 - **Service**: none. Genre mutations live on the store rather than in a `services/GenreServices.js`: per the data-flow convention a service layer is for orchestration across multiple stores/controllers, and this is one domain and one API surface. The string-to-array helper `splitAndNormalizeGenres` lives in `services/BookServices.js` and is used only by the book create/edit form, not by genre views.
 - **Routes** (`router/index.js`, no per-feature route file): `/genres` (`genres.index`) and `/genres/:id` (`genres.show`). Routing is by numeric ID — there is no slug column. The admin surface is `/admin/genres` (`admin.genres`), declared in `router/admin-routes.js`; see `admin.md`.
 - **Views**: `views/GenresView.vue` (index — the whole catalog on one page as a responsive card grid, with a substring filter, an A–Z / most-books sort toggle, and a first-letter jump rail) and `views/GenreView.vue` (detail — server-paginated bookshelf via `BookshelfTable`).
-- **Components**: `components/genres/GenreCard.vue` (one genre on the index — name, count, and the proportional bar). `components/newBook/NewGenresInput.vue` (step in the new-book wizard) wraps `components/newBook/GenreTagInput.vue` (chip-style autocomplete that warm-loads `GenreStore.allGenres` once on mount). `BookTableRow` renders the first **two** genres of each book with links to `genres.show` — its `primaryGenres` computed slices `(0, 2)`, though its own comment says three.
+- **Components**: `components/genres/GenreCard.vue` (one genre on the index — name, count, and the proportional bar). `components/genres/GenreTagInput.vue` (chip-style autocomplete that warm-loads `GenreStore.allGenres` once on mount), used by the new-book page and `EditBookView`. `BookTableRow` renders the first **two** genres of each book with links to `genres.show` — its `primaryGenres` computed slices `(0, 2)`, though its own comment says three.
 - **Admin components** (`components/admin/genres/`): `GenresIndex.vue` (the action root — search box, table, create form), `GenresTable.vue` / `GenreRow.vue` (name with click-to-rename inline, `books_count`, merge-selection checkbox, delete), `CreateGenre.vue`, and `MergeGenresBar.vue` (appears once ≥2 rows are checked). Destructive steps route through `components/globals/ConfirmAction.vue`.
 
 ## Non-obvious decisions and gotchas
@@ -48,7 +48,7 @@ The admin surface exists because loose data entry produces near-duplicates — `
 - **Five doors, one set of name rules.** Genres reach the database from the admin CRUD surface and from four ingest paths, each of which still takes a *different input shape*:
   - `POST /books` (book create) — an array of bare strings under `book.book.genres.parsed`. The form builds it by running `splitAndNormalizeGenres` on comma-separated raw input.
   - `PUT /books/{id}` (book update) — an array of `{ genre_id?, name? }` objects.
-  - `POST /create-book` (new-book wizard) — an array of `{ name }` objects.
+  - `POST /create-book` (new-book page) — an array of `{ name }` objects.
   - `POST /bulk-upload` (CSV import) — a `;`-separated cell, split by `BulkImportService`. Easy to forget: it has no FormRequest and isn't a form.
 
   The shapes differ; the resulting rows must not. All four now call `GenreService::attachByName()` or `::syncFromInput()`, so `GenreService::normalize()` is the only spelling rule in the application, and blank entries / duplicate spellings resolve identically at every door. `tests/Feature/Genres/GenreIngestTest` asserts the four in parallel — a fifth door gets a block there.
@@ -155,6 +155,6 @@ Re-send as `DELETE /genres/{genre}?force=true` to go through with it. Deleting i
 - Plan file: `/feature-plans/genre-management.md` — the CRUD/merge surface's own limitations, and the unique-index migration that can only land once merge has been used against the live database.
 - `/documentation/admin.md` — the admin shell that `/admin/genres` plugs into, and `ConfirmAction`.
 - `/documentation/books.md` — genre attachment, update, and the comma-separated form input are owned by the book pipeline.
-- `/documentation/new-book-creation.md` — the wizard step that consumes `GenreTagInput` and ships `[{name, genre_id}]` to `POST /create-book`.
+- `/documentation/new-book-creation.md` — the new-book page, which uses `GenreTagInput` and ships `[{name}]` to `POST /create-book`.
 - `/documentation/authors.md` — sibling taxonomy doc; many of the same gotchas (custom PK, no unique constraint, dead resource stubs) apply there. Genres no longer share the last two: they have a conflict-checked CRUD surface and no dead stubs.
 - `/documentation/formats.md` — the third taxonomy doc, covering format/version dependencies.

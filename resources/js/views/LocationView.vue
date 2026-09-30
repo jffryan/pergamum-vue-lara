@@ -33,8 +33,11 @@
 
             <h1>{{ location.name || location.code }}</h1>
             <p class="mb-2 text-sm text-gray-600">
-                {{ location.kind }} · {{ subtreeVersionsCount }} copies
+                <template v-if="!isVirtual">{{ location.kind }} · </template
+                >{{ subtreeVersionsCount }} copies
+                <!-- The statistics scope resolves real locations only. -->
                 <router-link
+                    v-if="!isVirtual"
                     :to="{
                         name: 'locations.statistics',
                         params: { slug: location.slug },
@@ -42,6 +45,9 @@
                     class="ml-2 hover:underline text-gray-500"
                     >Statistics →</router-link
                 >
+            </p>
+            <p v-if="isVirtual" class="mb-4 text-sm text-gray-600">
+                {{ location.description }}
             </p>
 
             <!-- Child locations -->
@@ -77,12 +83,54 @@
                     </router-link>
                 </div>
             </div>
-            <BookshelfTable :books="books" per-copy />
+            <AlertBox
+                v-if="actionError"
+                :message="actionError"
+                alert-type="danger"
+                class="mb-2"
+            />
+
+            <!-- The virtual pages are where copies get *out* of a holding
+                 state, so each row carries the one transition that does it:
+                 Shelve for the unshelved pen, Restore for the discarded
+                 pile. Real shelves take copies in via AddBookSearch below
+                 and move them from the book page. -->
+            <BookshelfTable :books="books" per-copy>
+                <template v-if="rowAction" #actions="{ book }">
+                    <template v-if="rowAction === 'shelve'">
+                        <button
+                            v-if="pickingVersionId !== copyOf(book).version_id"
+                            type="button"
+                            class="underline hover:no-underline"
+                            @click.stop="
+                                pickingVersionId = copyOf(book).version_id
+                            "
+                        >
+                            Shelve
+                        </button>
+                        <ShelfPicker
+                            v-else
+                            :version-id="copyOf(book).version_id"
+                            @move="shelveCopy"
+                            @cancel="pickingVersionId = null"
+                        />
+                    </template>
+                    <button
+                        v-else-if="rowAction === 'restore'"
+                        type="button"
+                        class="underline hover:no-underline"
+                        @click.stop="restoreCopy(copyOf(book).version_id)"
+                    >
+                        Restore
+                    </button>
+                </template>
+            </BookshelfTable>
 
             <!-- Only leaves are shelvable (see ShelfPicker) — a bookcase's
-                 copies live on its shelves, never on the bookcase itself. -->
+                 copies live on its shelves, never on the bookcase itself,
+                 and nothing is shelved *onto* a virtual location. -->
             <AddBookSearch
-                v-if="children.length === 0"
+                v-if="!isVirtual && children.length === 0"
                 class="mt-6"
                 :is-version-added="isVersionAdded"
                 @add="addVersion"
@@ -93,12 +141,23 @@
 
 <script>
 import { getLocationBooks, setVersionLocation } from "@/api/LocationController";
+import { restoreVersion } from "@/api/VersionController";
 import { useLocationsStore, useStatisticsStore } from "@/stores";
 
 import AddBookSearch from "@/components/books/AddBookSearch.vue";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
+import ShelfPicker from "@/components/locations/ShelfPicker.vue";
+
+// Which per-row transition a virtual location offers, by slug. The virtual
+// locations themselves are a server-side registry (`VirtualLocations`); this
+// is the SPA's half of it — a third virtual place is an entry here if it has
+// a way out.
+const ROW_ACTIONS = {
+    unshelved: "shelve",
+    discarded: "restore",
+};
 
 /**
  * One location: breadcrumb up, children down, and a paginated listing of
@@ -108,6 +167,11 @@ import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndica
  * shelf's listing arrives in physical left-to-right order — the server
  * defaults shelf-kind locations to the `shelf` sort. Leaf locations also get
  * an AddBookSearch so copies can be shelved from the shelf page itself.
+ *
+ * The same view serves the virtual locations (`unshelved`, `discarded`):
+ * the show payload has the same shape, flagged `virtual`, and the
+ * differences are what the page *offers* — no statistics, no AddBookSearch,
+ * and a per-row Shelve or Restore instead.
  */
 export default {
     name: "LocationView",
@@ -116,6 +180,7 @@ export default {
         AlertBox,
         BookshelfTable,
         PageLoadingIndicator,
+        ShelfPicker,
     },
     setup() {
         return {
@@ -133,6 +198,9 @@ export default {
             // Versions shelved here during this visit; the search results'
             // own location_id covers copies that were here already.
             shelvedVersionIds: new Set(),
+            // The row whose ShelfPicker is open, on the unshelved page.
+            pickingVersionId: null,
+            actionError: "",
         };
     },
     computed: {
@@ -156,11 +224,19 @@ export default {
                 this.LocationsStore.currentLocation?.subtree_versions_count ?? 0
             );
         },
+        isVirtual() {
+            return Boolean(this.location?.virtual);
+        },
+        rowAction() {
+            return this.isVirtual ? (ROW_ACTIONS[this.slug] ?? null) : null;
+        },
     },
     methods: {
         async fetchAndSetLocationData() {
             this.isLoading = true;
             this.shelvedVersionIds = new Set();
+            this.pickingVersionId = null;
+            this.actionError = "";
             try {
                 await this.loadLocationData();
             } catch (error) {
@@ -203,6 +279,42 @@ export default {
             } catch (error) {
                 console.error("Error shelving version:", error);
             }
+        },
+        // Under per-copy every row carries exactly its own version.
+        copyOf(book) {
+            return book.versions[0];
+        },
+        // Both transitions leave this page's listing, so the table refetches
+        // and the store's counts refresh (a virtual location's count is in
+        // the same index payload as the shelves').
+        async applyRowAction(request, failureMessage) {
+            this.actionError = "";
+            try {
+                await request();
+                await Promise.all([
+                    this.loadLocationData(),
+                    this.LocationsStore.fetchAllLocations({ force: true }),
+                ]);
+            } catch (error) {
+                console.error(failureMessage, error);
+                this.actionError = failureMessage;
+            }
+        },
+        async shelveCopy({ version_id, location_id }) {
+            this.pickingVersionId = null;
+            // "— Unshelved —" on the unshelved page is where it already is.
+            if (location_id === null) return;
+
+            await this.applyRowAction(
+                () => setVersionLocation(version_id, location_id),
+                "Unable to shelve this copy. Please try again.",
+            );
+        },
+        async restoreCopy(version_id) {
+            await this.applyRowAction(
+                () => restoreVersion(version_id),
+                "Unable to restore this copy. Please try again.",
+            );
         },
         buildPaginationLinks(paginationData) {
             const { currentPage, lastPage } = paginationData;

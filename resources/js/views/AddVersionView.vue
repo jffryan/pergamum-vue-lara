@@ -1,114 +1,251 @@
+<script setup>
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useBooksStore, useConfigStore } from "@/stores";
+import { fetchBookData } from "@/services/BookServices";
+import { createVersion } from "@/api/VersionController";
+import {
+    authorList,
+    copyState,
+    formatLabel,
+    lengthLabel,
+    locationLabel,
+    orderedCopies,
+} from "@/utils/bookDetail";
+import {
+    copyPayload,
+    emptyCopy,
+    saveErrorMessage,
+    validateCopy,
+} from "@/utils/copyForm";
+import AlertBox from "@/components/globals/alerts/AlertBox.vue";
+import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
+import CopyFields from "@/components/books/CopyFields.vue";
+
+/**
+ * Add another copy of a book that exists — the audiobook as well as the
+ * paperback, a second paperback for the other shelf.
+ *
+ * The copy is entered with the same `CopyFields` as the new-book page, shelf
+ * included, and posted to `POST /versions`, which shelves it through
+ * `LocationService::shelveVersion`. The book's existing copies are listed
+ * above the form so a duplicate is visible before it's made.
+ */
+const route = useRoute();
+const router = useRouter();
+const booksStore = useBooksStore();
+const ConfigStore = useConfigStore();
+
+const slug = computed(() => route.params.slug);
+
+// --- Loading ----------------------------------------------------------------
+
+const hasLoaded = ref(false);
+const loadError = ref("");
+
+// The detail payload, not a library row: the same gate `BookView` uses, so
+// the copy appended below shows up on the book page without a refetch.
+const detail = computed(() => {
+    const entry = booksStore.allBooks.find((b) => b.book.slug === slug.value);
+
+    return entry && "authorRelatedBooks" in entry ? entry : null;
+});
+
+const load = async () => {
+    const requested = slug.value;
+
+    loadError.value = "";
+
+    if (detail.value) {
+        hasLoaded.value = true;
+        return;
+    }
+
+    hasLoaded.value = false;
+
+    try {
+        const data = await fetchBookData(requested);
+
+        if (slug.value !== requested) return;
+
+        if (booksStore.allBooks.some((b) => b.book.slug === requested)) {
+            booksStore.updateBook(data);
+        } else {
+            booksStore.addBook(data);
+        }
+    } catch (e) {
+        console.error("Error fetching book data:", e);
+
+        if (slug.value === requested) {
+            loadError.value =
+                "Unable to load this book. Please try again later.";
+        }
+    } finally {
+        if (slug.value === requested) {
+            hasLoaded.value = true;
+        }
+    }
+};
+
+watch(slug, load, { immediate: true });
+
+onMounted(() => {
+    ConfigStore.checkForFormats();
+});
+
+const title = computed(() => detail.value?.book.title ?? "");
+const authors = computed(() =>
+    authorList(detail.value)
+        .map((author) => author.name)
+        .join(", "),
+);
+const copies = computed(() => orderedCopies(detail.value?.versions));
+
+const whereIs = (copy) => {
+    if (copyState(copy) === "discarded") return "Discarded";
+
+    return locationLabel(copy) || "Unshelved";
+};
+
+// --- Form -------------------------------------------------------------------
+
+const formats = computed(() => ConfigStore.books.formats);
+const copy = ref(emptyCopy());
+const errors = ref({});
+// Errors appear after the first submit, then track every edit.
+const attempted = ref(false);
+const isSaving = ref(false);
+const saveError = ref("");
+
+const updateCopy = (next) => {
+    copy.value = next;
+
+    if (attempted.value) {
+        errors.value = validateCopy(copy.value, formats.value);
+    }
+};
+
+const submit = async () => {
+    attempted.value = true;
+    saveError.value = "";
+    errors.value = validateCopy(copy.value, formats.value);
+
+    if (Object.keys(errors.value).length || isSaving.value) return;
+
+    isSaving.value = true;
+
+    try {
+        const res = await createVersion({
+            book_id: detail.value.book.book_id,
+            ...copyPayload(copy.value, formats.value),
+        });
+
+        // The server's row — with its id, `format` and `location` — not the
+        // draft, so the book page renders it like any other copy.
+        detail.value.versions.push(res.data);
+
+        router.push({ name: "books.show", params: { slug: slug.value } });
+    } catch (error) {
+        console.error("Error adding copy:", error);
+        saveError.value = saveErrorMessage(error, "copy");
+        isSaving.value = false;
+    }
+};
+
+const sectionHeading =
+    "mb-3 border-b border-zinc-200 pb-1 text-base font-bold text-zinc-500";
+const action = "underline hover:no-underline";
+</script>
+
 <template>
-    <div>
-        <div
-            class="lg:w-2/3 px-6 py-8 bg-zinc-300 border rounded-md border-zinc-400 mb-4 shadow-lg"
-        >
-            <div>
-                <span
-                    @click="hasHistory() ? $router.go(-1) : $router.push('/')"
-                    class="block mb-2 cursor-pointer text-zinc-600 hover:text-zinc-700 hover:underline"
-                >
-                    Go Back</span
-                >
-                <h1>Add Version</h1>
-            </div>
-            <div v-if="currentBook">
-                <div
-                    class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
-                >
-                    <h2>Book Information</h2>
-                    <p>Title: {{ currentBook.book.title }}</p>
-                    <p>
-                        Author<span v-if="currentAuthors.length > 1">s</span>:
-                        <span
-                            v-for="author in currentAuthors"
-                            :key="author.author_id"
-                            >{{ author }}</span
-                        >
-                    </p>
-                </div>
-                <!-- End book information -->
-                <div class="grid grid-cols-2 gap-x-4">
-                    <div
-                        v-for="version in currentVersions"
-                        :key="version.version_id"
-                        class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
+    <div class="max-w-2xl">
+        <PageLoadingIndicator v-if="!hasLoaded" />
+        <AlertBox
+            v-else-if="loadError"
+            :message="loadError"
+            alert-type="danger"
+        />
+
+        <template v-else-if="detail">
+            <router-link
+                :to="{ name: 'books.show', params: { slug } }"
+                class="text-sm text-zinc-500 underline hover:no-underline"
+            >
+                &larr; {{ title }}
+            </router-link>
+
+            <h1 class="mb-1 mt-2">Add a copy</h1>
+            <p class="mb-8 text-zinc-500">
+                <span class="text-zinc-700">{{ title }}</span>
+                <template v-if="authors"> — {{ authors }}</template>
+            </p>
+
+            <section v-if="copies.length" class="mb-8">
+                <h2 :class="sectionHeading">Copies you already have</h2>
+                <ul class="divide-y divide-zinc-200">
+                    <li
+                        v-for="existing in copies"
+                        :key="existing.version_id"
+                        class="flex flex-wrap items-baseline justify-between gap-x-6 py-2"
+                        :class="
+                            copyState(existing) === 'discarded'
+                                ? 'text-zinc-500'
+                                : ''
+                        "
                     >
-                        <p v-if="version.nickname">{{ version.nickname }}</p>
-                        <p class="capitalize">
-                            <strong>{{ version.format.name }}</strong>
-                        </p>
-                        <p v-if="version.format?.expects_page_count">
-                            {{ version.page_count }}
-                        </p>
-                        <p v-if="version.format?.expects_audio_runtime">
-                            {{ version.audio_runtime }}
-                        </p>
-                    </div>
-                </div>
-                <!-- End versions -->
-                <NewVersionsInput
-                    :existing-book="true"
-                    :book-id="currentBook.book.book_id"
+                        <span>
+                            {{ formatLabel(existing)
+                            }}<span
+                                v-if="lengthLabel(existing)"
+                                class="text-zinc-500"
+                            >
+                                · {{ lengthLabel(existing) }}</span
+                            ><span
+                                v-if="existing.nickname"
+                                class="text-zinc-500"
+                            >
+                                · “{{ existing.nickname }}”</span
+                            >
+                        </span>
+                        <span class="text-sm text-zinc-500">{{
+                            whereIs(existing)
+                        }}</span>
+                    </li>
+                </ul>
+            </section>
+
+            <form novalidate @submit.prevent="submit">
+                <section class="mb-8">
+                    <h2 :class="sectionHeading">New copy</h2>
+                    <CopyFields
+                        :copy="copy"
+                        :errors="errors"
+                        id-prefix="add-copy"
+                        @update:copy="updateCopy"
+                    />
+                </section>
+
+                <AlertBox
+                    v-if="saveError"
+                    :message="saveError"
+                    alert-type="danger"
                 />
-            </div>
-        </div>
+
+                <div class="flex items-center gap-4">
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        :disabled="isSaving"
+                    >
+                        {{ isSaving ? "Saving…" : "Add copy" }}
+                    </button>
+                    <router-link
+                        :to="{ name: 'books.show', params: { slug } }"
+                        :class="[action, 'text-sm text-zinc-500']"
+                        >Cancel</router-link
+                    >
+                </div>
+            </form>
+        </template>
     </div>
 </template>
-
-<script>
-import { useBooksStore, useNewBookStore } from "@/stores";
-
-import { getOneBookFromSlug } from "@/api/BookController";
-
-import NewVersionsInput from "@/components/newBook/NewVersionsInput.vue";
-
-export default {
-    name: "AddVersionView",
-    components: {
-        NewVersionsInput,
-    },
-    setup() {
-        const BooksStore = useBooksStore();
-        const NewBookStore = useNewBookStore();
-
-        return {
-            BooksStore,
-            NewBookStore,
-        };
-    },
-    computed: {
-        currentBook() {
-            return this.BooksStore.allBooks.find(
-                (b) => b.book.slug === this.$route.params.slug,
-            );
-        },
-        currentAuthors() {
-            return this.currentBook.authors.map((author) => {
-                const firstName = author.first_name || "";
-                const lastName = author.last_name || "";
-                return `${firstName} ${lastName}`.trim();
-            });
-        },
-        currentVersions() {
-            return this.currentBook.versions;
-        },
-    },
-    methods: {
-        hasHistory() {
-            return window.history.length > 2;
-        },
-    },
-    async mounted() {
-        if (!this.currentBook) {
-            try {
-                const book = await getOneBookFromSlug(this.$route.params.slug);
-                this.BooksStore.addBook(book.data);
-            } catch (error) {
-                console.log("ERROR: ", error);
-            }
-        }
-        this.NewBookStore.setBookFromExisting(this.currentBook);
-    },
-};
-</script>

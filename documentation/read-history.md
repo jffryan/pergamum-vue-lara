@@ -103,5 +103,5 @@ Sorted ascending by the first (earliest in the year) read instance's `date_read`
 
 - Plan file: `/feature-plans/read-history.md` — known limitations and future improvements.
 - `/documentation/books.md` — `ReadInstance` schema, dual-attached FKs, rating mutator, date serialization, and the user-scoping convention.
-- `/documentation/new-book-creation.md` — read-history captured at book-create time (pushed into `currentBookData.read_instances` and persisted alongside the book in `POST /create-book`).
+- `/documentation/new-book-creation.md` — read-history captured at book-create time (the page's "I've read this copy" section, persisted alongside the book in `POST /create-book`).
 - `/documentation/statistics.md` — aggregate metrics derived from `ReadInstance`, including the shared `ReadInstanceQuery` helper every per-year metric builds on.

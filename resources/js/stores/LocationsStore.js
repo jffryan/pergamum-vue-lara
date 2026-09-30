@@ -11,8 +11,15 @@ import {
 const useLocationsStore = defineStore("LocationsStore", {
     state: () => ({
         // The whole tree, flat — ~24 rows, fetched once. Hierarchy is
-        // derived from parent_id by the getters below.
+        // derived from parent_id by the getters below. Real rows only: the
+        // virtual locations the same payload carries are split off below.
         allLocations: [],
+        // The virtual locations (`unshelved`, `discarded`) — not rows, but
+        // places a copy can be, derived server-side from version state.
+        // They arrive in the index payload flagged `virtual: true` and stay
+        // out of `allLocations` so the tree getters (roots, leaves, the
+        // shelf picker's options, the admin tree) never see them.
+        virtualLocations: [],
         // The show payload for the location currently on screen:
         // { location, ancestors, children, subtree_versions_count }.
         currentLocation: null,
@@ -26,6 +33,9 @@ const useLocationsStore = defineStore("LocationsStore", {
             ),
         bySlug: (state) => (slug) =>
             state.allLocations.find((location) => location.slug === slug) ??
+            null,
+        virtualBySlug: (state) => (slug) =>
+            state.virtualLocations.find((location) => location.slug === slug) ??
             null,
         /**
          * 'Office / O1 / O1S5' — the location prefixed by its ancestors, for
@@ -78,10 +88,29 @@ const useLocationsStore = defineStore("LocationsStore", {
                 (location) => !parents.has(location.location_id),
             );
         },
+        /**
+         * The leaves as `{ location_id, label }` select options, labelled
+         * with their ancestor path and sorted by it. Every shelf select —
+         * the book page's `ShelfPicker`, the new-book form — reads this, so
+         * a shelf is offered and named the same way everywhere.
+         */
+        shelfOptions() {
+            return this.leaves
+                .map((location) => ({
+                    location_id: location.location_id,
+                    label: this.pathLabel(location),
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+        },
     },
     actions: {
         setAllLocations(locations) {
-            this.allLocations = locations;
+            this.allLocations = locations.filter(
+                (location) => !location.virtual,
+            );
+            this.virtualLocations = locations.filter(
+                (location) => location.virtual,
+            );
         },
         setCurrentLocation(payload) {
             this.currentLocation = payload;

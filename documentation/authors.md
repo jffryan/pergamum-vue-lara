@@ -33,10 +33,10 @@ An `Author` is a flat taxonomy record (first name, last name, slug) attached to 
 
 - **API layer**: `resources/js/api/AuthorController.js` exports `getAuthorBySlug(slug)` (used) and `getOneAuthor(author_id)` (unused — points at `/api/authors/{id}`, which has no backend route).
 - **Stores**: `AuthorsStore` (`stores/AuthorsStore.js`) holds `currentAuthor`, plus unused `allAuthors` and `sortedBy` slots. Only `setCurrentAuthor` is wired up.
-- **Service**: none dedicated. Author data shaping for the book-creation flow lives in `services/BookServices.js` and `stores/NewBookStore.js`.
+- **Service**: none dedicated. Author rows for the new-book page are trimmed and blank-filtered in `utils/newBookForm.js` (`namedAuthors`); the server resolves them through `AuthorService::attachToBook`.
 - **Routes**: `router/author-routes.js` — single route `/authors/:slug` (named `authors.show`). Routing is slug-only; there is no ID-based route.
 - **Views**: `views/AuthorView.vue` — fetches via `getAuthorBySlug`, stores result in `AuthorsStore.currentAuthor`, and renders the author's books through the shared `BookshelfTable`.
-- **Components**: no author-specific components. The detail page reuses `BookshelfTable`, and book-creation author input lives in `components/newBook/NewAuthorsInput.vue` (covered in `new-book-creation.md`).
+- **Components**: no author-specific components. The detail page reuses `BookshelfTable`, and book-creation author input is inline in `views/NewBookView.vue` (covered in `new-book-creation.md`).
 
 ## Non-obvious decisions and gotchas
 

@@ -45,7 +45,7 @@
                         {{ subtreeCount(bookcase) }} copies
                     </span>
 
-                    <div class="mt-1 ml-4 flex flex-wrap gap-2">
+                    <div class="mt-1 flex flex-wrap gap-2">
                         <router-link
                             v-for="shelf in childrenOf(bookcase.location_id)"
                             :key="shelf.location_id"
@@ -62,6 +62,32 @@
                         </router-link>
                     </div>
                 </div>
+            </div>
+
+            <!-- The places that aren't shelves: the unshelved holding pen and
+                 the discarded pile. Derived server-side from version state,
+                 so a copy is always in exactly one of these or on a shelf. -->
+            <h2 class="mt-8 mb-2 text-lg font-bold">Not on a shelf</h2>
+            <div
+                v-for="virtual in virtualLocations"
+                :key="virtual.slug"
+                class="mb-3 p-4 rounded-md border border-dashed border-slate-400 bg-slate-50"
+            >
+                <router-link
+                    :to="{
+                        name: 'locations.show',
+                        params: { slug: virtual.slug },
+                    }"
+                    class="text-xl font-bold hover:underline"
+                >
+                    {{ virtual.name }}
+                </router-link>
+                <span class="ml-2 text-sm text-gray-600">
+                    {{ virtual.versions_count }} copies
+                </span>
+                <p class="mb-0 mt-1 text-sm text-gray-600">
+                    {{ virtual.description }}
+                </p>
             </div>
         </div>
     </div>
@@ -93,6 +119,9 @@ export default {
         roots() {
             return this.LocationsStore.roots;
         },
+        virtualLocations() {
+            return this.LocationsStore.virtualLocations;
+        },
     },
     methods: {
         childrenOf(location_id) {
@@ -108,7 +137,9 @@ export default {
     },
     async mounted() {
         try {
-            await this.LocationsStore.fetchAllLocations();
+            // Forced: this page *is* the counts, and shelving from the book
+            // page writes through the API without touching the store.
+            await this.LocationsStore.fetchAllLocations({ force: true });
         } catch (error) {
             console.error("Error fetching locations:", error);
             this.showErrorMessage = true;

@@ -99,6 +99,13 @@
                 {{ calculatedRating }}
             </div>
         </div>
+
+        <!-- Per-row actions, when the parent supplies any. A strip under the
+             row rather than a column: the actions (a shelf picker, say) are
+             wider than any cell and only some listings have them. -->
+        <div v-if="$slots.actions" class="px-3 pb-2 text-sm sm:px-2">
+            <slot name="actions" />
+        </div>
     </div>
 </template>
 

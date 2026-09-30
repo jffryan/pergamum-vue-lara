@@ -11,7 +11,10 @@ use App\Rules\Rating;
  * `POST /api/create-book` — the final step of the multi-step create flow.
  *
  * A version row is either a reference to an existing copy (`version_id`) or a
- * new one (`format.format_id`), never both and never neither. The rest of the
+ * new one (`format.format_id`), never both and never neither. A new copy may
+ * name a `location_id` to be shelved on as it is created; an existing copy
+ * may not — it already has a place, and moving it is
+ * `PATCH /versions/{version}/location`'s job. The rest of the
  * payload is the same graph the single-form endpoint builds, under different
  * key names — `/feature-plans/books.md` item 4 tracks reconciling them.
  */
@@ -33,7 +36,12 @@ class CompleteBookCreationRequest extends ApiFormRequest
             'bookData.genres.*.name' => ['nullable', 'string', 'max:255'],
 
             'bookData.versions' => ['sometimes', 'nullable', 'array'],
-            'bookData.versions.*.version_id' => ['nullable', 'integer', 'exists:versions,version_id'],
+            'bookData.versions.*.version_id' => [
+                'nullable',
+                'integer',
+                'exists:versions,version_id',
+                'prohibits:bookData.versions.*.location_id',
+            ],
             // An unknown format used to throw a bare \Exception caught by the
             // controller's rollback, which reported it as a 200 with
             // success:false. It is a bad request, so say so.
@@ -46,6 +54,10 @@ class CompleteBookCreationRequest extends ApiFormRequest
             'bookData.versions.*.nickname' => ['nullable', 'string', 'max:255'],
             'bookData.versions.*.page_count' => ['nullable', 'integer', 'min:0'],
             'bookData.versions.*.audio_runtime' => ['nullable', 'integer', 'min:0'],
+            // Same rule as `MoveVersionRequest`: any real location row. The
+            // virtual ones (`unshelved`, `discarded`) have no id to send —
+            // unshelved is just null.
+            'bookData.versions.*.location_id' => ['nullable', 'integer', 'exists:locations,location_id'],
 
             'bookData.read_instances' => ['sometimes', 'nullable', 'array'],
             'bookData.read_instances.*.version_id' => ['nullable', 'integer', 'exists:versions,version_id'],
@@ -104,12 +116,15 @@ class CompleteBookCreationRequest extends ApiFormRequest
     /**
      * Version rows split into the two kinds the flow supports.
      *
-     * New rows come back as attribute arrays with their length fields already
-     * reduced to what the format carries, so the controller doesn't have to
-     * re-derive that. `book_id` is the caller's to fill in — the book does
-     * not exist yet when this runs.
+     * New rows come back as `attributes` for `Version::create()` — length
+     * fields already reduced to what the format carries — plus the
+     * `location_id` to shelve the copy on, if any. The location is kept out
+     * of the attributes on purpose: placing a copy goes through
+     * `LocationService::shelveVersion`, not a mass-assigned column.
+     * `book_id` is the caller's to fill in — the book does not exist yet
+     * when this runs.
      *
-     * @return array{existing: array<int, int>, new: array<int, array<string, mixed>>}
+     * @return array{existing: array<int, int>, new: array<int, array{attributes: array<string, mixed>, location_id: ?int}>}
      */
     public function versions(): array
     {
@@ -126,9 +141,12 @@ class CompleteBookCreationRequest extends ApiFormRequest
             $format = Format::findOrFail($version['format']['format_id']);
 
             $new[] = [
-                'format_id' => $format->format_id,
-                'nickname' => $version['nickname'] ?? null,
-            ] + $format->lengthFieldsFrom($version);
+                'attributes' => [
+                    'format_id' => $format->format_id,
+                    'nickname' => $version['nickname'] ?? null,
+                ] + $format->lengthFieldsFrom($version),
+                'location_id' => isset($version['location_id']) ? (int) $version['location_id'] : null,
+            ];
         }
 
         return ['existing' => $existing, 'new' => $new];

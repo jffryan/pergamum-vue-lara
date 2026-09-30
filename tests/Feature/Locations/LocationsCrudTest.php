@@ -31,7 +31,10 @@ class LocationsCrudTest extends TestCase
         $response = $this->getJson('/api/locations');
 
         $response->assertOk();
-        $response->assertJsonCount(3);
+        // The three real rows plus the two virtual locations that ride along
+        // (see VirtualLocationsTest).
+        $response->assertJsonCount(5);
+        $this->assertCount(3, collect($response->json())->where('virtual', '!=', true));
         $this->assertSame(2, collect($response->json())->firstWhere('code', 'O1S1')['versions_count']);
     }
 

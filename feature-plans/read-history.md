@@ -55,7 +55,7 @@ Tracks rough edges and follow-up work for the post-create read-history flows (`/
 - **The year-browse aggregation is untested.** `getAvailableYears` and `getCompletedItemsForYear` have no coverage of year-filter accuracy, sort order, multi-year books or undated reads. (`addReadInstance` is covered by `AddReadInstanceTest` and `BookWriteValidationTest`.)
 - **No store for year-browse state.** `CompletedView` keeps `loggedYears` / `activeYear` / `activeBooks` in `data()`. A future "include in stats", "export year as CSV", or "compare two years" feature has nowhere to hang.
 - **MySQL-specific `YEAR()` and `whereYear`.** Locks the year-browse to MySQL. If the project ever moves to Postgres / SQLite the queries break.
-- **Read-history-related fields are spread across two store actions.** `addReadInstanceToNewBookVersion` (new-book flow, `NewBookStore`) and `addReadInstanceToExistingBookVersion` (post-create flow, same store). The split makes sense given the flow difference, but the store is named `NewBookStore` — see `/feature-plans/new-book-creation.md` for the rename.
+- ~~**Read-history-related fields are spread across two store actions.**~~ Resolved 2026-09-29: the new-book page builds its read in `utils/newBookForm.js`, so `addReadInstanceToNewBookVersion` is gone and `addReadInstanceToExistingBookVersion` is the store's only read action. The store is still named `NewBookStore` — see `/feature-plans/new-book-creation.md` for the rename.
 
 ## Future improvements
 

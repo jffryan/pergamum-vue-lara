@@ -5,11 +5,6 @@ const bookRoutes = [
         component: () => import("@/views/LibraryView.vue"),
     },
     {
-        path: "/add-books",
-        name: "books.create",
-        component: () => import("@/views/AddBooksView.vue"),
-    },
-    {
         path: "/new-book/",
         name: "books.new",
         component: () => import("@/views/NewBookView.vue"),
