@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Author;
 use App\Models\Book;
+use App\Services\Exceptions\AuthorNameConflictException;
 use App\Support\Slugger;
 use Illuminate\Support\Facades\DB;
 
@@ -147,24 +148,117 @@ class AuthorService
     }
 
     /**
-     * Rename an author already on the book, normalizing as {@see resolve()}
-     * would.
+     * Rename an author, everywhere.
      *
-     * The slug is deliberately left alone: it is the identity other rows match
-     * on, and re-deriving it here could collide with the unique index and 500
-     * a book edit. Renaming an author properly — re-slug, resolve the
-     * collision, or merge into the author already holding the new slug — is
-     * the author-edit surface tracked in `/feature-plans/authors.md`.
+     * There is one `authors` row per person and every book points at it by
+     * `author_id`, so the names need no propagating — what does is the slug.
+     * It is the identity every ingest door finds authors by ({@see resolve()})
+     * and the author page's URL, so a rename that left it on the old spelling
+     * would strand both: the page would keep the old URL, and the next import
+     * of the corrected name would miss this row and create a second author.
+     *
+     * So the slug follows the name, with two exceptions:
+     *
+     * - The new name slugs to a row that isn't this one. That is a statement
+     *   that the two are the same person, which is a merge, not a rename —
+     *   {@see AuthorNameConflictException} carries the other row so the caller
+     *   can offer one.
+     * - …unless the edit is cosmetic (the old and new names slug alike), in
+     *   which case the author keeps the slug it has. That is what lets a row
+     *   the 2026-04-30 migration de-duplicated to `john-smith-2` fix a typo
+     *   without being told it collides with `john-smith`.
+     *
+     * Both the admin screen (`PATCH /authors/{author}`) and the book edit form
+     * (`PUT /books/{id}` with an `author_id`) come through here.
      *
      * @param  array<string, mixed>  $input
+     *
+     * @throws AuthorNameConflictException
      */
     public function rename(Author $author, array $input): Author
     {
-        $author->update([
-            'first_name' => self::normalize($input['first_name'] ?? null),
-            'last_name' => self::normalize($input['last_name'] ?? null),
-        ]);
+        $first = self::normalize($input['first_name'] ?? null);
+        $last = self::normalize($input['last_name'] ?? null);
+        $slug = self::slugFor($first, $last);
+
+        if ($slug !== $author->slug) {
+            $conflict = Author::where('slug', $slug)
+                ->where('author_id', '!=', $author->author_id)
+                ->first();
+
+            if ($conflict === null) {
+                $author->slug = $slug;
+            } elseif ($slug !== self::slugFor($author->first_name, $author->last_name)) {
+                throw new AuthorNameConflictException($conflict);
+            }
+        }
+
+        $author->fill(['first_name' => $first, 'last_name' => $last])->save();
 
         return $author;
+    }
+
+    /**
+     * Fold `$sourceIds` into `$keep`: every book credited to a loser comes out
+     * credited to the winner, in the loser's position, and the losers are gone.
+     *
+     * Re-pointing the pivot row rather than detach-and-attach is what keeps
+     * `author_ordinal`: a duplicate that was a book's primary author leaves
+     * the winner as its primary author, not appended after the co-authors.
+     * A book already crediting both keeps one row, at the better of the two
+     * positions.
+     *
+     * @param  array<int>  $sourceIds
+     */
+    public function merge(Author $keep, array $sourceIds): Author
+    {
+        // `MergeAuthorsRequest` already refuses a self-merge; this is for
+        // direct callers, since merging an author into itself deletes it.
+        $sourceIds = array_values(array_diff(array_map('intval', $sourceIds), [$keep->author_id]));
+
+        if ($sourceIds === []) {
+            return $keep->loadCount('books');
+        }
+
+        return DB::transaction(function () use ($keep, $sourceIds) {
+            $keepRows = DB::table('book_author')
+                ->where('author_id', $keep->author_id)
+                ->get()
+                ->keyBy('book_id');
+
+            $sourceRows = DB::table('book_author')
+                ->whereIn('author_id', $sourceIds)
+                ->orderBy('author_ordinal')
+                ->get();
+
+            foreach ($sourceRows as $row) {
+                $existing = $keepRows->get($row->book_id);
+
+                if ($existing === null) {
+                    DB::table('book_author')
+                        ->where('book_author_id', $row->book_author_id)
+                        ->update(['author_id' => $keep->author_id, 'updated_at' => now()]);
+
+                    $keepRows->put($row->book_id, $row);
+
+                    continue;
+                }
+
+                if ($row->author_ordinal < $existing->author_ordinal) {
+                    DB::table('book_author')
+                        ->where('book_id', $row->book_id)
+                        ->where('author_id', $keep->author_id)
+                        ->update(['author_ordinal' => $row->author_ordinal, 'updated_at' => now()]);
+
+                    $existing->author_ordinal = $row->author_ordinal;
+                }
+
+                DB::table('book_author')->where('book_author_id', $row->book_author_id)->delete();
+            }
+
+            Author::whereIn('author_id', $sourceIds)->delete();
+
+            return $keep->loadCount('books');
+        });
     }
 }

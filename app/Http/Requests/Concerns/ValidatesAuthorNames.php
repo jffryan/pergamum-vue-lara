@@ -37,21 +37,8 @@ trait ValidatesAuthorNames
      */
     protected function authorNameRules(string $prefix): array
     {
-        return [
-            $prefix => ['sometimes', 'nullable', 'array'],
-            "{$prefix}.*.first_name" => [
-                "required_without:{$prefix}.*.last_name",
-                'nullable',
-                'string',
-                'max:255',
-            ],
-            "{$prefix}.*.last_name" => [
-                "required_without:{$prefix}.*.first_name",
-                'nullable',
-                'string',
-                'max:255',
-            ],
-        ];
+        return [$prefix => ['sometimes', 'nullable', 'array']]
+            + $this->nameFieldRules("{$prefix}.*.");
     }
 
     /**
@@ -59,12 +46,7 @@ trait ValidatesAuthorNames
      */
     protected function authorNameMessages(string $prefix): array
     {
-        $message = 'Each author needs a first name or a last name.';
-
-        return [
-            "{$prefix}.*.first_name.required_without" => $message,
-            "{$prefix}.*.last_name.required_without" => $message,
-        ];
+        return $this->nameFieldMap("{$prefix}.*.", 'Each author needs a first name or a last name.');
     }
 
     /**
@@ -72,9 +54,65 @@ trait ValidatesAuthorNames
      */
     protected function authorNameReasonCodes(string $prefix): array
     {
+        return $this->nameFieldMap("{$prefix}.*.", 'author_name_required');
+    }
+
+    /**
+     * The same rule for a request whose body *is* one author —
+     * `PATCH /authors/{author}` — rather than an array of them.
+     *
+     * @return array<string, array<int, string>>
+     */
+    protected function singleAuthorNameRules(): array
+    {
+        return $this->nameFieldRules('');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function singleAuthorNameMessages(): array
+    {
+        return $this->nameFieldMap('', 'An author needs a first name or a last name.');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function singleAuthorNameReasonCodes(): array
+    {
+        return $this->nameFieldMap('', 'author_name_required');
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function nameFieldRules(string $path): array
+    {
         return [
-            "{$prefix}.*.first_name.required_without" => 'author_name_required',
-            "{$prefix}.*.last_name.required_without" => 'author_name_required',
+            "{$path}first_name" => [
+                "required_without:{$path}last_name",
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            "{$path}last_name" => [
+                "required_without:{$path}first_name",
+                'nullable',
+                'string',
+                'max:255',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function nameFieldMap(string $path, string $value): array
+    {
+        return [
+            "{$path}first_name.required_without" => $value,
+            "{$path}last_name.required_without" => $value,
         ];
     }
 

@@ -368,7 +368,12 @@ export default {
                 return res;
             } catch (error) {
                 this.showErrorMessage = true;
-                this.error = error.message;
+                // Renaming an author here onto another author's name is a 409:
+                // that's a merge, which only the admin Authors screen does.
+                this.error =
+                    error.response?.data?.reason_code === "author_name_taken"
+                        ? `${error.response.data.reason} To combine the two, merge them under Admin → Manage Authors.`
+                        : error.message;
                 return error;
             }
         },

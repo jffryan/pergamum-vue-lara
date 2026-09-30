@@ -46,6 +46,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/completed/{year}', [BookController::class, 'getBooksByYear']);
     Route::get('/book/{slug}', [BookController::class, 'getOneBookFromSlug']);
     Route::get('/author/{slug}', [AuthorController::class, 'getAuthorBySlug']);
+    // Admin: list, rename (re-slugs), merge. `{author}` binds by `author_id`;
+    // the slug-keyed detail route above stays the SPA's way onto a page.
+    Route::get('/authors', [AuthorController::class, 'index']);
+    Route::match(['put', 'patch'], '/authors/{author}', [AuthorController::class, 'update']);
+    Route::post('/authors/{author}/merge', [AuthorController::class, 'merge']);
     Route::post('/create-book/title', [NewBookController::class, 'createOrGetBookByTitle']);
     Route::post('/create-book', [NewBookController::class, 'completeBookCreation']);
     Route::post('/create-authors', [AuthorController::class, 'getOrSetToBeCreatedAuthorsByName']);

@@ -8,6 +8,9 @@ const route = useRoute();
 // used to be bundled into the admin route chunk regardless of which action the
 // user opened. Each action now loads its own chunk.
 const components = {
+    AuthorsIndex: defineAsyncComponent(
+        () => import("@/components/admin/authors/AuthorsIndex.vue"),
+    ),
     FormatsIndex: defineAsyncComponent(
         () => import("@/components/admin/FormatsIndex.vue"),
     ),

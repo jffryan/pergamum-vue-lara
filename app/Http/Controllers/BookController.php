@@ -12,6 +12,7 @@ use App\Models\Scopes\BelongsToCurrentUser;
 use App\Models\Version;
 use App\Services\AuthorService;
 use App\Services\BookService;
+use App\Services\Exceptions\AuthorNameConflictException;
 use App\Services\GenreService;
 use App\Support\BookCreator;
 use App\Support\BookListing;
@@ -246,12 +247,15 @@ class BookController extends Controller
     }
 
     /**
-     * A row carrying an `author_id` renames that author in place; a row without
-     * one resolves to an author and joins the book.
+     * A row carrying an `author_id` renames that author in place — on every
+     * book, since there is one row per author — and a row without one
+     * resolves to an author and joins the book.
      *
      * Both halves are `AuthorService`'s — see its class docblock for why the
-     * find-or-create rules live in one place. Note that nothing here detaches:
-     * removing an author from a book has no door yet.
+     * find-or-create rules live in one place. The rename is the same one the
+     * admin Authors screen makes, so the slug follows the name; a name that
+     * belongs to another author throws, and `update()` answers 409. Note that
+     * nothing here detaches: removing an author from a book has no door yet.
      */
     private function updateAuthors($existing_book, $patch_authors)
     {
@@ -406,6 +410,13 @@ class BookController extends Controller
             DB::commit();
 
             return response()->json($this->bookService->getBookWithRelations($existing_book->book_id));
+        } catch (AuthorNameConflictException $e) {
+            // Renaming an author here onto someone else's name is a merge,
+            // which this form can't do. Nothing is written; the 409 names the
+            // other author, and the admin Authors screen can merge them.
+            DB::rollBack();
+
+            return AuthorController::conflictResponse($e);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error updating book: '.$e->getMessage());

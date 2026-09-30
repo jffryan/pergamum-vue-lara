@@ -17,7 +17,7 @@ That tension is now sharper than it was: `/admin/genres` shipped without item 1,
 
 - **No admin gate, anywhere.** No middleware, no `is_admin` column, no role / permission table. `GenrePolicy` exists but grants every ability to everyone — it's a seam, not a restriction. The `/admin` route and every endpoint behind an admin action (`POST /api/formats`, the genre CRUD and merge endpoints) are reachable by any authenticated user. Hiding the header link wouldn't help — the URLs are guessable and the API is open.
 - **The header "Admin" link is shown to every logged-in user.** Even if you wanted "soft" gating today, the affordance is universal.
-- **No audit trail, and now something irreversible to not have one for.** No "who created this format / deleted this book / merged these genres." Genre merge deletes the losing rows and their pivot rows outright, so a regretted merge has no record of what it consumed. `created_at` / `updated_at` exist on most tables but that's not the same as an action log. Item 3 has a concrete first customer now.
+- **No audit trail, and now something irreversible to not have one for.** No "who created this format / deleted this book / merged these genres or authors." Genre and author merge delete the losing rows and their pivot rows outright, so a regretted merge has no record of what it consumed. `created_at` / `updated_at` exist on most tables but that's not the same as an action log. Item 3 has a concrete first customer now.
 
 ### Discoverability & UX
 
@@ -43,7 +43,6 @@ That tension is now sharper than it was: `/admin/genres` shipped without item 1,
 
 The codebase already has actions that *behave* like admin operations but live elsewhere because there's no admin authorization to migrate them behind. Each of these is a candidate to fold into `/admin/*` once a permission model exists:
 
-- **Author merge / rename.** Mentioned in `/feature-plans/authors.md` as missing. Authors get duplicates from the find-or-stub flow; merging two author rows into one needs a deliberate UI.
 - **Book delete.** `BookController::destroy` exists and is reachable by any authed user. In a single-user instance that's fine; with multiple users, deleting a book ripples through every user's lists and read history. Either it becomes admin-only, or per-user libraries replace the global catalog (see `/feature-plans/books.md`).
 - **Bulk upload.** `BulkUploadView` lives at its own URL today but is functionally an admin operation (mass-imports into the global catalog). Could either stay where it is and gain an admin gate, or move under `/admin/bulk-upload`.
 - **User management** (once registration is real). Listing users, deactivating a user, resetting a password as an admin, viewing per-user activity. None of this exists; all of it belongs here.
@@ -88,29 +87,28 @@ In rough priority order. **Items 1–3 are sequencing-critical** — most of the
 
 ### Sibling actions to migrate or build
 
-11. **Author merge tool.** From `/feature-plans/authors.md`. Pick two `author_id`s, repoint `book_author` rows from the loser to the winner, delete the loser. Audit log entry. Wrap in a transaction. **Copy `GenreService::merge`'s shape, not a naive `UPDATE book_author SET author_id`** — `book_author` carries an `author_ordinal`, so a book credited to both the winner and the loser needs a deliberate answer for which ordinal survives, on top of the same duplicate-pivot hazard genres had.
-12. **Book delete confirmation flow.** Either an admin-only operation under `/admin/books` with a confirm-with-impact-summary ("this will affect 3 lists and 7 read instances") or — depending on how `/feature-plans/books.md` resolves ownership — a per-user delete that doesn't need to live here. `ConfirmAction` is the component; the impact summary is the work.
-13. **Migrate bulk upload under `/admin/bulk-upload`.** Or keep its current URL and add the admin gate. Decide based on whether non-admins should ever bulk-upload (today, they can).
-14. **Catalog integrity dashboard.** A read-only admin view that lists: orphaned authors / genres / formats (zero references), books with zero versions, versions with zero reads, read instances with `book_id` ≠ their version's `book_id`. Each item linkable to its detail page; some entries get a one-click cleanup once the destructive ops above exist. Orphaned genres are now one click from cleanup via `/admin/genres`, which is the pattern the rest should follow.
+11. **Book delete confirmation flow.** Either an admin-only operation under `/admin/books` with a confirm-with-impact-summary ("this will affect 3 lists and 7 read instances") or — depending on how `/feature-plans/books.md` resolves ownership — a per-user delete that doesn't need to live here. `ConfirmAction` is the component; the impact summary is the work.
+12. **Migrate bulk upload under `/admin/bulk-upload`.** Or keep its current URL and add the admin gate. Decide based on whether non-admins should ever bulk-upload (today, they can).
+13. **Catalog integrity dashboard.** A read-only admin view that lists: orphaned authors / genres / formats (zero references), books with zero versions, versions with zero reads, read instances with `book_id` ≠ their version's `book_id`. Each item linkable to its detail page; some entries get a one-click cleanup once the destructive ops above exist. Orphaned genres are now one click from cleanup via `/admin/genres`, which is the pattern the rest should follow.
 
 ### User management (depends on registration UI from auth plan)
 
-15. **User list view** (`/admin/users`). Email, name, created date, last login, role, "deactivate" affordance. No edit-as-admin yet.
-16. **Per-user activity drill-down.** Reads, lists, reviews — the same data the user sees on their own dashboard, scoped to one user_id.
-17. **Admin password reset for a user.** Distinct from the user-initiated password reset in `/feature-plans/auth.md`; an admin can issue a one-time link.
-18. **Promote / demote admin.** UI for flipping the `is_admin` flag added in item 1, with audit log entries.
+14. **User list view** (`/admin/users`). Email, name, created date, last login, role, "deactivate" affordance. No edit-as-admin yet.
+15. **Per-user activity drill-down.** Reads, lists, reviews — the same data the user sees on their own dashboard, scoped to one user_id.
+16. **Admin password reset for a user.** Distinct from the user-initiated password reset in `/feature-plans/auth.md`; an admin can issue a one-time link.
+17. **Promote / demote admin.** UI for flipping the `is_admin` flag added in item 1, with audit log entries.
 
 ### Operational visibility
 
-19. **Site stats dashboard** (`/admin/stats`). Total users, total books, total reads, recent registrations, recent activity. Distinct from the per-user `/statistics` surface.
-20. **Recent errors view.** If/when Sentry or similar lands, embed the recent-errors list. Until then, a tail of `storage/logs/laravel.log` is a poor-man's version.
-21. **Job / queue monitor.** Required by `/feature-plans/enrichment-microservices.md`. Likely Horizon (Redis) or a custom view over `failed_jobs`.
-22. **Feature-flag panel.** Even a hand-rolled `flags` table with on/off toggles is enough; replace with Pennant or LaunchDarkly later. Useful for the books-ownership and Laravel 9→10 work specifically.
+18. **Site stats dashboard** (`/admin/stats`). Total users, total books, total reads, recent registrations, recent activity. Distinct from the per-user `/statistics` surface.
+19. **Recent errors view.** If/when Sentry or similar lands, embed the recent-errors list. Until then, a tail of `storage/logs/laravel.log` is a poor-man's version.
+20. **Job / queue monitor.** Required by `/feature-plans/enrichment-microservices.md`. Likely Horizon (Redis) or a custom view over `failed_jobs`.
+21. **Feature-flag panel.** Even a hand-rolled `flags` table with on/off toggles is enough; replace with Pennant or LaunchDarkly later. Useful for the books-ownership and Laravel 9→10 work specifically.
 
 ### Cross-cutting
 
-23. **Tests.** Feature tests for every admin endpoint asserting (a) non-admin gets 403, (b) admin gets 200 / 201, (c) audit-log row written — none of which can be written until item 1 exists. SPA tests for `AdminActionView` dispatch (renders the right component for the right `meta.component`, renders nothing + warns on missing), for `AdminHome`'s derived menu, and for the `ConfirmAction` consumers. The last group needs a Vue component-testing setup the project doesn't have.
-24. **Documentation: keep `/documentation/admin.md` in sync** as actions land. The "Adding a new admin action" section there will need to evolve again when items 4–6 land.
+22. **Tests.** Feature tests for every admin endpoint asserting (a) non-admin gets 403, (b) admin gets 200 / 201, (c) audit-log row written — none of which can be written until item 1 exists. SPA tests for `AdminActionView` dispatch (renders the right component for the right `meta.component`, renders nothing + warns on missing), for `AdminHome`'s derived menu, and for the `ConfirmAction` consumers. The last group needs a Vue component-testing setup the project doesn't have.
+23. **Documentation: keep `/documentation/admin.md` in sync** as actions land. The "Adding a new admin action" section there will need to evolve again when items 4–6 land.
 
 ## Open questions
 

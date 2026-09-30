@@ -45,6 +45,38 @@ const useBooksStore = defineStore("BooksStore", {
             );
             this.allBooks[index] = book;
         },
+        // Swap `author` into every cached book that credits it — or, after a
+        // merge, credits one of `replacedIds`. A book that credited both the
+        // winner and a loser keeps one entry, the way the server now does.
+        replaceAuthor(author, replacedIds = []) {
+            const ids = [author.author_id, ...replacedIds];
+            const fields = {
+                author_id: author.author_id,
+                first_name: author.first_name,
+                last_name: author.last_name,
+                slug: author.slug,
+            };
+
+            this.allBooks.forEach((book, index) => {
+                if (!book.authors?.some((a) => ids.includes(a.author_id))) {
+                    return;
+                }
+
+                const seen = new Set();
+                this.allBooks[index] = {
+                    ...book,
+                    authors: book.authors
+                        .map((a) =>
+                            ids.includes(a.author_id) ? { ...a, ...fields } : a,
+                        )
+                        .filter((a) => {
+                            if (seen.has(a.author_id)) return false;
+                            seen.add(a.author_id);
+                            return true;
+                        }),
+                };
+            });
+        },
         deleteBook(book) {
             this.allBooks = this.allBooks.filter(
                 (b) => b.book.book_id !== book.book.book_id,

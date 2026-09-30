@@ -7,29 +7,30 @@ status: living
 
 ## Scope
 
-Covers the `/admin` SPA surface — the admin landing page (`AdminHome.vue`), the dispatch view (`AdminActionView.vue`) that resolves a route's `meta.component` to a real component, the shared destructive-action confirm (`ConfirmAction.vue`), and the three admin actions wired up today: format management (`FormatsIndex` / `FormatsList` / `CreateFormat`), genre management (`components/admin/genres/`), and location management (`components/admin/locations/`). The underlying models and endpoints are documented in `formats.md`, `genres.md` and `locations.md`; this doc covers the admin shell that wraps them. Things that *could* live under admin but currently don't (author merge, bulk-upload, user management) are tracked in `/feature-plans/admin.md`.
+Covers the `/admin` SPA surface — the admin landing page (`AdminHome.vue`), the dispatch view (`AdminActionView.vue`) that resolves a route's `meta.component` to a real component, the shared destructive-action confirm (`ConfirmAction.vue`), and the four admin actions wired up today: author management (`components/admin/authors/`), format management (`FormatsIndex` / `FormatsList` / `CreateFormat`), genre management (`components/admin/genres/`), and location management (`components/admin/locations/`). The underlying models and endpoints are documented in `authors.md`, `formats.md`, `genres.md` and `locations.md`; this doc covers the admin shell that wraps them. Things that *could* live under admin but currently don't (bulk-upload, user management) are tracked in `/feature-plans/admin.md`.
 
 ## Summary
 
 The admin surface is a thin SPA-only convention: a `/admin` landing page lists actions, each action is a route under `/admin/...` whose component is `AdminActionView`, and `AdminActionView` reads `route.meta.component` to pick which feature component to mount. The landing page's link list is **derived** from the route table rather than hand-written — a route that declares `meta.adminMenu` shows up on it automatically.
 
-There are three admin actions today (manage formats, manage genres, manage locations) and no admin-specific authorization — any logged-in user can see the "Admin" link in the header and reach the page. Genre management is the first admin surface that can destroy data, which is what `ConfirmAction` exists for.
+There are four admin actions today (manage authors, manage formats, manage genres, manage locations) and no admin-specific authorization — any logged-in user can see the "Admin" link in the header and reach the page. Genre management is the first admin surface that can destroy data, which is what `ConfirmAction` exists for.
 
 ## How it's wired
 
 ### Backend
 
-- **Routes**: there is no `/api/admin/*` namespace. Admin actions hit the same endpoints normal flows use — `POST /api/formats` (`FormatController::store`), the genre CRUD + merge endpoints on `GenreController`, and the location CRUD endpoints on `LocationController`. Nothing about those endpoints is admin-only; the new-book flow calls the format one too.
-- **Controllers / services / models / policies**: nothing admin-specific exists. No admin middleware, no `is_admin` column on `users`, no role / permission table. `GenrePolicy` exists but every ability returns `true` — it is a seam for a future gate, not a working restriction. The only gate is `auth:sanctum`.
+- **Routes**: there is no `/api/admin/*` namespace. Admin actions hit the same endpoints normal flows use — the author list / rename / merge endpoints on `AuthorController`, `POST /api/formats` (`FormatController::store`), the genre CRUD + merge endpoints on `GenreController`, and the location CRUD endpoints on `LocationController`. Nothing about those endpoints is admin-only; the new-book flow calls the format one too.
+- **Controllers / services / models / policies**: nothing admin-specific exists. No admin middleware, no `is_admin` column on `users`, no role / permission table. `GenrePolicy` and `AuthorPolicy` exist but every ability returns `true` — it is a seam for a future gate, not a working restriction. The only gate is `auth:sanctum`.
 - **Migrations**: none.
 
 ### Frontend
 
 - **API layer**: none admin-specific. Format creation goes through `ConfigStore.createFormat` → `POST /api/formats` (see `formats.md`); genre mutations go through `GenreStore` → `api/GenresController.js` (see `genres.md`).
-- **Stores**: `ConfigStore` and `GenreStore` — both shared with the rest of the app rather than admin-owned. `formats` is bootstrap config; `GenreStore.allGenres` backs the user-facing `GenresView` and `GenreTagInput` as well as the admin table.
+- **Stores**: `AuthorsStore`, `ConfigStore` and `GenreStore` — all shared with the rest of the app rather than admin-owned. `formats` is bootstrap config; `GenreStore.allGenres` backs the user-facing `GenresView` and `GenreTagInput` as well as the admin table.
 - **Service**: none.
 - **Routes** (`resources/js/router/admin-routes.js`):
   - `/admin` (`name: 'admin.home'`) → `views/admin/AdminHome.vue`.
+  - `/admin/authors` (`name: 'admin.authors'`) → `views/admin/AdminActionView.vue`, `meta: { component: 'AuthorsIndex', adminMenu: { … } }`.
   - `/admin/formats` (`name: 'admin.formats'`) → `views/admin/AdminActionView.vue`, with `meta: { component: 'FormatsIndex', adminMenu: { title, description } }`.
   - `/admin/genres` (`name: 'admin.genres'`) → same view, `meta: { component: 'GenresIndex', adminMenu: { … } }`.
   - `/admin/locations` (`name: 'admin.locations'`) → same view, `meta: { component: 'LocationsIndex', adminMenu: { … } }`.
@@ -43,8 +44,9 @@ There are three admin actions today (manage formats, manage genres, manage locat
   - `genres/GenresIndex.vue` — the genre action root: search box, `GenresTable`, `MergeGenresBar` (shown once ≥2 rows are checked), and `CreateGenre`. Fetches through `GenreStore.fetchAllGenres({ force: true })` on mount.
   - `genres/GenresTable.vue` / `genres/GenreRow.vue` — name (click to rename inline), `books_count`, merge-selection checkbox, delete button. See `genres.md` for the rename → merge handoff and the two-step delete.
   - `genres/CreateGenre.vue`, `genres/MergeGenresBar.vue`.
+  - `authors/AuthorsIndex.vue`, `authors/AuthorRow.vue`, `authors/MergeAuthorsBar.vue` — rename (which re-slugs, and hands a name conflict off to a merge) and N→1 merge. No create or delete. See `authors.md` → Renaming and merging.
 - **Shared components** (`resources/js/components/globals/`):
-  - `ConfirmAction.vue` — the destructive-action confirm. Props `title`, `impact`, `confirmLabel`, `busy`; emits `confirm` / `cancel`. Genre delete and genre merge are its first two consumers.
+  - `ConfirmAction.vue` — the destructive-action confirm. Props `title`, `impact`, `confirmLabel`, `busy`; emits `confirm` / `cancel`. Genre delete, genre merge and author merge are its consumers.
 - **Header link**: `components/navs/HeaderNav.vue` shows an "Admin" link to every logged-in user (gated only on `authStore.isLoggedIn`, no role check).
 
 ## Non-obvious decisions and gotchas
@@ -55,7 +57,7 @@ There are three admin actions today (manage formats, manage genres, manage locat
 - **The `components` map in `AdminActionView` uses `defineAsyncComponent`.** Each action loads its own chunk rather than every entry being bundled into the admin route chunk. Keep new entries in that shape; a static import re-introduces the problem for every action at once.
 - **`FormatsList` uses top-level `await`; `FormatsIndex` must keep the `<Suspense>` wrapper.** `FormatsList.vue`'s `<script setup>` calls `await configStore.checkForFormats()` at the top level, which only works inside a Suspense boundary. Removing the `<Suspense>` in `FormatsIndex` (or copy-pasting the pattern without it for a future async component) will produce a Vue warning and a never-resolving render. The genre components deliberately don't use top-level await — `GenresIndex` fetches in `onMounted` with its own loading state, so it needs no Suspense parent.
 - **Custom primary keys, in `:key` bindings too.** Every model on this surface uses a custom PK (`format_id`, `genre_id`), never `id`. `FormatsList` had `:key="format.id"` for a long time, which silently evaluated to `undefined` and dropped Vue back to index-based diffing. Both lists now bind the real column.
-- **`ConfirmAction` lives in `globals/`, not `admin/`.** Book delete and the eventual author merge want the same component, and neither is under `/admin`. Its `impact` prop is the point of it — a confirm that only asks "are you sure?" is noise, so callers pass the concrete consequence ("this genre is on 14 book(s)").
+- **`ConfirmAction` lives in `globals/`, not `admin/`.** Book delete wants the same component and isn't under `/admin`. Its `impact` prop is the point of it — a confirm that only asks "are you sure?" is noise, so callers pass the concrete consequence ("this genre is on 14 book(s)").
 - **Destructive genre operations confirm twice by design.** `GenreRow` sends the first `DELETE` *without* `force`, so the server decides whether books are attached and reports the authoritative count; only then does the confirm escalate to acknowledged wording and re-send with `force=true`. A genre nothing is tagged with is gone on the first click. See `genres.md`.
 - **`CreateFormat` exposes no edit / delete / reorder.** It can only add. Once a format exists there's no way through this UI to rename, soft-delete, or merge it — the genre screen is the reference for what that looks like. See `formats.md`.
 - **The `/admin` route is gated only by the global `auth` guard.** Like every non-public route in `router/index.js`, `/admin` and `/admin/formats` redirect anonymous users to `/login`. There is no `meta: { admin: true }` flag and nothing in the guard reads one.

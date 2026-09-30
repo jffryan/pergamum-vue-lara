@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 // use Illuminate\Support\Facades\Gate;
+use App\Models\Author;
 use App\Models\BookList;
 use App\Models\Genre;
 use App\Models\Location;
+use App\Policies\AuthorPolicy;
 use App\Policies\BookListPolicy;
 use App\Policies\GenrePolicy;
 use App\Policies\LocationPolicy;
@@ -19,6 +21,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
+        Author::class => AuthorPolicy::class,
         BookList::class => BookListPolicy::class,
         Genre::class => GenrePolicy::class,
         Location::class => LocationPolicy::class,

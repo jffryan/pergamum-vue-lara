@@ -163,4 +163,76 @@ describe("BooksStore", () => {
 
         expect(store.allBooks).toEqual(books);
     });
+
+    // ------------------------
+    // replaceAuthor
+    // ------------------------
+    it("replaces a renamed author on every cached book that credits them", () => {
+        const other = { author_id: 5, first_name: "Neil", last_name: "Gaiman" };
+        store.setAllBooks([
+            {
+                book: { book_id: 1 },
+                authors: [{ author_id: 1, last_name: "Prachett" }, other],
+            },
+            { book: { book_id: 2 }, authors: [other] },
+        ]);
+
+        store.replaceAuthor({
+            author_id: 1,
+            first_name: "Terry",
+            last_name: "Pratchett",
+            slug: "terry-pratchett",
+        });
+
+        expect(store.allBooks[0].authors).toEqual([
+            {
+                author_id: 1,
+                first_name: "Terry",
+                last_name: "Pratchett",
+                slug: "terry-pratchett",
+            },
+            other,
+        ]);
+        expect(store.allBooks[1].authors).toEqual([other]);
+    });
+
+    it("re-points merged-away authors and keeps one entry per book", () => {
+        store.setAllBooks([
+            {
+                book: { book_id: 1 },
+                authors: [
+                    { author_id: 2, last_name: "Prachett" },
+                    { author_id: 1, last_name: "Pratchett" },
+                ],
+            },
+        ]);
+
+        store.replaceAuthor(
+            {
+                author_id: 1,
+                first_name: "Terry",
+                last_name: "Pratchett",
+                slug: "tp",
+            },
+            [2],
+        );
+
+        expect(store.allBooks[0].authors).toEqual([
+            {
+                author_id: 1,
+                first_name: "Terry",
+                last_name: "Pratchett",
+                slug: "tp",
+            },
+        ]);
+    });
+
+    it("leaves books without authors alone", () => {
+        store.setAllBooks([{ book: { book_id: 1 }, versions: [] }]);
+        store.replaceAuthor({ author_id: 1 });
+        expect(store.allBooks[0]).toEqual({
+            book: { book_id: 1 },
+            versions: [],
+        });
+    });
 });

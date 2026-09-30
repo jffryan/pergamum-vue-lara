@@ -9,6 +9,19 @@ const adminRoutes = [
         component: () => import("@/views/admin/AdminHome.vue"),
     },
     {
+        path: "/admin/authors",
+        name: "admin.authors",
+        component: () => import("@/views/admin/AdminActionView.vue"),
+        meta: {
+            component: "AuthorsIndex",
+            adminMenu: {
+                title: "Manage Authors",
+                description:
+                    "Rename authors everywhere they appear, and merge duplicates.",
+            },
+        },
+    },
+    {
         path: "/admin/formats",
         name: "admin.formats",
         component: () => import("@/views/admin/AdminActionView.vue"),
