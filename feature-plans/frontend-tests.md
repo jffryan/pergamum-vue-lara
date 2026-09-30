@@ -24,11 +24,11 @@ Vitest 3, Pinia 2, Vue 3, axios, lodash, papaparse, sortablejs are installed. Th
 - `@vue/test-utils` — Vue's official component mounting helper. Required for any `mount()` / `shallowMount()` of `.vue` files.
 - `@vitest/coverage-v8` (optional but cheap) — coverage reports via `vitest run --coverage`. Defer until the suite is large enough to need triage.
 - `jsdom` or `happy-dom` as the Vitest test environment — required for component tests that touch the DOM. Default to `happy-dom` (faster, lighter) unless something needs full jsdom fidelity.
-- A `vitest.config.js` (or `test` block in `vite.config.js`) — currently neither exists; Vitest is running on defaults. We need one to set the `test.environment`, register the `@` alias explicitly (see "Aliases" below), and globalize `describe`/`it`/`expect` if desired.
+- A `vitest.config.js` (or `test` block in `vite.config.js`) — currently neither exists; Vitest is running on defaults. We need one to set the `test.environment` and globalize `describe`/`it`/`expect` if desired.
 
 ### Aliases
 
-Resolved — `vite.config.js` now declares `resolve.alias` for `@`, and Vitest inherits it from there, so the build, the dev server, Vitest and ESLint all agree. This was an open hazard while the alias worked by accident; it no longer does. Component tests can import `@/components/...` without further setup. (There is still no `vitest.config.js`; Vitest reads `vite.config.js` directly. If one is ever added it must extend rather than replace it, or the alias silently goes away again.)
+Component tests can import `@/components/...` without setup: Vitest reads `resolve.alias` from `vite.config.js`. If a `vitest.config.js` is ever added it must extend `vite.config.js` rather than replace it, or the alias silently goes away.
 
 ### Test environment & DB strategy equivalent
 
@@ -129,10 +129,8 @@ Skip pure-presentation components (svgs, `AlertBox.vue`, `PageLoadingIndicator.v
 - **`@pinia/testing` adoption** — adds a dependency. Worth it once stores are mocked from component tests in volume; skip while only direct store unit tests exist.
 - **Coverage tooling** — `@vitest/coverage-v8` is one line of config, but enforcing a coverage threshold on a greenfield suite is counterproductive. Default: install but don't enforce; revisit when the suite is mature.
 - **Pest-equivalent DSL** — none needed; Vitest's `describe`/`it` is already terse. No analog to the backend "Pest vs PHPUnit" question.
-- ~~**CI integration**~~ — resolved. `.github/workflows/ci.yml` runs `npm run test:run` (plus eslint and a production build) on every push to `main` and every PR. `npm test` still starts Vitest in watch mode for local work; `test:run` is the single-shot script CI calls. Anything added to this plan must pass in both.
 - **Snapshot testing** — Vitest supports it via `toMatchSnapshot()`. Same risks as on the backend (over-broad assertions, cosmetic-change churn). Default: skip; assert on specific properties / rendered text instead.
 - **MSW (Mock Service Worker)** — an alternative to per-test axios mocks; intercepts at the network layer and gives one shared "fake API" across the suite. More setup, more fidelity. Default: stick with `vi.mock` for now; revisit if axios-mocking duplication grows painful.
-- ~~**Component testing scope creep** — the `newBook/*Input.vue` family.~~ Moot as of 2026-09-29: the wizard's step components were replaced by one `NewBookView` whose validation and payload logic lives in the tested `utils/newBookForm.js`.
 - **Sortablejs in tests** — drag-and-drop isn't exercisable from happy-dom. Mock `sortablejs-vue3`'s emitted `update` event rather than simulating real drags; assert the resulting `ListController.reorder` call.
 
 ---

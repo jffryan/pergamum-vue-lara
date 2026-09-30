@@ -45,8 +45,7 @@ The admin surface exists because loose data entry produces near-duplicates — `
 
 - **`genre_id` custom PK and explicit pivot wiring.** `Genre::$primaryKey = 'genre_id'`, and `books()` passes the pivot name (`book_genre`) and FK columns (`genre_id`, `book_id`) explicitly. New relations against `Genre` must do the same; relying on Eloquent defaults will silently match on `id`.
 - **No slug — routing is by numeric `genre_id`.** `Book` and `Author` both route by slug; `Genre` does not. The genre table has no `slug` column and no normalization step. The detail route is `/genres/:id` and `GenresController::show` looks up via `findOrFail($genre_id)`. Don't add `genres.show` links built from a slug.
-- **Five doors, one set of name rules.** Genres reach the database from the admin CRUD surface and from four ingest paths, each of which still takes a *different input shape*:
-  - `POST /books` (book create) — an array of bare strings under `book.book.genres.parsed`. The form builds it by running `splitAndNormalizeGenres` on comma-separated raw input.
+- **Four doors, one set of name rules.** Genres reach the database from the admin CRUD surface and from three ingest paths, each of which still takes a *different input shape*:
   - `PUT /books/{id}` (book update) — an array of `{ genre_id?, name? }` objects.
   - `POST /create-book` (new-book page) — an array of `{ name }` objects.
   - `POST /bulk-upload` (CSV import) — a `;`-separated cell, split by `BulkImportService`. Easy to forget: it has no FormRequest and isn't a form.
@@ -115,7 +114,7 @@ Books are ordered exactly as the library orders them: by the name the *primary* 
 
 ### Creating, updating, and deleting genres
 
-Two independent paths, one rulebook. Genres are still created and attached implicitly by book ingest (`POST /books`, `PUT /books/{id}`, `POST /create-book` — see `books.md` and `new-book-creation.md`); the direct CRUD API below is what `/admin/genres` drives. Both go through `GenreService`.
+Two independent paths, one rulebook. Genres are still created and attached implicitly by book ingest (`PUT /books/{id}`, `POST /create-book` — see `books.md` and `new-book-creation.md`); the direct CRUD API below is what `/admin/genres` drives. Both go through `GenreService`.
 
 Names are normalized wherever they arrive: trimmed, with internal whitespace collapsed. Casing is **not** touched — display casing is a UI concern and the collation makes it irrelevant for matching. The two paths diverge only in what they do with a blank name, and the difference is intentional: the admin surface **rejects** it (a 422 from `StoreGenreRequest`, because naming a genre four spaces is a mistake worth reporting), while ingest **drops** it (an empty row in a book form is not an instruction).
 

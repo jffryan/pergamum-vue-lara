@@ -83,7 +83,7 @@ Success: `{ success: true, book, authors, genres, versions, read_instances }`; t
 ## Related
 
 - Plan file: `/feature-plans/new-book-creation.md` — known limitations and future improvements.
-- `/documentation/books.md` — the add-a-copy page, the now caller-less `POST /books`, and the `Book` / `Version` / `ReadInstance` shapes this flow writes.
+- `/documentation/books.md` — the add-a-copy page, the deleted `POST /books`, and the `Book` / `Version` / `ReadInstance` shapes this flow writes.
 - `/documentation/locations.md` — `LocationService::shelveVersion`, the shelf tree, and the virtual Unshelved location a copy with no shelf lands in.
 - `/documentation/authors.md`, `/documentation/genres.md`, `/documentation/formats.md` — taxonomy attached during creation.
 - `/documentation/read-history.md` — the standalone "add read history" path.

@@ -12,8 +12,7 @@ use App\Rules\Rating;
  * **The payload is flat.** It used to arrive wrapped as
  * `{ request: { formData: { … } } }` — two levels of envelope that existed
  * only because the SPA happened to keep the form state under that name.
- * `/feature-plans/books.md` item 2 called for flattening it alongside this
- * request class, so `book`, `authors`, `genres`, `versions` and
+ * It was flattened alongside this request class, so `book`, `authors`, `genres`, `versions` and
  * `readInstances` are now top-level keys.
  */
 class UpdateBookRequest extends ApiFormRequest

@@ -12,14 +12,14 @@ use App\Services\AuthorService;
  * it is a first name, because that is where a single name belongs when the
  * two columns are read apart (display, edit forms, export).
  *
- * All three book requests used to require `last_name` outright. The CSV
+ * The book requests used to require `last_name` outright. The CSV
  * importer never did — `BulkImportService::parseAuthors` has always asked only
  * that one half be non-empty — so single-name authors could enter the catalog
  * by import and then fail validation on any subsequent edit of a book they
  * were on. The importer's rule was the right one; this trait is it, stated
- * once, so the three doors can't drift from it or from each other again.
+ * once, so the doors can't drift from it or from each other again.
  *
- * `tests/Feature/Authors/AuthorIngestTest` pins all four doors together.
+ * `tests/Feature/Authors/AuthorIngestTest` pins every door together.
  */
 trait ValidatesAuthorNames
 {

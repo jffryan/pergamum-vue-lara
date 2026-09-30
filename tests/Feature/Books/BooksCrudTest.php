@@ -4,7 +4,6 @@ namespace Tests\Feature\Books;
 
 use App\Models\Author;
 use App\Models\Book;
-use App\Models\Format;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -86,69 +85,6 @@ class BooksCrudTest extends TestCase
     {
         $this->actingAsUser();
         $this->getJson('/api/book/does-not-exist')->assertNotFound();
-    }
-
-    public function test_store_creates_book_with_authors_versions_and_genres(): void
-    {
-        $this->actingAsUser();
-        $format = Format::factory()->create(['name' => 'Hardcover']);
-
-        $response = $this->postJson('/api/books', [
-            'book' => [
-                'book' => [
-                    'title' => 'A New Hope',
-                    'genres' => ['parsed' => ['Fantasy', 'Adventure']],
-                ],
-                'authors' => [
-                    ['first_name' => 'Ada', 'last_name' => 'Lovelace'],
-                ],
-                'versions' => [
-                    ['format' => $format->format_id, 'page_count' => 320, 'nickname' => 'first edition', 'audio_runtime' => null],
-                ],
-            ],
-        ]);
-
-        $response->assertOk();
-        $this->assertDatabaseHas('books', ['title' => 'A New Hope', 'slug' => 'a-new-hope']);
-        $book = Book::where('slug', 'a-new-hope')->firstOrFail();
-
-        $this->assertDatabaseHas('authors', ['first_name' => 'Ada', 'last_name' => 'Lovelace']);
-        $this->assertCount(1, $book->authors);
-        $this->assertCount(1, $book->versions);
-        $this->assertSame(320, $book->versions->first()->page_count);
-        $this->assertCount(2, $book->genres);
-        $this->assertEqualsCanonicalizing(['Fantasy', 'Adventure'], $book->genres->pluck('name')->all());
-    }
-
-    public function test_store_with_existing_slug_creates_distinct_book_filed_under_its_author(): void
-    {
-        $this->actingAsUser();
-        $format = Format::factory()->create(['name' => 'Audiobook']);
-        $existing = Book::factory()->create(['title' => 'Recursion', 'slug' => Str::slug('Recursion')]);
-        Version::factory()->for($existing, 'book')->create();
-
-        $response = $this->postJson('/api/books', [
-            'book' => [
-                'book' => [
-                    'title' => 'Recursion',
-                    'genres' => ['parsed' => []],
-                ],
-                'authors' => [['first_name' => 'New', 'last_name' => 'Author']],
-                'versions' => [
-                    ['format' => $format->format_id, 'page_count' => 0, 'nickname' => 'audio', 'audio_runtime' => 540],
-                ],
-            ],
-        ]);
-
-        $response->assertOk();
-        $existing->refresh();
-        $this->assertCount(1, $existing->versions, 'existing book should not gain a version');
-
-        $this->assertDatabaseHas('books', ['title' => 'Recursion', 'slug' => 'recursion-author']);
-        $created = Book::where('slug', 'recursion-author')->firstOrFail();
-        $this->assertCount(1, $created->versions);
-        $this->assertCount(1, $created->authors);
-        $this->assertDatabaseHas('authors', ['first_name' => 'New', 'last_name' => 'Author']);
     }
 
     public function test_destroy_removes_book_versions_and_orphan_authors(): void

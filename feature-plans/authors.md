@@ -34,7 +34,6 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 ### Performance & query shape
 
 - **`AuthorService::getAuthorWithRelations` is one big eager-load with no pagination.** A prolific author with hundreds of books pulls every book, every version, every read instance, every genre, every author of every related book in a single query tree. Fine today; will not be fine at scale.
-- ~~**`books.readInstances` is not user-scoped on the author page.**~~ Fixed. `App\Models\Scopes\BelongsToCurrentUser` on `ReadInstance` scopes the eager load, so `AuthorService::getAuthorWithRelations` no longer needs (or carries) an explicit predicate. Pinned by `tests/Feature/UserScoping/TaxonomyScopingTest`.
 
 ### API surface
 
@@ -54,7 +53,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 - **Only the primary author is linked from book rows.** `BookTableRow` and `ListItemsTable` both hardcode `book.authors[0]`. Multi-author books surface only one name on the table; the others are reachable only from the book detail page.
 - **Author detail page is bookshelf-only.** Reuses `BookshelfTable` and shows nothing about the author themselves — no bio (no column), no photo, no aggregated stats (total books read, average rating across their catalog, first/most-recent read). The page header is just `"{first} {last}"`.
 - **No edit affordance for authors.** Fixing a typo in `first_name` requires opening every book by that author and editing through the book edit flow. The "edit author" UI doesn't exist.
-- **Author sort on book lists is by the primary author only.** A book by "Smith & Adams" sorts under `authors[0]`, which is now the lowest `author_ordinal` rather than insert order (every ingest door numbers co-authors in input order via `AuthorService::attachToBook`). There is still no way to *change* that order after the fact, and no `is_primary` concept — see item 12.
+- **Author sort on book lists is by the primary author only.** A book by "Smith & Adams" sorts under `authors[0]`, which is now the lowest `author_ordinal` rather than insert order (every ingest door numbers co-authors in input order via `AuthorService::attachToBook`). There is still no way to *change* that order after the fact, and no `is_primary` concept — see Future improvements, "Introduce a 'primary author' concept".
 
 ## Future improvements
 
@@ -70,11 +69,10 @@ In rough priority order — earlier items unblock later ones.
 5. **Add `bio` (and probably `photo_url`, `birth_year`, `death_year`) to the `authors` table.** `AuthorService` is already returning `bio`; make it real. Then build a minimal author edit form (also unblocks item 7).
 6. **Build an author edit endpoint and view.** `PATCH /authors/{id}` with a real `update` method on `AuthorController`, an `AuthorPolicy`, and a small edit form on the detail page. Removes the "edit every book to fix a typo" workaround.
 7. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` ("Soft-delete books, versions, and read instances"). The orphan prune should mark, not delete.
-8. ~~**User-scope `books.readInstances` in `AuthorService::getAuthorWithRelations`.**~~ Shipped — see the Known limitations entry above. Solved model-side rather than call-site-side, so a future author surface cannot reintroduce it.
-9. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
-10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
-11. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.
-12. **Introduce a "primary author" concept.** A flag on `book_author` (`is_primary`) or a dedicated column on `books` (`primary_author_id`). Removes the dependence on insert-order for the index sort and makes the "primary author" link in book rows meaningful.
-13. **Stabilize the `AuthorView` error message.** Currently says "Unable to load books at this time" on any failure (copy-pasted from a book view); should reference the author.
-14. **Delete `getOneAuthor` from `api/AuthorController.js`** and the unreachable `index` / `create` / `store` / `edit` / `update` / `destroy` stubs from `AuthorController.php`. Either implement them with policies or remove them — currently they're noise that suggests CRUD exists when it doesn't.
-15. **De-duplicate `AuthorController::show` vs `getAuthorBySlug`.** Pick one. If `Route::resource('authors', …)` is added later (item 9 likely needs it), `show` should be the canonical handler and `getAuthorBySlug` should be removed (or vice versa); don't keep both.
+8. **Build an author index / browse view** — `GET /authors` paginated, alphabetic, filterable by first letter of last name. Wire `AuthorsStore.allAuthors` and `sortedBy` (currently unused) to back it. Unblocks discovery without going through a book.
+9. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
+10. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.
+11. **Introduce a "primary author" concept.** A flag on `book_author` (`is_primary`) or a dedicated column on `books` (`primary_author_id`). Removes the dependence on insert-order for the index sort and makes the "primary author" link in book rows meaningful.
+12. **Stabilize the `AuthorView` error message.** Currently says "Unable to load books at this time" on any failure (copy-pasted from a book view); should reference the author.
+13. **Delete `getOneAuthor` from `api/AuthorController.js`** and the unreachable `index` / `create` / `store` / `edit` / `update` / `destroy` stubs from `AuthorController.php`. Either implement them with policies or remove them — currently they're noise that suggests CRUD exists when it doesn't.
+14. **De-duplicate `AuthorController::show` vs `getAuthorBySlug`.** Pick one. If `Route::resource('authors', …)` is added later (the author index / browse view likely needs it), `show` should be the canonical handler and `getAuthorBySlug` should be removed (or vice versa); don't keep both.

@@ -33,7 +33,9 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-    Route::resource('/books', BookController::class);
+    // No `store`: creation is `POST /create-book`. `create` and `edit` never
+    // had methods behind them.
+    Route::resource('/books', BookController::class)->only(['index', 'show', 'update', 'destroy']);
     // `apiResource`, not `resource` — the `create` and `edit` routes only ever
     // pointed at empty stubs. The merge route is declared first so `{genre}/merge`
     // isn't shadowed by anything the resource registers.

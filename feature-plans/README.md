@@ -1,6 +1,6 @@
 # /feature-plans/
 
-Markdown plans for upcoming, in-flight, and recently shipped features. Plans may sit here for weeks or months before implementation — treat them as durable design context, not scratch notes.
+Markdown plans for upcoming and in-flight work. Plans may sit here for weeks or months before implementation — treat them as durable design context, not scratch notes.
 
 ## Status convention
 
@@ -13,7 +13,7 @@ status: draft | in-progress | living
 ```
 
 - **draft** — an idea, nothing implemented yet. Safe to revise freely.
-- **in-progress** — implementation has started but isn't complete. The plan should reflect what's been done and what's left.
+- **in-progress** — implementation has started but isn't complete. The plan describes what's left, not what's been done.
 - **living** — feature is shipped and has a corresponding file in `/documentation/`. The plan now tracks **future improvements** and **known limitations** only; descriptive content has moved to the doc.
 
 ## What goes in a plan
@@ -33,5 +33,9 @@ A living plan keeps only:
 ## Lifecycle
 
 When finishing a feature, flip the status to `living`, move the descriptive content into `/documentation/<feature>.md`, and leave behind only the future-improvements and known-limitations sections. Delete the file only when both of those sections are empty.
+
+**Plans hold only work that is still ahead.** When an item ships, or a limitation is fixed, delete it. Don't strike it through, and don't mark it "Done", "Fixed", "Moot" or "Shipped" — `CHANGELOG.md` and git history record what shipped, and anything a future reader still needs belongs in `/documentation/`. When an item is only partly done, rewrite it to describe what's left. When it moves to another plan, keep a one-line pointer there.
+
+**Refer to items by title, not number** — `/feature-plans/books.md` ("Soft-delete books, versions, and read instances"), not "item 1". Deleting finished items renumbers the list.
 
 A `_template.md` is provided — copy it when starting a new plan.

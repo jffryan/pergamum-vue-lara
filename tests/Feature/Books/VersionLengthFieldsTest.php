@@ -25,13 +25,12 @@ class VersionLengthFieldsTest extends TestCase
     private function createPayload(Format $format, array $version): array
     {
         return [
-            'book' => [
-                'book' => [
-                    'title' => 'Ancillary Justice',
-                    'genres' => ['parsed' => []],
-                ],
+            'bookData' => [
+                'book' => ['title' => 'Ancillary Justice'],
                 'authors' => [['first_name' => 'Ann', 'last_name' => 'Leckie']],
-                'versions' => [['format' => $format->format_id, 'nickname' => null] + $version],
+                'genres' => [],
+                'versions' => [['format' => ['format_id' => $format->format_id], 'nickname' => null] + $version],
+                'read_instances' => [],
             ],
         ];
     }
@@ -45,7 +44,7 @@ class VersionLengthFieldsTest extends TestCase
         $this->actingAsUser();
         $format = Format::factory()->print()->create(['name' => 'Hardcover']);
 
-        $this->postJson('/api/books', $this->createPayload($format, ['page_count' => 320]))
+        $this->postJson('/api/create-book', $this->createPayload($format, ['page_count' => 320]))
             ->assertOk();
 
         $version = Book::where('slug', 'ancillary-justice')->firstOrFail()->versions->first();
@@ -63,7 +62,7 @@ class VersionLengthFieldsTest extends TestCase
         $this->actingAsUser();
         $format = Format::factory()->audio()->create(['name' => 'Audiobook']);
 
-        $this->postJson('/api/books', $this->createPayload($format, ['audio_runtime' => 540]))
+        $this->postJson('/api/create-book', $this->createPayload($format, ['audio_runtime' => 540]))
             ->assertOk();
 
         $version = Book::where('slug', 'ancillary-justice')->firstOrFail()->versions->first();
@@ -82,7 +81,7 @@ class VersionLengthFieldsTest extends TestCase
         $this->actingAsUser();
         $format = Format::factory()->audio()->create(['name' => 'Audiobook']);
 
-        $this->postJson('/api/books', $this->createPayload($format, [
+        $this->postJson('/api/create-book', $this->createPayload($format, [
             'page_count' => 320,
             'audio_runtime' => 540,
         ]))->assertOk();
@@ -157,34 +156,6 @@ class VersionLengthFieldsTest extends TestCase
 
         $version = $book->versions()->sole();
         $this->assertSame(610, $version->audio_runtime);
-        $this->assertNull($version->page_count, 'an audiobook must not carry a page count');
-    }
-
-    /**
-     * The multi-step create flow's version handler had the same gap.
-     */
-    public function test_completing_a_new_book_drops_the_field_its_format_does_not_carry(): void
-    {
-        $this->actingAsUser();
-        $audio = Format::factory()->audio()->create(['name' => 'Audiobook']);
-
-        $this->postJson('/api/create-book', [
-            'bookData' => [
-                'book' => ['title' => 'Listened Only'],
-                'authors' => [['first_name' => 'A', 'last_name' => 'Narrator']],
-                'genres' => [],
-                'versions' => [[
-                    'format' => ['format_id' => $audio->format_id],
-                    'page_count' => 300,
-                    'audio_runtime' => 480,
-                    'nickname' => null,
-                ]],
-                'read_instances' => [],
-            ],
-        ])->assertOk();
-
-        $version = Book::where('slug', 'listened-only')->firstOrFail()->versions()->sole();
-        $this->assertSame(480, $version->audio_runtime);
         $this->assertNull($version->page_count, 'an audiobook must not carry a page count');
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreBookRequest;
 use App\Http\Requests\StoreReadInstanceRequest;
 use App\Http\Requests\UpdateBookRequest;
 use App\Models\Author;
@@ -182,32 +181,6 @@ class BookController extends Controller
         })->paginate(20);
 
         return response()->json($books);
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @return Response
-     */
-    public function store(StoreBookRequest $request)
-    {
-        $book = BookCreator::create($request->title(), $request->authors());
-
-        $new_authors = $this->authorService->attachToBook($book, $request->authors());
-        $new_versions = $this->prepareVersions($request->versions());
-
-        $book->versions()->saveMany($new_versions);
-
-        $new_genres = $this->genreService->attachByName($book, $request->genreNames());
-
-        $new_read_instances = [];
-        $readInstancesData = $request->readInstances();
-
-        if ($readInstancesData !== []) {
-            $new_read_instances = $this->updateReadInstances($book, $readInstancesData);
-        }
-
-        return $this->buildResponse($book, $new_authors, $new_versions, $new_genres, $new_read_instances);
     }
 
     /**
@@ -544,21 +517,5 @@ class BookController extends Controller
         }
 
         return $new_versions;
-    }
-
-    /**
-     * Genres are attached separately, by `GenreService::attachByName`.
-     */
-    private function buildResponse($book, $authors, $versions, $genres, $readInstances = [])
-    {
-        $nestedResponse = [
-            'book' => $book,
-            'authors' => $authors,
-            'versions' => $versions,
-            'genres' => $genres,
-            'readInstances' => $readInstances,
-        ];
-
-        return response()->json($nestedResponse);
     }
 }

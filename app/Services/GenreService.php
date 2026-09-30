@@ -12,12 +12,12 @@ use Illuminate\Support\Facades\DB;
 /**
  * Single owner of the genre name rules.
  *
- * Genres reach the database from five doors: the admin CRUD surface
- * (`create` / `rename` / `delete` / `merge` below) and four ingest paths —
- * `POST /books`, `PUT /books/{id}`, `POST /create-book`, and the CSV importer
- * in `BulkImportService`. Each ingest door takes a different input shape, and
+ * Genres reach the database from four doors: the admin CRUD surface
+ * (`create` / `rename` / `delete` / `merge` below) and three ingest paths —
+ * `PUT /books/{id}`, `POST /create-book`, and the CSV importer in
+ * `BulkImportService`. Each ingest door takes a different input shape, and
  * each used to resolve names its own way, so the same genre could arrive
- * spelled four ways. They now all land on `attachByName()` /
+ * spelled several ways. They now all land on `attachByName()` /
  * `syncFromInput()`, which means `normalize()` is the only spelling rule in
  * the application. `tests/Feature/Genres/GenreIngestTest` pins that.
  */
@@ -62,8 +62,8 @@ class GenreService
     /**
      * Attach genres named by `$names` to `$book`, creating what doesn't exist.
      *
-     * The additive half of book ingest — used by the two create doors, where
-     * the book is new and nothing should be removed.
+     * The additive half of book ingest — used by `POST /create-book` and the
+     * importer, where the book is new and nothing should be removed.
      *
      * @param  array<int, string|null>  $names
      * @return Collection<int, Genre>
@@ -143,8 +143,7 @@ class GenreService
      *
      * Blank names are dropped rather than rejected. Every genre input in the
      * SPA is a form row, and a form that renders an empty row has not been
-     * told about a genre — the same reading `StoreBookRequest::readInstances()`
-     * already applies to blank read rows.
+     * told about a genre.
      *
      * @param  Collection<string, Genre>  $resolved
      */

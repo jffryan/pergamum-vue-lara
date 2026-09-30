@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\DB;
 /**
  * Single owner of the author name rules.
  *
- * Authors reach the database from four doors — `POST /books`,
- * `PUT /books/{id}`, `POST /create-book`, and the CSV importer in
- * `BulkImportService`. Each used to resolve names its own way: three called
+ * Authors reach the database from three doors — `PUT /books/{id}`,
+ * `POST /create-book`, and the CSV importer in `BulkImportService`. Each used
+ * to resolve names its own way: the form endpoints called
  * `Author::firstOrCreate` on whatever the caller typed and attached with no
- * ordinal, the fourth looked the slug up by hand, deduped against the book's
- * existing authors, and continued `author_ordinal` from the current max. So
- * the same author could arrive spelled four ways, and "primary author"
- * depended on which door created the book.
+ * ordinal, while the importer looked the slug up by hand, deduped against the
+ * book's existing authors, and continued `author_ordinal` from the current
+ * max. So the same author could arrive spelled several ways, and "primary
+ * author" depended on which door created the book.
  *
  * They now all land on {@see resolve()} / {@see attachToBook()}, which makes
  * {@see normalize()} the only spelling rule in the application and the

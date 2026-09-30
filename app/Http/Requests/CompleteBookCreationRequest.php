@@ -8,15 +8,14 @@ use App\Models\Format;
 use App\Rules\Rating;
 
 /**
- * `POST /api/create-book` — the final step of the multi-step create flow.
+ * `POST /api/create-book` — the only book create endpoint, posted by the
+ * new-book page.
  *
  * A version row is either a reference to an existing copy (`version_id`) or a
  * new one (`format.format_id`), never both and never neither. A new copy may
  * name a `location_id` to be shelved on as it is created; an existing copy
  * may not — it already has a place, and moving it is
- * `PATCH /versions/{version}/location`'s job. The rest of the
- * payload is the same graph the single-form endpoint builds, under different
- * key names — `/feature-plans/books.md` item 4 tracks reconciling them.
+ * `PATCH /versions/{version}/location`'s job.
  */
 class CompleteBookCreationRequest extends ApiFormRequest
 {

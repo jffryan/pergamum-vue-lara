@@ -10,8 +10,7 @@ use App\Models\Format;
  * Same rules as the version rows inside the book create/edit payloads, but a
  * different envelope: this one carries `book_id` (the book is not in the URL)
  * and nests the format as an object rather than a bare id, because the SPA
- * hands the whole selected format through. `/feature-plans/books.md` item 4
- * tracks reconciling the two shapes.
+ * hands the whole selected format through.
  */
 class StoreVersionRequest extends ApiFormRequest
 {

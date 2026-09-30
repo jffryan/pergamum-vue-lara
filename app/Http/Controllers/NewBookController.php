@@ -94,8 +94,8 @@ class NewBookController extends Controller
     {
         return collect($readInstancesData)->map(function ($readInstance) use ($book, $versions) {
             // FOR NOW: a read with no version named is filed against the first
-            // copy. /feature-plans/new-book-creation.md item 11 tracks
-            // threading the chosen version through the SPA instead.
+            // copy. /feature-plans/new-book-creation.md ("Fix the read-instance
+            // version routing") tracks filing it against its own copy instead.
             $version_id = $readInstance['version_id'] ?? ($versions[0]->version_id ?? null);
 
             return ReadInstance::create([

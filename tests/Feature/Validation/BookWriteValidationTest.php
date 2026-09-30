@@ -27,76 +27,21 @@ class BookWriteValidationTest extends TestCase
     use RefreshDatabase;
 
     // ---------------------------------------------------------------
-    // POST /api/books
+    // POST /api/create-book
+    //
+    // Unknown formats, author names and out-of-range ratings are pinned in
+    // `NewBookFlowTest` and `AuthorIngestTest`; these are the gaps.
     // ---------------------------------------------------------------
 
     public function test_create_without_a_title_is_a_422(): void
     {
         $this->actingAsUser();
 
-        $this->postJson('/api/books', ['book' => ['book' => []]])
+        $this->postJson('/api/create-book', ['bookData' => ['book' => []]])
             ->assertStatus(422)
-            ->assertJsonValidationErrors('book.book.title');
+            ->assertJsonValidationErrors('bookData.book.title');
 
         $this->assertSame(0, Book::count());
-    }
-
-    public function test_create_with_an_unknown_format_is_a_422_rather_than_a_book_with_no_copies(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', [
-            'book' => [
-                'book' => ['title' => 'No Such Format'],
-                'authors' => [['first_name' => 'A', 'last_name' => 'Writer']],
-                'versions' => [['format' => 999_999, 'nickname' => null, 'page_count' => 10]],
-            ],
-        ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('book.versions.0.format');
-
-        // The old code skipped the unknown format with `continue`, so this
-        // used to be a 200 and a book with zero versions.
-        $this->assertSame(0, Book::count());
-    }
-
-    /**
-     * A first name alone is a whole author — see
-     * `App\Http\Requests\Concerns\ValidatesAuthorNames`. This used to 422
-     * on the missing last name, which made Plato uncreatable through the form
-     * and unsaveable through the edit form once bulk import had let him in.
-     */
-    public function test_create_accepts_an_author_with_only_a_first_name(): void
-    {
-        $this->actingAsUser();
-        $format = Format::factory()->print()->create();
-
-        $this->postJson('/api/books', [
-            'book' => [
-                'book' => ['title' => 'Republic'],
-                'authors' => [['first_name' => 'Plato']],
-                'versions' => [['format' => $format->format_id, 'page_count' => 100]],
-            ],
-        ])->assertOk();
-
-        $this->assertDatabaseHas('authors', ['first_name' => 'Plato', 'last_name' => '', 'slug' => 'plato']);
-    }
-
-    public function test_create_rejects_an_author_with_neither_name(): void
-    {
-        $this->actingAsUser();
-        $format = Format::factory()->print()->create();
-
-        $this->postJson('/api/books', [
-            'book' => [
-                'book' => ['title' => 'Anonymous'],
-                'authors' => [['first_name' => '', 'last_name' => '   ']],
-                'versions' => [['format' => $format->format_id, 'page_count' => 100]],
-            ],
-        ])
-            ->assertStatus(422)
-            ->assertJsonPath('reason_code', 'author_name_required')
-            ->assertJsonValidationErrors('book.authors.0.last_name');
     }
 
     public function test_create_without_genres_is_accepted(): void
@@ -104,13 +49,11 @@ class BookWriteValidationTest extends TestCase
         $this->actingAsUser();
         $format = Format::factory()->print()->create();
 
-        // `$bookForm['book']['genres']['parsed']` was read unconditionally, so
-        // a book with no genres at all was an undefined-key 500.
-        $this->postJson('/api/books', [
-            'book' => [
+        $this->postJson('/api/create-book', [
+            'bookData' => [
                 'book' => ['title' => 'Ungenred'],
                 'authors' => [['first_name' => 'A', 'last_name' => 'Writer']],
-                'versions' => [['format' => $format->format_id, 'page_count' => 100]],
+                'versions' => [['format' => ['format_id' => $format->format_id], 'page_count' => 100]],
             ],
         ])->assertOk();
 
@@ -119,17 +62,21 @@ class BookWriteValidationTest extends TestCase
         $this->assertCount(1, $book->versions);
     }
 
+    /**
+     * `NewBookFlowTest` pins a rating above the scale; this is one inside it
+     * but between the half-steps.
+     */
     public function test_create_rejects_a_rating_off_the_half_step_scale(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->print()->create();
 
-        $this->postJson('/api/books', [
-            'book' => [
+        $this->postJson('/api/create-book', [
+            'bookData' => [
                 'book' => ['title' => 'Rated Wrong'],
                 'authors' => [['first_name' => 'A', 'last_name' => 'Writer']],
-                'versions' => [['format' => $format->format_id, 'page_count' => 100]],
-                'readInstances' => [['date_read' => '2026-01-01', 'rating' => 3.7]],
+                'versions' => [['format' => ['format_id' => $format->format_id], 'page_count' => 100]],
+                'read_instances' => [['date_read' => '2026-01-01', 'rating' => 3.7]],
             ],
         ])
             ->assertStatus(422)

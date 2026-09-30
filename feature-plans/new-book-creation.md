@@ -7,8 +7,6 @@ status: living
 
 Tracks rough edges and follow-up work for the new-book page. Descriptive content lives in `/documentation/new-book-creation.md`.
 
-The seven-step wizard was replaced by a single form on 2026-09-29 (CHANGELOG 0.1.23). That retired this file's step-machine items — no back button, stringly-typed step names, fixed step order, the progress panel reading stale data, the misleading duplicate-title screen, focus lost between steps, and the silent submit failure. The items below are what survived it, plus what the new shape introduced.
-
 Many limitations here cross-cut taxonomy plans (authors, genres, formats) and the books pipeline. Where an item is owned elsewhere, this file links instead of restating.
 
 ## Known limitations
@@ -42,7 +40,6 @@ Many limitations here cross-cut taxonomy plans (authors, genres, formats) and th
 ### Extensibility
 
 - **The store name lies.** `NewBookStore` no longer serves the new-book page at all; it's the existing-book store for `AddReadHistoryView` and `UpdateBookReadInstance`. See Future improvements item 2.
-- **`POST /books` has no caller.** `/add-books` (its only SPA caller) was deleted 2026-09-29, but the endpoint, `StoreBookRequest` and their tests remain, because its ingest tests pin that every door agrees on authors, genres and length fields — so it still costs upkeep while serving nothing. Future improvements item 4.
 
 ## Future improvements
 
@@ -51,6 +48,5 @@ In rough priority order.
 1. **Persist the draft to `localStorage`.** Save the draft on change, offer to restore it on arrival, clear it on success. Wrap every access in try/catch.
 2. **Rename `NewBookStore` to something like `CurrentBookStore`** (or fold it into `BooksStore`). Two callers; see `/feature-plans/read-history.md` for the coupling it carries.
 3. **Fix the read-instance version routing in `handleReadInstances`.** Nest reads under their copy in the payload (`versions[i].read_instances`) so a read is attached to the copy it belongs to by construction, and drop the `versions[0]` fallback. Prerequisite for multi-copy creates.
-4. **Delete `POST /books`** — `/feature-plans/books.md` item 2. With `/add-books` gone, `POST /create-book` owns creation. Deleting `BookController::store` and `StoreBookRequest` means moving the ingest tests that go through it (`AuthorIngestTest`, `GenreIngestTest`, `BookWriteValidationTest`, `VersionLengthFieldsTest`, `BooksCrudTest`) onto `/create-book` where they pin something still reachable, and keeping `prepareVersions`, which `update` shares.
-5. **Pre-empt the same-title question when authors settle it.** Once an author is entered, re-run the check with authors so the server can apply `BookMatcher::find` and say "this *is* Plath's *Ariel* — add a copy?" rather than listing every same-title book.
-6. **Add an "import from external source" affordance.** Every field is hand-typed. A "look up by ISBN" that pre-fills the draft (Open Library, Google Books) fits the single form naturally — it's one more field above Title that populates the others. Coordinate with `/feature-plans/enrichment-microservices.md`.
+4. **Pre-empt the same-title question when authors settle it.** Once an author is entered, re-run the check with authors so the server can apply `BookMatcher::find` and say "this *is* Plath's *Ariel* — add a copy?" rather than listing every same-title book.
+5. **Add an "import from external source" affordance.** Every field is hand-typed. A "look up by ISBN" that pre-fills the draft (Open Library, Google Books) fits the single form naturally — it's one more field above Title that populates the others. Coordinate with `/feature-plans/enrichment-microservices.md`.

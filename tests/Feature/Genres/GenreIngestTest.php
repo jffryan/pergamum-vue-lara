@@ -10,104 +10,25 @@ use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
- * The four ingest doors that attach genres to a book, pinned against one set
- * of name rules.
+ * The three ingest doors that attach genres to a book, pinned against one
+ * set of name rules.
  *
- * Each takes a different input shape — `POST /books` a flat array of strings
- * under `book.book.genres.parsed`, `PUT /books/{id}` `{genre_id, name}`
+ * Each takes a different input shape — `PUT /books/{id}` `{genre_id, name}`
  * objects, `POST /create-book` `{name}` objects, and `POST /bulk-upload` a
  * `;`-separated CSV cell — and each used to resolve names its own way:
- * `Genre::firstOrCreate` on the raw value for the first three, a
- * `LOWER(TRIM(name))` match for the fourth. They now all route through
+ * `Genre::firstOrCreate` on the raw value for the forms, a
+ * `LOWER(TRIM(name))` match for the importer. They now all route through
  * `GenreService`, so the assertions below are deliberately near-identical
- * across doors: the shapes differ, the resulting genre rows must not.
+ * across doors: the shapes differ, the resulting genre rows must not. (There
+ * was a fourth, `POST /books`, deleted 2026-09-29 once `/create-book` owned
+ * creation.)
  *
- * If a fifth door appears, it gets a block here. The admin CRUD door is
+ * If a new door appears, it gets a block here. The admin CRUD door is
  * covered by `GenresCrudTest`, and merge by `GenreMergeTest`.
  */
 class GenreIngestTest extends TestCase
 {
     use RefreshDatabase;
-
-    // ---------------------------------------------------------------
-    // POST /api/books — the legacy create form. Array of bare strings.
-    // ---------------------------------------------------------------
-
-    public function test_create_attaches_genres_by_name(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload(['Fantasy', 'Adventure']))->assertOk();
-
-        $book = Book::where('slug', 'a-new-hope')->firstOrFail();
-        $this->assertEqualsCanonicalizing(
-            ['Fantasy', 'Adventure'],
-            $book->genres->pluck('name')->all(),
-        );
-    }
-
-    public function test_create_collapses_surrounding_and_internal_whitespace(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload(["  science   fiction \n"]))->assertOk();
-
-        $this->assertDatabaseHas('genres', ['name' => 'science fiction']);
-        $this->assertSame(1, Genre::count());
-    }
-
-    public function test_create_reuses_an_existing_genre_regardless_of_case(): void
-    {
-        $this->actingAsUser();
-        $existing = Genre::factory()->create(['name' => 'essays']);
-
-        $this->postJson('/api/books', $this->createPayload(['Essays']))->assertOk();
-
-        $this->assertSame(1, Genre::count(), 'case-only variants must not create a second row');
-        $book = Book::where('slug', 'a-new-hope')->firstOrFail();
-        $this->assertSame($existing->genre_id, $book->genres->first()->genre_id);
-    }
-
-    public function test_create_dedupes_names_within_one_payload(): void
-    {
-        $this->actingAsUser();
-
-        // Three spellings that differ by case and by whitespace only. None of
-        // them exists yet, so nothing reaches the database to be compared by
-        // the collation — the dedupe has to happen in PHP.
-        $this->postJson('/api/books', $this->createPayload([
-            'Science Fiction',
-            ' science fiction ',
-            "SCIENCE   fiction\n",
-        ]))->assertOk();
-
-        $book = Book::where('slug', 'a-new-hope')->firstOrFail();
-        $this->assertSame(1, Genre::count());
-        $this->assertCount(1, $book->genres, 'the pivot must not carry the same genre twice');
-    }
-
-    public function test_create_keeps_names_that_differ_by_more_than_whitespace(): void
-    {
-        $this->actingAsUser();
-
-        // Collapsing internal whitespace is not the same as removing it:
-        // "Fan\ttasy" is "Fan tasy", which is not "Fantasy".
-        $this->postJson('/api/books', $this->createPayload(['Fantasy', "Fan\ttasy"]))->assertOk();
-
-        $this->assertSame(2, Genre::count());
-        $this->assertDatabaseHas('genres', ['name' => 'Fantasy']);
-        $this->assertDatabaseHas('genres', ['name' => 'Fan tasy']);
-    }
-
-    public function test_create_drops_blank_genre_names(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload(['Fantasy', '   ', '']))->assertOk();
-
-        $this->assertSame(1, Genre::count(), 'a whitespace-only name is not a genre');
-        $this->assertDatabaseMissing('genres', ['name' => '']);
-    }
 
     // ---------------------------------------------------------------
     // PUT /api/books/{id} — the edit form. {genre_id, name} objects.
@@ -246,14 +167,49 @@ class GenreIngestTest extends TestCase
     {
         $this->actingAsUser();
 
+        // Three spellings that differ by case and by whitespace only. None of
+        // them exists yet, so nothing reaches the database to be compared by
+        // the collation — the dedupe has to happen in PHP.
         $this->postJson('/api/create-book', $this->completePayload([
-            ['name' => 'Fantasy'],
-            ['name' => ' fantasy '],
+            ['name' => 'Science Fiction'],
+            ['name' => ' science fiction '],
+            ['name' => "SCIENCE   fiction\n"],
         ]))->assertOk();
 
         $book = Book::where('slug', 'project-hail-mary')->firstOrFail();
         $this->assertSame(1, Genre::count());
-        $this->assertCount(1, $book->genres);
+        $this->assertCount(1, $book->genres, 'the pivot must not carry the same genre twice');
+    }
+
+    public function test_complete_creation_keeps_names_that_differ_by_more_than_whitespace(): void
+    {
+        $this->actingAsUser();
+
+        // Collapsing internal whitespace is not the same as removing it:
+        // "Fan\ttasy" is "Fan tasy", which is not "Fantasy".
+        $this->postJson('/api/create-book', $this->completePayload([
+            ['name' => 'Fantasy'],
+            ['name' => "Fan\ttasy"],
+        ]))->assertOk();
+
+        $this->assertSame(2, Genre::count());
+        $this->assertDatabaseHas('genres', ['name' => 'Fantasy']);
+        $this->assertDatabaseHas('genres', ['name' => 'Fan tasy']);
+    }
+
+    public function test_complete_creation_drops_blank_genre_names(): void
+    {
+        $this->actingAsUser();
+
+        $this->postJson('/api/create-book', $this->completePayload([
+            ['name' => 'Fantasy'],
+            ['name' => '   '],
+            ['name' => ''],
+            ['name' => null],
+        ]))->assertOk();
+
+        $this->assertSame(1, Genre::count(), 'a whitespace-only name is not a genre');
+        $this->assertDatabaseMissing('genres', ['name' => '']);
     }
 
     // ---------------------------------------------------------------
@@ -301,48 +257,42 @@ class GenreIngestTest extends TestCase
     public function test_all_three_doors_land_on_the_same_genre_row(): void
     {
         $this->actingAsUser();
+        $format = Format::factory()->create(['name' => 'Paper']);
 
-        // Door 1 creates it, with the messiest spelling of the three.
-        $this->postJson('/api/books', $this->createPayload(['  magical   realism ']))->assertOk();
+        // The create flow makes it, with the messiest spelling of the three.
+        $this->postJson('/api/create-book', $this->completePayload([
+            ['name' => '  magical   realism '],
+        ]))->assertOk();
         $created = Genre::where('name', 'magical realism')->firstOrFail();
 
-        // Door 3 spells it differently and must find the same row.
-        $this->postJson('/api/create-book', $this->completePayload([
-            ['name' => 'Magical Realism'],
-        ]))->assertOk();
-
-        // Door 2 spells it differently again.
+        // The edit form spells it differently and must find the same row.
         $book = Book::factory()->create(['title' => 'Beloved', 'slug' => 'beloved']);
         $this->putJson("/api/books/{$book->book_id}", $this->updatePayload($book, [
             ['name' => 'MAGICAL REALISM'],
         ]))->assertOk();
 
+        // The importer spells it differently again.
+        $this->postJson('/api/bulk-upload', [
+            'csv_file' => $this->csvFile([
+                'title' => 'One Hundred Years of Solitude',
+                'authors' => 'Gabriel|Garcia Marquez',
+                'format' => $format->name,
+                'page_count' => '417',
+                'genres' => 'Magical  Realism',
+            ]),
+        ])->assertOk();
+
         $this->assertSame(1, Genre::count(), 'three doors, three spellings, one genre row');
         $this->assertSame($created->genre_id, $book->fresh()->genres->first()->genre_id);
+        $this->assertSame(
+            $created->genre_id,
+            Book::where('slug', 'one-hundred-years-of-solitude')->firstOrFail()->genres->first()->genre_id,
+        );
     }
 
     // ---------------------------------------------------------------
     // Payload builders — each door's envelope, genres swapped in.
     // ---------------------------------------------------------------
-
-    /** @param  array<int, string>  $genres */
-    private function createPayload(array $genres): array
-    {
-        $format = Format::factory()->create();
-
-        return [
-            'book' => [
-                'book' => [
-                    'title' => 'A New Hope',
-                    'genres' => ['parsed' => $genres],
-                ],
-                'authors' => [['first_name' => 'Ada', 'last_name' => 'Lovelace']],
-                'versions' => [
-                    ['format' => $format->format_id, 'page_count' => 320, 'nickname' => null, 'audio_runtime' => null],
-                ],
-            ],
-        ];
-    }
 
     /** @param  array<int, array<string, mixed>>  $genres */
     private function updatePayload(Book $book, array $genres): array

@@ -168,10 +168,10 @@ Steps 1–4 are the feature. 5–8 are the tools. Each step is independently shi
 - **`book_genre`** — schema change plus the unique index. The `syncWithoutDetaching` workaround in `attachByName` can be simplified once the index exists.
 - **`GenreBreakdown` / `statistics-widgets.md`** — the metric needs the flag; the planned genre scope should include implied rows.
 - **`similarity-scoring.md`** — shares the co-occurrence table; its step 5 depends on this plan. Its `GenreAffinity` weight is the handshake.
-- **`genres.md`** — item 12 (hierarchy / alias) is superseded by this plan; point it here. Item 2 (slug) can ride the schema migration.
+- **`genres.md`** — "Add a hierarchy or alias system" points here. "Add a `slug` column on `genres`" can ride the schema migration.
 - **`genre-management.md`** — merge and forced delete now trigger re-derivation, and the audit-log item there gains two more candidates (graph edits, compact).
 - **`BookTableRow`, `BookCard`, `BookView`, `LibraryBookRow`** — genre rendering changes. `BookView` is under active iteration; coordinate.
-- **`GenreTagInput`** — gains the implied row and the suggestion row. The threshold loosening in `genres.md` item 10 is a natural rider.
+- **`GenreTagInput`** — gains the implied row and the suggestion row. The threshold loosening in `genres.md` ("Loosen `GenreTagInput` thresholds") is a natural rider.
 - **`admin-routes.js` / `AdminActionView`** — new action(s). The `meta.adminMenu` convention makes this a config addition.
 - **`LibraryView`** — new `genre` filter in the URL-driven query (`BookListing` grows a genre constraint) and selection mode. `GenreView`, `AuthorView`, `LocationView`, `ListView` — selection mode. A shared `BookSelectionBar` component; do not build five.
 - **Lists (`lists.md`, `ListItemController`)** — quick-add from the selection bar and *Tag every book on this list*. Both go through `ListItemController::store` / a new list-level action, not around them; the bulk-upload second-writer warning in `lists.md` is the precedent for why.

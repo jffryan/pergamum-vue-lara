@@ -5,16 +5,8 @@ status: living
 
 # Locations (physical shelving)
 
-Shipped 2026-08-22 (CHANGELOG 0.1.17); the virtual `unshelved` / `discarded`
-locations followed 2026-09-17 (0.1.22). The descriptive content lives in
-`/documentation/locations.md`. Decisions taken at implementation, for the
-record: `restrict` + refuse-non-empty delete (force only unshelves a leaf's
-copies), one `location` statistics scope rather than shelf/bookcase pairs,
-`ambiguous_copy` import failure for the nickname-discriminator gap, and the
-CSV `location` column carries `CODE|ordinal` (not the bare code the draft
-sketched) so `shelf_ordinal` survives a reset. The reset gap the draft missed
-— `migrate:fresh` empties `locations` and the importer refuses unknown codes
-— is closed by the opt-in `create_locations` upload flag.
+Tracks future work for physical shelving. Descriptive content lives in
+`/documentation/locations.md`.
 
 **Second writer warning (mirrors `/feature-plans/lists.md`):** bulk upload
 writes `versions.location_id` / `shelf_ordinal` directly from

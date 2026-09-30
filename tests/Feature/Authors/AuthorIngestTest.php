@@ -10,22 +10,23 @@ use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
- * The four ingest doors that attach authors to a book, pinned against one set
- * of name rules.
+ * The three ingest doors that attach authors to a book, pinned against one
+ * set of name rules.
  *
- * Each takes a different input shape — `POST /books` under `book.authors`,
- * `PUT /books/{id}` under a top-level `authors`, `POST /create-book` under
- * `bookData.authors`, and `POST /bulk-upload` as a `;`-separated CSV cell of
- * `First|Last` entries — and each used to answer two questions its own way:
+ * Each takes a different input shape — `PUT /books/{id}` under a top-level
+ * `authors`, `POST /create-book` under `bookData.authors`, and
+ * `POST /bulk-upload` as a `;`-separated CSV cell of `First|Last` entries —
+ * and each used to answer two questions its own way. (There was a fourth,
+ * `POST /books`, deleted 2026-09-29 once `/create-book` owned creation.)
  *
- *   1. **Is a last name required?** The three book forms said yes; the CSV
+ *   1. **Is a last name required?** The book forms said yes; the CSV
  *      importer said "one of the two". So mononyms and organizations (Plato,
  *      Aristotle, National Geographic) could only enter by import, and once
  *      in, any later edit of a book they were on 422'd on an author the user
  *      never touched. The importer's rule is now everyone's — see
  *      `App\Http\Requests\Concerns\ValidatesAuthorNames`.
  *   2. **What happens on attach?** The importer deduped against the book's
- *      current authors and continued `author_ordinal` from the max; the three
+ *      current authors and continued `author_ordinal` from the max; the
  *      forms called `attach($ids)` with no pivot data, so every author sat at
  *      the column default of 1 and `authors[0]` — the name every book row
  *      renders and the library sorts on — was insert order. The importer's
@@ -33,75 +34,11 @@ use Tests\TestCase;
  *
  * The assertions below are deliberately near-identical across doors: the
  * shapes differ, the resulting author rows and pivot ordinals must not. A
- * fifth door gets a block here.
+ * new door gets a block here.
  */
 class AuthorIngestTest extends TestCase
 {
     use RefreshDatabase;
-
-    // ---------------------------------------------------------------
-    // POST /api/books — the legacy create form.
-    // ---------------------------------------------------------------
-
-    public function test_create_accepts_a_mononym(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload([
-            ['first_name' => 'Plato', 'last_name' => ''],
-        ]))->assertOk();
-
-        $author = Author::where('slug', 'plato')->firstOrFail();
-        $this->assertSame('Plato', $author->first_name);
-        $this->assertSame('', $author->last_name);
-    }
-
-    public function test_create_rejects_an_author_with_neither_name(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload([
-            ['first_name' => '', 'last_name' => ''],
-        ]))
-            ->assertStatus(422)
-            ->assertJsonPath('reason_code', 'author_name_required');
-
-        $this->assertSame(0, Author::count());
-    }
-
-    public function test_create_collapses_whitespace_in_both_halves(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload([
-            ['first_name' => "  Ursula   K.  \n", 'last_name' => ' Le  Guin '],
-        ]))->assertOk();
-
-        $this->assertDatabaseHas('authors', [
-            'first_name' => 'Ursula K.',
-            'last_name' => 'Le Guin',
-        ]);
-    }
-
-    public function test_create_numbers_co_authors_in_input_order(): void
-    {
-        $this->actingAsUser();
-
-        $this->postJson('/api/books', $this->createPayload([
-            ['first_name' => 'Terry', 'last_name' => 'Pratchett'],
-            ['first_name' => 'Neil', 'last_name' => 'Gaiman'],
-        ]))->assertOk();
-
-        $book = Book::where('slug', 'a-new-hope')->firstOrFail();
-
-        // Ordinal, not insert order, is what makes `authors[0]` mean
-        // "primary author" — the create doors used to leave every row at the
-        // column default of 1.
-        $this->assertSame(
-            ['Pratchett' => 1, 'Gaiman' => 2],
-            $this->ordinalsByLastName($book),
-        );
-    }
 
     // ---------------------------------------------------------------
     // PUT /api/books/{id} — the edit form.
@@ -206,6 +143,40 @@ class AuthorIngestTest extends TestCase
         $this->assertSame(0, Book::count());
     }
 
+    public function test_complete_creation_collapses_whitespace_in_both_halves(): void
+    {
+        $this->actingAsUser();
+
+        $this->postJson('/api/create-book', $this->completePayload([
+            ['first_name' => "  Ursula   K.  \n", 'last_name' => ' Le  Guin '],
+        ]))->assertOk();
+
+        $this->assertDatabaseHas('authors', [
+            'first_name' => 'Ursula K.',
+            'last_name' => 'Le Guin',
+        ]);
+    }
+
+    public function test_complete_creation_numbers_co_authors_in_input_order(): void
+    {
+        $this->actingAsUser();
+
+        $this->postJson('/api/create-book', $this->completePayload([
+            ['first_name' => 'Terry', 'last_name' => 'Pratchett'],
+            ['first_name' => 'Neil', 'last_name' => 'Gaiman'],
+        ]))->assertOk();
+
+        $book = Book::where('slug', 'project-hail-mary')->firstOrFail();
+
+        // Ordinal, not insert order, is what makes `authors[0]` mean
+        // "primary author" — the create doors used to leave every row at the
+        // column default of 1.
+        $this->assertSame(
+            ['Pratchett' => 1, 'Gaiman' => 2],
+            $this->ordinalsByLastName($book),
+        );
+    }
+
     // ---------------------------------------------------------------
     // POST /api/bulk-upload — the CSV importer. The door that was right all
     // along, and the one with no FormRequest to keep it honest.
@@ -253,29 +224,24 @@ class AuthorIngestTest extends TestCase
     // Cross-door: the whole point of the consolidation.
     // ---------------------------------------------------------------
 
-    public function test_all_four_doors_land_on_the_same_author_row(): void
+    public function test_all_three_doors_land_on_the_same_author_row(): void
     {
         $this->actingAsUser();
         $format = Format::factory()->create(['name' => 'Paper']);
 
-        // Door 1 creates her, with the messiest spelling of the four.
-        $this->postJson('/api/books', $this->createPayload([
+        // The create flow makes her, with the messiest spelling of the three.
+        $this->postJson('/api/create-book', $this->completePayload([
             ['first_name' => '  Ursula   K. ', 'last_name' => ' Le Guin '],
         ]))->assertOk();
         $created = Author::where('slug', 'ursula-k-le-guin')->firstOrFail();
 
-        // Door 3.
-        $this->postJson('/api/create-book', $this->completePayload([
-            ['first_name' => 'Ursula K.', 'last_name' => 'Le Guin'],
-        ]))->assertOk();
-
-        // Door 2.
+        // The edit form.
         $book = Book::factory()->create(['title' => 'The Dispossessed', 'slug' => 'the-dispossessed']);
         $this->putJson("/api/books/{$book->book_id}", $this->updatePayload($book, [
             ['first_name' => 'Ursula K.', 'last_name' => 'Le  Guin'],
         ]))->assertOk();
 
-        // Door 4.
+        // The importer.
         $this->postJson('/api/bulk-upload', [
             'csv_file' => $this->csvFile([
                 'title' => 'The Lathe of Heaven',
@@ -285,8 +251,8 @@ class AuthorIngestTest extends TestCase
             ]),
         ])->assertOk();
 
-        $this->assertSame(1, Author::count(), 'four doors, four spellings, one author row');
-        $this->assertSame(4, $created->fresh()->books()->count());
+        $this->assertSame(1, Author::count(), 'three doors, three spellings, one author row');
+        $this->assertSame(3, $created->fresh()->books()->count());
     }
 
     // ---------------------------------------------------------------
@@ -300,25 +266,6 @@ class AuthorIngestTest extends TestCase
             ->get()
             ->mapWithKeys(fn ($author) => [$author->last_name => $author->pivot->author_ordinal])
             ->all();
-    }
-
-    /** @param  array<int, array<string, mixed>>  $authors */
-    private function createPayload(array $authors): array
-    {
-        $format = Format::factory()->create();
-
-        return [
-            'book' => [
-                'book' => [
-                    'title' => 'A New Hope',
-                    'genres' => ['parsed' => []],
-                ],
-                'authors' => $authors,
-                'versions' => [
-                    ['format' => $format->format_id, 'page_count' => 320, 'nickname' => null, 'audio_runtime' => null],
-                ],
-            ],
-        ];
     }
 
     /** @param  array<int, array<string, mixed>>  $authors */
