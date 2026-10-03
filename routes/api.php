@@ -33,6 +33,9 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    // Additive genre tagging across many books. Ahead of the resource so a
+    // future `POST /books/{book}` can't shadow it.
+    Route::post('/books/bulk-tag', [BookController::class, 'bulkTag']);
     // No `store`: creation is `POST /create-book`. `create` and `edit` never
     // had methods behind them.
     Route::resource('/books', BookController::class)->only(['index', 'show', 'update', 'destroy']);

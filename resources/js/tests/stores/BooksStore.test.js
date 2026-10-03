@@ -235,4 +235,40 @@ describe("BooksStore", () => {
             versions: [],
         });
     });
+
+    // ------------------------
+    // addGenres
+    // ------------------------
+    it("adds genres to the named cached books, in name order", () => {
+        const fantasy = { genre_id: 1, name: "fantasy" };
+        const essays = { genre_id: 2, name: "essays" };
+        store.setAllBooks([
+            { book: { book_id: 1 }, genres: [fantasy] },
+            { book: { book_id: 2 }, genres: [] },
+        ]);
+
+        store.addGenres([1], [essays]);
+
+        expect(store.allBooks[0].genres).toEqual([essays, fantasy]);
+        expect(store.allBooks[1].genres).toEqual([]);
+    });
+
+    it("doesn't duplicate a genre the book already holds", () => {
+        const fantasy = { genre_id: 1, name: "fantasy" };
+        const entry = { book: { book_id: 1 }, genres: [fantasy] };
+        store.setAllBooks([entry]);
+
+        store.addGenres([1], [fantasy]);
+
+        expect(store.allBooks[0]).toEqual(entry);
+    });
+
+    it("handles a cached book with no genres key", () => {
+        const fantasy = { genre_id: 1, name: "fantasy" };
+        store.setAllBooks([{ book: { book_id: 1 }, versions: [] }]);
+
+        store.addGenres([1], [fantasy]);
+
+        expect(store.allBooks[0].genres).toEqual([fantasy]);
+    });
 });

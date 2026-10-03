@@ -41,6 +41,16 @@ const updateBook = async (book_id, formData) =>
 const deleteBook = async (book_id) =>
     makeRequest("delete", buildUrl("books", book_id));
 
+// BULK TAG
+// Additive: every genre in `genre_ids` and `names` onto every book in
+// `book_ids`. Pass ids when you hold the genre row; names may create one.
+const bulkTagBooks = async (book_ids, { genre_ids, names } = {}) =>
+    makeRequest("post", buildUrl("books", "bulk-tag"), {
+        book_ids,
+        genre_ids,
+        names,
+    });
+
 const createOrGetBookByTitle = async (title) => {
     const url = buildUrl("create-book", "title");
     return makeRequest("POST", url, { title });
@@ -83,6 +93,7 @@ export {
     getCompletedYears,
     getBooksByYear,
     updateBook,
+    bulkTagBooks,
     removeGenreInstance,
     removeAuthorInstance,
     deleteBook,

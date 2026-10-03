@@ -27,13 +27,29 @@
                 >
             </div>
             <BookshelfTable :books="books" per-copy />
+
+            <AddBookSearch
+                class="mt-6"
+                mode="book"
+                :is-book-added="isBookAdded"
+                @add="addBook"
+            />
+            <AlertBox
+                v-if="addError"
+                class="mt-2"
+                :message="addError"
+                alert-type="danger"
+            />
         </div>
     </div>
 </template>
 
 <script>
+import { bulkTagBooks } from "@/api/BookController";
 import { getOneGenre } from "@/api/GenresController";
+import { useBooksStore } from "@/stores";
 
+import AddBookSearch from "@/components/books/AddBookSearch.vue";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import BookshelfTable from "@/components/books/table/BookshelfTable.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
@@ -41,13 +57,21 @@ import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndica
 export default {
     name: "GenreView",
     components: {
+        AddBookSearch,
         AlertBox,
         BookshelfTable,
         PageLoadingIndicator,
     },
+    setup() {
+        return { BooksStore: useBooksStore() };
+    },
     data() {
         return {
             isLoading: true,
+            // Search results are a snapshot, so a book tagged from them still
+            // reads untagged there; this is what flips its button to Added.
+            taggedBookIds: new Set(),
+            addError: "",
             genre: null,
             books: [],
             pagination: [],
@@ -90,6 +114,29 @@ export default {
                 this.isLoading = false;
             }
         },
+        isBookAdded(result) {
+            return (
+                this.taggedBookIds.has(result.book.book_id) ||
+                result.genres.some((g) => g.genre_id === this.genre.genre_id)
+            );
+        },
+        // By id, not name: the page already holds the row, and a name could
+        // re-resolve onto a near-duplicate. See `BulkTagBooksRequest`.
+        async addBook(result) {
+            const bookId = result.book.book_id;
+            this.addError = "";
+            try {
+                await bulkTagBooks([bookId], {
+                    genre_ids: [this.genre.genre_id],
+                });
+                this.taggedBookIds.add(bookId);
+                this.BooksStore.addGenres([bookId], [this.genre]);
+                await this.fetchAndSetGenreData();
+            } catch (error) {
+                console.error("Error tagging book:", error);
+                this.addError = `Couldn't add "${result.book.title}" to this genre.`;
+            }
+        },
         setGenre(genre) {
             this.genre = genre;
         },
@@ -116,7 +163,11 @@ export default {
     watch: {
         "$route.params.id": {
             immediate: true,
-            handler: "fetchAndSetGenreData",
+            handler() {
+                this.taggedBookIds = new Set();
+                this.addError = "";
+                this.fetchAndSetGenreData();
+            },
         },
         currentPage: "fetchAndSetGenreData",
     },

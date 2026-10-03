@@ -23,6 +23,9 @@ use Tests\TestCase;
  * was a fourth, `POST /books`, deleted 2026-09-29 once `/create-book` owned
  * creation.)
  *
+ * `POST /books/bulk-tag` (plain names, from a listing) joined 2026-10-03 and
+ * has its block below; the cross-door test predates it.
+ *
  * If a new door appears, it gets a block here. The admin CRUD door is
  * covered by `GenresCrudTest`, and merge by `GenreMergeTest`.
  */
@@ -248,6 +251,40 @@ class GenreIngestTest extends TestCase
         );
         $this->assertSame($existing->genre_id, $book->genres->firstWhere('name', 'Fantasy')->genre_id);
         $this->assertSame(2, Genre::count(), 'the blank third entry is not a genre');
+    }
+
+    // ---------------------------------------------------------------
+    // POST /api/books/bulk-tag — tagging from a listing. Plain names.
+    // Its endpoint contract is in `Tests\Feature\Books\BulkTagBooksTest`.
+    // ---------------------------------------------------------------
+
+    public function test_bulk_tag_collapses_whitespace_and_reuses_an_existing_genre_regardless_of_case(): void
+    {
+        $this->actingAsUser();
+        $book = Book::factory()->create(['title' => 'Ancillary Justice', 'slug' => 'ancillary-justice']);
+        $existing = Genre::factory()->create(['name' => 'space opera']);
+
+        $this->postJson('/api/books/bulk-tag', [
+            'book_ids' => [$book->book_id],
+            'names' => ["  SPACE   opera \n"],
+        ])->assertOk();
+
+        $this->assertSame(1, Genre::count());
+        $this->assertSame($existing->genre_id, $book->fresh()->genres->first()->genre_id);
+    }
+
+    public function test_bulk_tag_dedupes_names_within_one_payload(): void
+    {
+        $this->actingAsUser();
+        $book = Book::factory()->create(['title' => 'Ancillary Justice', 'slug' => 'ancillary-justice']);
+
+        $this->postJson('/api/books/bulk-tag', [
+            'book_ids' => [$book->book_id],
+            'names' => ['Science Fiction', ' science fiction '],
+        ])->assertOk();
+
+        $this->assertSame(1, Genre::count());
+        $this->assertCount(1, $book->fresh()->genres, 'the pivot must not carry the same genre twice');
     }
 
     // ---------------------------------------------------------------

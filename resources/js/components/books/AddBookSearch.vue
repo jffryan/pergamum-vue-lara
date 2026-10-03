@@ -3,14 +3,28 @@ import { ref } from "vue";
 import { getAllBooks } from "@/api/BookController";
 
 /**
- * Title search that offers each matching book's versions as add buttons.
- * Owns the search round-trip; what "add" means belongs to the owning view
- * (append to a list, shelve to a location), which listens for `add` and
- * supplies `isVersionAdded` so already-present versions render disabled.
- * The version objects emitted are exactly what `/api/books?search=` returns.
+ * Title search that offers each matching book as add buttons. Owns the search
+ * round-trip; what "add" means belongs to the owning view, which listens for
+ * `add`.
+ *
+ * `mode` is what gets added. `version` (lists, shelves — things that hold
+ * physical copies) renders one button per copy and emits the version;
+ * `isVersionAdded` disables the ones already present. `book` (genres —
+ * things that attach to the work) renders one button per result and emits
+ * the whole result row; `isBookAdded` disables it. Either way the emitted
+ * object is exactly what `/api/books?search=` returns.
  */
 const props = defineProps({
+    mode: {
+        type: String,
+        default: "version",
+        validator: (value) => ["version", "book"].includes(value),
+    },
     isVersionAdded: {
+        type: Function,
+        default: () => false,
+    },
+    isBookAdded: {
         type: Function,
         default: () => false,
     },
@@ -83,7 +97,21 @@ const primaryAuthor = (result) => {
                         — {{ primaryAuthor(result) }}
                     </span>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div v-if="props.mode === 'book'">
+                    <button
+                        @click="emit('add', result)"
+                        :disabled="props.isBookAdded(result)"
+                        class="text-sm border rounded px-2 py-1"
+                        :class="
+                            props.isBookAdded(result)
+                                ? 'border-gray-300 text-gray-400 cursor-default'
+                                : 'border-slate-900 hover:bg-slate-900 hover:text-white'
+                        "
+                    >
+                        {{ props.isBookAdded(result) ? "✓ Added" : "Add" }}
+                    </button>
+                </div>
+                <div v-else class="flex flex-wrap gap-2">
                     <button
                         v-for="version in result.versions"
                         :key="version.version_id"

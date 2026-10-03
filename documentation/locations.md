@@ -172,7 +172,8 @@ but are no longer how shelving works).
   (`StatisticsGrid` + the `locationStatistics` surface config). On leaf
   locations, `LocationView` also renders
   `components/books/AddBookSearch.vue` — the list page's title-search /
-  pick-a-version widget, extracted to a shared component — so copies can be
+  pick-a-version widget, extracted to a shared component (its default
+  `mode="version"`; `GenreView` uses `mode="book"`) — so copies can be
   shelved from the shelf page; the view's `addVersion` calls the same
   `setVersionLocation` write path, then quietly refetches the listing.
   The same view serves `/locations/unshelved`, `/locations/on-loan` and

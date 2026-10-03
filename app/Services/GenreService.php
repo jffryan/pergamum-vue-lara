@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\DB;
  * Single owner of the genre name rules.
  *
  * Genres reach the database from four doors: the admin CRUD surface
- * (`create` / `rename` / `delete` / `merge` below) and three ingest paths —
- * `PUT /books/{id}`, `POST /create-book`, and the CSV importer in
- * `BulkImportService`. Each ingest door takes a different input shape, and
+ * (`create` / `rename` / `delete` / `merge` below) and four ingest paths —
+ * `PUT /books/{id}`, `POST /create-book`, `POST /books/bulk-tag`, and the CSV
+ * importer in `BulkImportService`. Each ingest door takes a different input shape, and
  * each used to resolve names its own way, so the same genre could arrive
  * spelled several ways. They now all land on `attachByName()` /
  * `syncFromInput()`, which means `normalize()` is the only spelling rule in
@@ -72,13 +72,54 @@ class GenreService
     {
         $genres = $this->resolveNames($names);
 
+        $this->attachGenres($book, $genres);
+
+        return $genres;
+    }
+
+    /**
+     * Attach known genres plus named ones to every book in `$bookIds`, in one
+     * transaction. The additive door for tagging from a listing.
+     *
+     * Ids are taken as-is — a page that already holds the genre row shouldn't
+     * have its name re-resolved onto a near-duplicate. Names go through the
+     * same rules as every other door. Both are resolved once, not per book.
+     *
+     * @param  array<int>  $bookIds
+     * @param  array<int>  $genreIds
+     * @param  array<int, string|null>  $names
+     * @return Collection<int, Genre>
+     */
+    public function attachToBooks(array $bookIds, array $genreIds, array $names): Collection
+    {
+        return DB::transaction(function () use ($bookIds, $genreIds, $names) {
+            $genres = Genre::findMany($genreIds)
+                ->concat($this->resolveNames($names))
+                ->unique('genre_id')
+                ->values();
+
+            foreach (Book::findMany($bookIds) as $book) {
+                $this->attachGenres($book, $genres);
+            }
+
+            return $genres;
+        });
+    }
+
+    /**
+     * The one additive pivot write. Anything that must happen whenever a book
+     * gains a genre (implied genres — see `/feature-plans/genre-rework.md`)
+     * belongs here, so every additive door inherits it.
+     *
+     * @param  Collection<int, Genre>  $genres
+     */
+    private function attachGenres(Book $book, Collection $genres): void
+    {
         // `syncWithoutDetaching`, not `attach`: `book_genre` carries no unique
         // index on (book_id, genre_id), so attaching an id the book already
         // holds writes a second pivot row rather than failing. That duplicate
         // is invisible on the book page and over-reports in `withCount('books')`.
         $book->genres()->syncWithoutDetaching($genres->pluck('genre_id')->all());
-
-        return $genres;
     }
 
     /**

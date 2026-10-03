@@ -2,6 +2,11 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.26] - 2026-10-03
+
+- **Books can be added to a genre from the genre's page.** `/genres/:id` has an "Add a book" title search below the bookshelf. Each result has one Add button that tags the book with this genre (genres belong to the book, not to a copy), shows "✓ Added" once the book has the genre, and refreshes the shelf. `AddBookSearch` has a new `mode="book"` for this. Lists and shelves keep the default per-copy `mode="version"`.
+- **New endpoint: `POST /books/bulk-tag`** `{ book_ids, genre_ids?, names? }`. It adds every listed genre to every listed book and never removes a genre. Sending it twice doesn't create a second pivot row. Names follow the same rules as every other genre door. A blank name is rejected with 422, unlike the forms, which drop blank names. `genre_ids` are used as given, so a page that already has the genre's id can't land on a near-duplicate. It is the endpoint that the selection bar planned in `/feature-plans/genre-rework.md` will use. Every additive genre write now goes through one `GenreService::attachGenres`. 13 new backend tests (`BulkTagBooksTest`, plus a block in `GenreIngestTest`) and 3 JS specs (`BooksStore.addGenres`, which updates cached book pages). See `/documentation/genres.md` → Tagging books from a listing.
+
 ## [0.1.25] - 2026-09-30
 
 - **Copies can be marked as lent out.** Each copy on a book page has a Lend action with an optional "Lent to" (free text, up to 255 characters) and a date that starts at today. Both can be left blank. A lent copy shows `Lent to Sam · Sep 2026` under its shelf and offers Returned in place of Lend, and the header count gains `· N on loan`. New endpoints: `PATCH /versions/{id}/lend` (`{ loaned_to?, loaned_at? }`, where an omitted key keeps its value on a re-lend and null clears it) and `PATCH /versions/{id}/return`. New columns: `versions.is_on_loan` (the state), `loaned_to`, `loaned_at`.

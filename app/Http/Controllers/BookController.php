@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkTagBooksRequest;
 use App\Http\Requests\StoreReadInstanceRequest;
 use App\Http\Requests\UpdateBookRequest;
 use App\Models\Author;
@@ -425,6 +426,25 @@ class BookController extends Controller
             // string is an information leak and was never actionable.
             return response()->json(['error' => 'An error occurred while updating the book.'], 500);
         }
+    }
+
+    /**
+     * Tag every book in `book_ids` with every genre in `genre_ids` and
+     * `names`, additively.
+     *
+     * Nothing is removed — this is the additive attach, not the edit form's
+     * sync. Responds with the resolved genres (created where needed) so a
+     * caller holding a stale `GenreStore` knows the ids.
+     */
+    public function bulkTag(BulkTagBooksRequest $request)
+    {
+        $bookIds = $request->bookIds();
+        $genres = $this->genreService->attachToBooks($bookIds, $request->genreIds(), $request->names());
+
+        return response()->json([
+            'book_ids' => $bookIds,
+            'genres' => $genres,
+        ]);
     }
 
     /**

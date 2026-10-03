@@ -38,7 +38,7 @@ Genre CRUD + merge behind `/admin/genres` has shipped — its own follow-up work
 ### API surface
 
 - **No `/genres` filter / search endpoint.** The index is "everything alphabetical." Both the `GenresView` search box and the `/admin/genres` one filter in memory, which works only because the full list fits there.
-- **Genre attachment still takes three input shapes**, one per ingest door, even though all three now resolve through `GenreService`. The name rules are consolidated; the *envelopes* are not. `PUT /books/{id}` sends `{ genre_id?, name? }` and `POST /create-book` sends `{ name }`; the create shape could adopt the optional `genre_id`, and the CSV cell will always be its own shape.
+- **Genre attachment still takes four input shapes**, one per ingest door, even though all four now resolve through `GenreService`. The name rules are consolidated; the *envelopes* are not. `PUT /books/{id}` sends `{ genre_id?, name? }` objects, `POST /create-book` sends `{ name }` objects, and `POST /books/bulk-tag` sends parallel `genre_ids` / `names` arrays; the create shape could adopt the optional `genre_id`, and the CSV cell will always be its own shape.
 
 ### Extensibility
 

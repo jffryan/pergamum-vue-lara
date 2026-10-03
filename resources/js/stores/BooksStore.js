@@ -77,6 +77,26 @@ const useBooksStore = defineStore("BooksStore", {
                 };
             });
         },
+        // Add `genres` to every cached book in `bookIds` that lacks them —
+        // the client half of `POST /books/bulk-tag`. Kept in name order, the
+        // order the server eager-loads them in.
+        addGenres(bookIds, genres) {
+            this.allBooks.forEach((book, index) => {
+                if (!bookIds.includes(book.book.book_id)) return;
+
+                const current = book.genres || [];
+                const held = new Set(current.map((g) => g.genre_id));
+                const added = genres.filter((g) => !held.has(g.genre_id));
+                if (!added.length) return;
+
+                this.allBooks[index] = {
+                    ...book,
+                    genres: [...current, ...added].sort((a, b) =>
+                        a.name.localeCompare(b.name),
+                    ),
+                };
+            });
+        },
         deleteBook(book) {
             this.allBooks = this.allBooks.filter(
                 (b) => b.book.book_id !== book.book.book_id,
