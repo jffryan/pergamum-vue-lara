@@ -9,7 +9,7 @@ use Illuminate\Contracts\Database\Query\Builder;
  * The registry of {@see VirtualLocation}s — the places a copy can be that
  * aren't shelves.
  *
- * Two today. Adding a third ("lent out", say) is one entry here plus the
+ * Three today. Adding another ("boxed", say) is one entry here plus the
  * column it derives from; routes, the index payload, the show/books
  * endpoints and the SPA's locations page all read this list. The slugs are
  * reserved in `LocationService` so a real location can never shadow one —
@@ -22,6 +22,8 @@ final class VirtualLocations
     public const KIND = 'virtual';
 
     public const UNSHELVED = 'unshelved';
+
+    public const ON_LOAN = 'on-loan';
 
     public const DISCARDED = 'discarded';
 
@@ -42,7 +44,21 @@ final class VirtualLocations
                 description: 'Copies you own that have not been placed on a shelf yet.',
                 constraint: fn (Builder $q) => $q
                     ->whereNull('versions.location_id')
-                    ->where('versions.is_discarded', false),
+                    ->where('versions.is_discarded', false)
+                    ->where('versions.is_on_loan', false),
+            ),
+            // Out with someone else. Unlike the other two this overlaps a
+            // shelf: a lent copy keeps `location_id` as its home, so it is
+            // listed here *and* on that shelf (flagged there). It is kept
+            // out of the pen, though — a lent copy with no home is not
+            // waiting to be shelved, it is waiting to come back. Discarding
+            // ends a loan, so this and the pile are exclusive.
+            new VirtualLocation(
+                slug: self::ON_LOAN,
+                code: 'ON-LOAN',
+                name: 'On loan',
+                description: 'Copies you own that are lent out. A lent copy stays listed on its shelf; marking it returned is all it takes to have it back.',
+                constraint: fn (Builder $q) => $q->where('versions.is_on_loan', true),
             ),
             // The pile: copies you no longer own. Discarding clears the
             // location (`VersionController::discard`) and shelving a
@@ -75,7 +91,7 @@ final class VirtualLocations
         return self::find($slug) !== null;
     }
 
-    /** `unshelved|discarded` — the `where()` pattern for the virtual routes. */
+    /** `unshelved|on-loan|discarded` — the `where()` pattern for the virtual routes. */
     public static function routePattern(): string
     {
         return implode('|', array_map(fn (VirtualLocation $virtual) => preg_quote($virtual->slug, '/'), self::all()));

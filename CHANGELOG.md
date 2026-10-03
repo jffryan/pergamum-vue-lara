@@ -2,6 +2,14 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.25] - 2026-09-30
+
+- **Copies can be marked as lent out.** Each copy on a book page has a Lend action with an optional "Lent to" (free text, up to 255 characters) and a date that starts at today. Both can be left blank. A lent copy shows `Lent to Sam · Sep 2026` under its shelf and offers Returned in place of Lend, and the header count gains `· N on loan`. New endpoints: `PATCH /versions/{id}/lend` (`{ loaned_to?, loaned_at? }`, where an omitted key keeps its value on a re-lend and null clears it) and `PATCH /versions/{id}/return`. New columns: `versions.is_on_loan` (the state), `loaned_to`, `loaned_at`.
+- **A lent copy keeps its shelf.** Lending doesn't touch `location_id`, so returning a copy puts it straight back where it lived. The shelf's page still lists it, labelled with the loan, and it still counts toward that shelf's totals and statistics.
+- **New virtual location: On loan** (`/locations/on-loan`). It sits beside Unshelved and Discarded, and each row has a Returned action. It is derived from `is_on_loan`, and it is the one virtual place that overlaps a shelf. Unshelved now excludes lent copies. `on-loan` is a reserved location code.
+- **Loans and discards are exclusive.** Discarding a lent copy ends the loan. Lending a discarded copy is a 422 `copy_discarded`.
+- **The CSV carries loans** (`is_on_loan`, `loaned_to`, `loaned_at`, after `discarded_at`), so loans survive a database reset. On import they are create-only, like the discard pair. New row failures: `is_on_loan_invalid`, `loan_details_without_flag`, `loan_on_discarded_copy`. Older files without these columns still import. 22 new backend tests (`LendVersionTest`, `BulkUploadLoanColumnsTest`, `VirtualLocationsTest`, the roundtrip) and new JS specs for `loanLabel` and the loan count. See `/documentation/books.md` → Lending a copy and `/documentation/locations.md`.
+
 ## [0.1.24] - 2026-09-29
 
 - **Authors can be renamed and merged from `/admin/authors`.** Every author, searchable, with how many books credit them and the URL their page lives at. Renaming fixes the name on every book at once (there is one author record per person, shared by all their books). A rename onto a name another author already has is refused with a 409 that names them, and the row offers "Merge into them"; ticking two or more rows merges them N→1 through `ConfirmAction`. New endpoints: `GET /authors`, `PATCH /authors/{author}`, `POST /authors/{author}/merge`, behind a new all-`true` `AuthorPolicy` (the same seam as `GenrePolicy`).

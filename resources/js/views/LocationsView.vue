@@ -64,9 +64,10 @@
                 </div>
             </div>
 
-            <!-- The places that aren't shelves: the unshelved holding pen and
-                 the discarded pile. Derived server-side from version state,
-                 so a copy is always in exactly one of these or on a shelf. -->
+            <!-- The places that aren't shelves: the unshelved holding pen,
+                 copies on loan, and the discarded pile. Derived server-side
+                 from version state. A lent copy is also still counted on its
+                 home shelf; otherwise a copy is in exactly one place. -->
             <h2 class="mt-8 mb-2 text-lg font-bold">Not on a shelf</h2>
             <div
                 v-for="virtual in virtualLocations"

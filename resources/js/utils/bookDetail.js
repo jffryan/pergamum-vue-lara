@@ -189,6 +189,27 @@ const copyState = (version) => {
 };
 
 /**
+ * "Lent to Sam · Sep 2026", "Lent to Sam", "Lent out · Sep 2026", "Lent out";
+ * "" for a copy that isn't on loan. Read from `is_on_loan`, the discard rule
+ * again: who has it and since when are both optional, so neither can stand in
+ * for the state.
+ *
+ * Separate from `copyState` because a loan isn't a place — a lent copy keeps
+ * its shelf, which is where it goes back to.
+ */
+const loanLabel = (version) => {
+    if (!version?.is_on_loan) {
+        return "";
+    }
+
+    const who = version.loaned_to?.trim();
+    const when = monthYear(version.loaned_at);
+    const lead = who ? `Lent to ${who}` : "Lent out";
+
+    return when ? `${lead} · ${when}` : lead;
+};
+
+/**
  * Copies you still own first, discarded ones after, each group keeping the
  * server's oldest-first order. This is the one place that reorders, because
  * the server has no opinion worth preserving here and the page's question is
@@ -200,22 +221,29 @@ const orderedCopies = (versions = []) => [
     ...versions.filter((version) => version.is_discarded),
 ];
 
+// `onShelf` is every copy still owned; `onLoan` is the part of it that is
+// lent out — still owned, so still counted in `onShelf`.
 const copyCounts = (versions = []) => {
     const discarded = versions.filter((version) => version.is_discarded).length;
+    const onLoan = versions.filter(
+        (version) => version.is_on_loan && !version.is_discarded,
+    ).length;
 
     return {
         total: versions.length,
         onShelf: versions.length - discarded,
+        onLoan,
         discarded,
     };
 };
 
 /**
- * "2 copies · 1 discarded", "1 copy", "No copies". The second clause only
- * appears when something has been discarded, so the common case stays short.
+ * "2 copies · 1 on loan · 1 discarded", "1 copy", "No copies". The trailing
+ * clauses only appear when something is lent or discarded, so the common case
+ * stays short.
  */
 const copySummary = (versions = []) => {
-    const { total, onShelf, discarded } = copyCounts(versions);
+    const { total, onShelf, onLoan, discarded } = copyCounts(versions);
 
     if (!total) {
         return "No copies";
@@ -223,15 +251,16 @@ const copySummary = (versions = []) => {
 
     const copies = (count) => plural(count, "copy", "copies");
 
-    if (!discarded) {
-        return copies(total);
-    }
-
     if (!onShelf) {
         return `${copies(total)}, all discarded`;
     }
 
-    return `${copies(onShelf)} · ${discarded} discarded`;
+    const parts = [copies(onShelf)];
+
+    if (onLoan) parts.push(`${onLoan} on loan`);
+    if (discarded) parts.push(`${discarded} discarded`);
+
+    return parts.join(" · ");
 };
 
 // --- Reads ------------------------------------------------------------------
@@ -420,6 +449,7 @@ export {
     copyLabel,
     locationLabel,
     copyState,
+    loanLabel,
     orderedCopies,
     copyCounts,
     copySummary,

@@ -70,6 +70,13 @@ class VersionController extends Controller
         $version->location_id = null;
         $version->shelf_ordinal = null;
 
+        // Discarding also ends a loan — the usual way a lent copy gets here
+        // is by never coming back. A copy is in the pile or out on loan,
+        // never both, and `lend` refuses the other direction.
+        $version->is_on_loan = false;
+        $version->loaned_to = null;
+        $version->loaned_at = null;
+
         $version->save();
 
         // `location` and not just `format`: the SPA merges this response over
@@ -89,6 +96,65 @@ class VersionController extends Controller
         $version->fill([
             'is_discarded' => false,
             'discarded_at' => null,
+        ])->save();
+
+        return response()->json($version->load('format', 'location'));
+    }
+
+    /**
+     * Mark a copy as lent out — still ours, currently someone else's.
+     *
+     * Unlike discard this leaves the location alone: the shelf is where the
+     * copy goes back to, so a lent copy is listed on its shelf (flagged) and
+     * in the virtual "On loan" location, and returning it is just clearing
+     * the loan. `loaned_to` (free text — whoever has it) and `loaned_at` are
+     * both optional and follow discard's key rule: omitting a key on a
+     * re-lend keeps what is there, sending null clears it.
+     */
+    public function lend(Request $request, $version_id)
+    {
+        $validated = $request->validate([
+            'loaned_to' => 'nullable|string|max:255',
+            'loaned_at' => 'nullable|date',
+        ]);
+
+        $version = Version::findOrFail($version_id);
+
+        // Same reason code the shelve path uses: a discarded copy is in the
+        // pile, not anywhere a copy you own can be.
+        if ($version->is_discarded) {
+            return response()->json([
+                'reason_code' => 'copy_discarded',
+                'reason' => 'A discarded copy cannot be lent. Restore it first.',
+            ], 422);
+        }
+
+        $version->is_on_loan = true;
+
+        foreach (['loaned_to', 'loaned_at'] as $key) {
+            if ($request->has($key)) {
+                $version->{$key} = $validated[$key] ?? null;
+            }
+        }
+
+        $version->save();
+
+        return response()->json($version->load('format', 'location'));
+    }
+
+    /**
+     * The copy is back. Clears the details with the flag, so the next loan
+     * doesn't inherit the last borrower. The location was never touched, so
+     * the copy is on its shelf again with nothing else to do.
+     */
+    public function returnFromLoan($version_id)
+    {
+        $version = Version::findOrFail($version_id);
+
+        $version->fill([
+            'is_on_loan' => false,
+            'loaned_to' => null,
+            'loaned_at' => null,
         ])->save();
 
         return response()->json($version->load('format', 'location'));

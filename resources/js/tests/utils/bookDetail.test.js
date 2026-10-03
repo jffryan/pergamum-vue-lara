@@ -8,6 +8,7 @@ import {
     copyLabel,
     locationLabel,
     copyState,
+    loanLabel,
     orderedCopies,
     copyCounts,
     copySummary,
@@ -64,6 +65,9 @@ const copy = ({
     nickname = null,
     is_discarded = false,
     discarded_at = null,
+    is_on_loan = false,
+    loaned_to = null,
+    loaned_at = null,
     location = null,
 } = {}) => ({
     version_id,
@@ -73,6 +77,9 @@ const copy = ({
     nickname,
     is_discarded,
     discarded_at,
+    is_on_loan,
+    loaned_to,
+    loaned_at,
     location_id: location?.location_id ?? null,
     location,
 });
@@ -219,6 +226,35 @@ describe("utils/bookDetail", () => {
 
             expect(copyState(stale)).toBe("discarded");
         });
+
+        it("keeps a lent copy's shelf as its state", () => {
+            expect(
+                copyState(
+                    copy({ is_on_loan: true, location: shelf("Office") }),
+                ),
+            ).toBe("shelved");
+        });
+    });
+
+    describe("loan label", () => {
+        it("says who and when, whichever are known", () => {
+            const lent = (overrides) =>
+                copy({ is_on_loan: true, ...overrides });
+
+            expect(
+                loanLabel(lent({ loaned_to: "Sam", loaned_at: "2026-09-12" })),
+            ).toBe("Lent to Sam · Sep 2026");
+            expect(loanLabel(lent({ loaned_to: " Sam " }))).toBe("Lent to Sam");
+            expect(loanLabel(lent({ loaned_at: "2026-09-12" }))).toBe(
+                "Lent out · Sep 2026",
+            );
+            expect(loanLabel(lent({ loaned_to: "  " }))).toBe("Lent out");
+        });
+
+        it("reads the state from the flag, not the details", () => {
+            expect(loanLabel(copy({ loaned_to: "Sam" }))).toBe("");
+            expect(loanLabel(copy())).toBe("");
+        });
     });
 
     describe("copy ordering and counts", () => {
@@ -243,11 +279,13 @@ describe("utils/bookDetail", () => {
             expect(copyCounts(versions)).toEqual({
                 total: 2,
                 onShelf: 1,
+                onLoan: 0,
                 discarded: 1,
             });
             expect(copyCounts()).toEqual({
                 total: 0,
                 onShelf: 0,
+                onLoan: 0,
                 discarded: 0,
             });
         });
@@ -267,6 +305,13 @@ describe("utils/bookDetail", () => {
             expect(copySummary([copy({ is_discarded: true })])).toBe(
                 "1 copy, all discarded",
             );
+            expect(
+                copySummary([
+                    copy({ version_id: 1, is_on_loan: true }),
+                    copy({ version_id: 2 }),
+                    copy({ version_id: 3, is_discarded: true }),
+                ]),
+            ).toBe("2 copies · 1 on loan · 1 discarded");
         });
     });
 

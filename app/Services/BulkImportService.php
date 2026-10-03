@@ -45,7 +45,7 @@ class BulkImportService
 
     private const DATE_FORMATS = CsvContract::DATE_FORMATS;
 
-    /** Accepted spellings of the `is_discarded` flag, lowercased. */
+    /** Accepted spellings of the `is_discarded` / `is_on_loan` flags, lowercased. */
     private const TRUTHY = ['1', 'true', 'yes', 'y'];
 
     private const FALSEY = ['', '0', 'false', 'no', 'n'];
@@ -354,6 +354,32 @@ class BulkImportService
             }
         }
 
+        $isOnLoan = $this->parseFlag($cells['is_on_loan'] ?? '');
+        if ($isOnLoan === null) {
+            throw new BulkImportRowException("is_on_loan '{$cells['is_on_loan']}' is not a boolean", 'is_on_loan_invalid');
+        }
+
+        // The discard rule again: loan details on a copy the row says is on
+        // the shelf contradict it. And a copy can't be both gone and lent —
+        // the discard endpoint ends a loan and the lend endpoint refuses a
+        // discarded copy.
+        $loanedTo = trim($cells['loaned_to'] ?? '');
+        $loanedAtRaw = $cells['loaned_at'] ?? '';
+        if (! $isOnLoan && ($loanedTo !== '' || $loanedAtRaw !== '')) {
+            throw new BulkImportRowException('loaned_to or loaned_at is set but is_on_loan is not', 'loan_details_without_flag');
+        }
+        if ($isOnLoan && $isDiscarded) {
+            throw new BulkImportRowException('is_on_loan and is_discarded are both set — a discarded copy is not on loan', 'loan_on_discarded_copy');
+        }
+
+        $loanedAt = null;
+        if ($loanedAtRaw !== '') {
+            $loanedAt = $this->parseDate($loanedAtRaw);
+            if ($loanedAt === null) {
+                throw new BulkImportRowException("loaned_at '{$loanedAtRaw}' did not match Y-m-d, n/j/Y, or m/d/Y", 'date_parse_failed');
+            }
+        }
+
         $lists = $this->parseLists($cells['lists'] ?? '');
         if ($lists === null) {
             throw new BulkImportRowException('one or more lists entries are malformed (expected Name or Name|ordinal)', 'list_entry_malformed');
@@ -384,6 +410,9 @@ class BulkImportService
             rating: $rating,
             isDiscarded: $isDiscarded,
             discardedAt: $discardedAt,
+            isOnLoan: $isOnLoan,
+            loanedTo: $loanedTo === '' ? null : $loanedTo,
+            loanedAt: $loanedAt,
             lists: $lists,
             location: $location,
             shelfOrdinal: $shelfOrdinal,
@@ -509,7 +538,7 @@ class BulkImportService
             $book = $this->resolveBook($row->title, $authors);
             $this->attachAuthors($book, $authors);
             $this->attachGenres($book, $row->genres);
-            $version = $this->resolveVersion($book, $row->format, $row->nickname, $row->pageCount, $row->audioRuntime, $row->isDiscarded, $row->discardedAt, $location, $row->shelfOrdinal);
+            $version = $this->resolveVersion($book, $row, $location);
 
             if (! $dryRun) {
                 $this->fileIntoNamedLists($version, $row->lists, $userId);
@@ -699,46 +728,45 @@ class BulkImportService
         $this->genreService->attachByName($book, $names);
     }
 
-    private function resolveVersion(
-        Book $book,
-        Format $format,
-        ?string $nickname,
-        ?int $pageCount,
-        ?int $audioRuntime,
-        bool $isDiscarded = false,
-        ?Carbon $discardedAt = null,
-        ?Location $location = null,
-        ?int $shelfOrdinal = null,
-    ): Version {
+    /**
+     * Takes the whole row: the copy's facts (length, discard, loan, shelf)
+     * outgrew a positional list, and every one of them is written on create
+     * only.
+     */
+    private function resolveVersion(Book $book, ImportRow $row, ?Location $location = null): Version
+    {
         $query = Version::where('book_id', $book->book_id)
-            ->where('format_id', $format->format_id);
+            ->where('format_id', $row->format->format_id);
 
-        if ($nickname === null) {
+        if ($row->nickname === null) {
             $query->whereNull('nickname');
         } else {
-            $query->where('nickname', $nickname);
+            $query->where('nickname', $row->nickname);
         }
 
         $version = $query->first();
         if ($version) {
-            // Existing fields are left alone on a match, discard state and
-            // location included: a re-import shouldn't un-discard a copy you
-            // got rid of — or reshelve a copy you moved — after the file was
-            // written. Same rule as page_count — see
+            // Existing fields are left alone on a match — discard state, loan
+            // and location included: a re-import shouldn't un-discard a copy
+            // you got rid of, re-lend one that came back, or reshelve one you
+            // moved after the file was written. Same rule as page_count — see
             // /documentation/bulk-upload.md.
             return $version;
         }
 
         return Version::create([
             'book_id' => $book->book_id,
-            'format_id' => $format->format_id,
-            'nickname' => $nickname,
-            'page_count' => $pageCount,
-            'audio_runtime' => $audioRuntime,
-            'is_discarded' => $isDiscarded,
-            'discarded_at' => $discardedAt,
+            'format_id' => $row->format->format_id,
+            'nickname' => $row->nickname,
+            'page_count' => $row->pageCount,
+            'audio_runtime' => $row->audioRuntime,
+            'is_discarded' => $row->isDiscarded,
+            'discarded_at' => $row->discardedAt,
+            'is_on_loan' => $row->isOnLoan,
+            'loaned_to' => $row->loanedTo,
+            'loaned_at' => $row->loanedAt,
             'location_id' => $location?->location_id,
-            'shelf_ordinal' => $location === null ? null : $shelfOrdinal,
+            'shelf_ordinal' => $location === null ? null : $row->shelfOrdinal,
         ]);
     }
 

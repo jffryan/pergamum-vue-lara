@@ -34,7 +34,7 @@ class LocationController extends Controller
      * The whole tree, flat — a couple of dozen rows, so the SPA fetches it
      * once and builds the hierarchy from `parent_id` client-side.
      *
-     * The virtual locations (`unshelved`, `discarded`) ride along at the
+     * The virtual locations (`unshelved`, `on-loan`, `discarded`) ride along at the
      * end, flagged `virtual: true` with `location_id: null`, so the same
      * fetch that refreshes every shelf's count refreshes the holding pen's.
      * The store splits them off before the tree getters see them.

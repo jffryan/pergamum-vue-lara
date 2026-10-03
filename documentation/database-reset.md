@@ -35,6 +35,7 @@ procedure* is whatever the export file carries:
 | Genres | yes | `genres` |
 | Versions, page counts, runtimes, nicknames | yes | `format`, `page_count`, `audio_runtime`, `version_nickname` |
 | Discarded copies and their dates | yes | `is_discarded`, `discarded_at` |
+| Loans (who has a copy, since when) | yes | `is_on_loan`, `loaned_to`, `loaned_at` |
 | Read history, re-reads, ratings | yes | `date_read`, `rating` (one row per read) |
 | Lists, list membership, item order | yes | `lists`, `;`-separated `Name\|ordinal` |
 | Shelf assignments and shelf order | yes | `location`, `CODE` or `CODE\|ordinal` — **requires `create_locations` on the import**, see step 4 |

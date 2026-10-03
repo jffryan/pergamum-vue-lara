@@ -4,7 +4,12 @@ import { useRoute } from "vue-router";
 import { useBooksStore, useListsStore } from "@/stores";
 import { fetchBookData } from "@/services/BookServices";
 import { getAllLists } from "@/api/ListController";
-import { discardVersion, restoreVersion } from "@/api/VersionController";
+import {
+    discardVersion,
+    lendVersion,
+    restoreVersion,
+    returnVersion,
+} from "@/api/VersionController";
 import { setVersionLocation } from "@/api/LocationController";
 import {
     authorList,
@@ -153,6 +158,18 @@ const restoreCopy = (version_id) =>
         "Unable to restore this copy. Please try again.",
     );
 
+const lendCopy = ({ version_id, loaned_to, loaned_at }) =>
+    applyVersionAction(
+        () => lendVersion(version_id, { loaned_to, loaned_at }),
+        "Unable to lend this copy. Please try again.",
+    );
+
+const returnCopy = (version_id) =>
+    applyVersionAction(
+        () => returnVersion(version_id),
+        "Unable to mark this copy returned. Please try again.",
+    );
+
 const moveCopy = ({ version_id, location_id }) =>
     applyVersionAction(
         () => setVersionLocation(version_id, location_id),
@@ -287,6 +304,8 @@ const moveCopy = ({ version_id, location_id }) =>
                         @discard="discardCopy"
                         @restore="restoreCopy"
                         @move="moveCopy"
+                        @lend="lendCopy"
+                        @return="returnCopy"
                     />
                 </ul>
 

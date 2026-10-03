@@ -80,6 +80,9 @@ class CatalogRoundtripTest extends TestCase
                     'nickname' => $v->nickname,
                     'is_discarded' => (bool) $v->is_discarded,
                     'discarded_at' => $v->discarded_at?->format('Y-m-d'),
+                    'is_on_loan' => (bool) $v->is_on_loan,
+                    'loaned_to' => $v->loaned_to,
+                    'loaned_at' => $v->loaned_at?->format('Y-m-d'),
                     'reads' => $v->readInstances
                         ->sortBy([['date_read', 'asc'], ['rating', 'asc']])
                         ->map(fn ($r) => [
@@ -109,8 +112,8 @@ class CatalogRoundtripTest extends TestCase
     /**
      * Build a catalog that exercises every column: multi-author, multi-genre,
      * multi-version, a re-read, an unrated read, an unread copy, a discarded
-     * copy with and without a date, an audiobook with no page count, and two
-     * overlapping lists.
+     * copy with and without a date, a lent copy, an audiobook with no page
+     * count, and two overlapping lists.
      */
     private function seedCatalog(User $user): void
     {
@@ -135,6 +138,7 @@ class CatalogRoundtripTest extends TestCase
         $duneAudio = Version::create([
             'book_id' => $dune->book_id, 'format_id' => $audiobook->format_id,
             'audio_runtime' => 1260,
+            'is_on_loan' => true, 'loaned_to' => 'Sam, next door', 'loaned_at' => '2025-02-03',
         ]);
 
         // Two reads of the paperback, one of them unrated; the audiobook is
@@ -267,7 +271,7 @@ class CatalogRoundtripTest extends TestCase
         $header = strtok($csv, "\n");
 
         $this->assertSame(
-            'title,authors,format,page_count,audio_runtime,version_nickname,genres,date_read,rating,is_discarded,discarded_at,location,lists',
+            'title,authors,format,page_count,audio_runtime,version_nickname,genres,date_read,rating,is_discarded,discarded_at,is_on_loan,loaned_to,loaned_at,location,lists',
             trim($header)
         );
     }

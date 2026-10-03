@@ -92,9 +92,9 @@
 
             <!-- The virtual pages are where copies get *out* of a holding
                  state, so each row carries the one transition that does it:
-                 Shelve for the unshelved pen, Restore for the discarded
-                 pile. Real shelves take copies in via AddBookSearch below
-                 and move them from the book page. -->
+                 Shelve for the unshelved pen, Returned for copies on loan,
+                 Restore for the discarded pile. Real shelves take copies in
+                 via AddBookSearch below and move them from the book page. -->
             <BookshelfTable :books="books" per-copy>
                 <template v-if="rowAction" #actions="{ book }">
                     <template v-if="rowAction === 'shelve'">
@@ -115,6 +115,14 @@
                             @cancel="pickingVersionId = null"
                         />
                     </template>
+                    <button
+                        v-else-if="rowAction === 'return'"
+                        type="button"
+                        class="underline hover:no-underline"
+                        @click.stop="returnCopy(copyOf(book).version_id)"
+                    >
+                        Returned
+                    </button>
                     <button
                         v-else-if="rowAction === 'restore'"
                         type="button"
@@ -141,7 +149,7 @@
 
 <script>
 import { getLocationBooks, setVersionLocation } from "@/api/LocationController";
-import { restoreVersion } from "@/api/VersionController";
+import { restoreVersion, returnVersion } from "@/api/VersionController";
 import { useLocationsStore, useStatisticsStore } from "@/stores";
 
 import AddBookSearch from "@/components/books/AddBookSearch.vue";
@@ -156,6 +164,7 @@ import ShelfPicker from "@/components/locations/ShelfPicker.vue";
 // a way out.
 const ROW_ACTIONS = {
     unshelved: "shelve",
+    "on-loan": "return",
     discarded: "restore",
 };
 
@@ -168,10 +177,10 @@ const ROW_ACTIONS = {
  * defaults shelf-kind locations to the `shelf` sort. Leaf locations also get
  * an AddBookSearch so copies can be shelved from the shelf page itself.
  *
- * The same view serves the virtual locations (`unshelved`, `discarded`):
- * the show payload has the same shape, flagged `virtual`, and the
- * differences are what the page *offers* — no statistics, no AddBookSearch,
- * and a per-row Shelve or Restore instead.
+ * The same view serves the virtual locations (`unshelved`, `on-loan`,
+ * `discarded`): the show payload has the same shape, flagged `virtual`, and
+ * the differences are what the page *offers* — no statistics, no
+ * AddBookSearch, and a per-row Shelve, Returned or Restore instead.
  */
 export default {
     name: "LocationView",
@@ -284,7 +293,7 @@ export default {
         copyOf(book) {
             return book.versions[0];
         },
-        // Both transitions leave this page's listing, so the table refetches
+        // Every transition leaves this page's listing, so the table refetches
         // and the store's counts refresh (a virtual location's count is in
         // the same index payload as the shelves').
         async applyRowAction(request, failureMessage) {
@@ -308,6 +317,14 @@ export default {
             await this.applyRowAction(
                 () => setVersionLocation(version_id, location_id),
                 "Unable to shelve this copy. Please try again.",
+            );
+        },
+        // A returned copy is back on its shelf (the loan never moved it), or
+        // in the unshelved pen if it never had one.
+        async returnCopy(version_id) {
+            await this.applyRowAction(
+                () => returnVersion(version_id),
+                "Unable to mark this copy returned. Please try again.",
             );
         },
         async restoreCopy(version_id) {

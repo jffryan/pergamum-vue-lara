@@ -35,6 +35,9 @@ class CsvContract
         'rating',
         'is_discarded',
         'discarded_at',
+        'is_on_loan',
+        'loaned_to',
+        'loaned_at',
         'location',
         'lists',
     ];

@@ -30,6 +30,9 @@ readonly class ImportRow
         public ?float $rating,
         public bool $isDiscarded = false,
         public ?Carbon $discardedAt = null,
+        public bool $isOnLoan = false,
+        public ?string $loanedTo = null,
+        public ?Carbon $loanedAt = null,
         public array $lists = [],
         // The shelf `code` ('O1S5') and optional left-to-right position — a
         // copy has exactly one place, so unlike `lists` this is one value.

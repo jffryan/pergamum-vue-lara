@@ -7,7 +7,7 @@ use RuntimeException;
 
 /**
  * Raised by {@see LocationService} when a code would slug to one of the
- * virtual locations (`unshelved`, `discarded`). Those are routes and
+ * virtual locations (`unshelved`, `on-loan`, `discarded`). Those are routes and
  * derived views, not rows — a real location under that slug would be
  * unreachable behind them.
  */

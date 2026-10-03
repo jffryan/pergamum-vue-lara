@@ -58,9 +58,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/versions', [VersionController::class, 'addNewVersion']);
     Route::patch('/versions/{version}/discard', [VersionController::class, 'discard']);
     Route::patch('/versions/{version}/restore', [VersionController::class, 'restore']);
+    Route::patch('/versions/{version}/lend', [VersionController::class, 'lend']);
+    Route::patch('/versions/{version}/return', [VersionController::class, 'returnFromLoan']);
     Route::patch('/versions/{version}/location', [VersionController::class, 'setLocation']);
 
-    // The virtual locations (`unshelved`, `discarded`) are not rows, so they
+    // The virtual locations (`unshelved`, `on-loan`, `discarded`) are not rows, so they
     // go before the slug-bound resource routes and are pinned to their
     // slugs — `LocationService` refuses to create a real location under
     // either, which is what keeps this ordering honest.

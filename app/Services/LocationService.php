@@ -177,7 +177,7 @@ class LocationService
     }
 
     /**
-     * The virtual locations (`unshelved`, `discarded`) own their slugs — see
+     * The virtual locations (`unshelved`, `on-loan`, `discarded`) own their slugs — see
      * {@see VirtualLocations}. Their routes are matched before the resource
      * routes, so a real row under one of those slugs would be unreachable.
      *
@@ -237,6 +237,9 @@ class LocationService
      * would be two places. The discard flow clears the location on the way
      * in; this is the guard on the way back. Unshelving (`null`) is allowed
      * regardless — it can only make the row more consistent.
+     *
+     * A lent copy is not refused: its location is the shelf it goes back
+     * to, and moving that home while the copy is out is a normal edit.
      *
      * @throws CopyDiscardedException
      */

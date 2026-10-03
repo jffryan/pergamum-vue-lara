@@ -20,8 +20,8 @@ but are no longer how shelving works).
   `'O1S5'` / `'O1'` / `'O'`), nullable `name` (human label, `'Office'`),
   `kind` (open string vocabulary — `room` / `bookcase` / `shelf` today),
   unique `slug` (lowercased code), nullable `ordinal` (position among
-  siblings). Depth is a convention, not a schema: a box or a "lent out" pile
-  is a row with a different `kind`.
+  siblings). Depth is a convention, not a schema: a box is a row with a
+  different `kind`.
 - **`versions.location_id`** (nullable, `set null` on delete) plus
   **`versions.shelf_ordinal`** (left-to-right position). These sit beside
   `is_discarded` / `discarded_at` because all four are facts about the
@@ -29,12 +29,14 @@ but are no longer how shelving works).
   place — is a database fact, which a membership table could never enforce.
 - Codes are globally unique via the slug index; `code` and `name` are
   separate so renaming never moves a location's identity in URLs or the CSV.
-- **Two virtual locations**, `unshelved` and `discarded`, are places a copy
-  can be that are *not* rows: the holding pen for copies with no
-  `location_id` (and not discarded), and the pile for `is_discarded` copies.
-  Both are derived from the version's own columns, so a copy is always in
-  exactly one of shelf / pen / pile and nothing has to keep a second fact in
-  step. See "Virtual locations" below.
+- **Three virtual locations**, `unshelved`, `on-loan` and `discarded`, are
+  places a copy can be that are *not* rows: the holding pen for copies with
+  no `location_id` (not discarded, not lent), copies with `is_on_loan`, and
+  the pile for `is_discarded` copies. All are derived from the version's own
+  columns, so nothing has to keep a second fact in step. A copy is in
+  exactly one of shelf / pen / pile; `on-loan` is the one overlap — a lent
+  copy keeps its shelf as its home and is listed in both. See "Virtual
+  locations" below.
 
 ## How it's wired
 
@@ -93,7 +95,13 @@ but are no longer how shelving works).
   `LocationService::shelveVersion` throws `CopyDiscardedException` (422,
   `copy_discarded`) when asked to shelve a discarded copy, and the importer
   fails a row that is both discarded and located
-  (`location_on_discarded_copy`).
+  (`location_on_discarded_copy`). Discarding also ends a loan.
+- **Loan flow**: `VersionController::lend` / `returnFromLoan` set and clear
+  `is_on_loan` / `loaned_to` / `loaned_at` and never touch `location_id` or
+  `shelf_ordinal`. A lent copy is therefore still in its shelf's listing,
+  counts, and statistics (it is still part of that shelf's collection), and
+  `shelveVersion` accepts it — moving a lent copy changes where it goes back
+  to. Lending a discarded copy is a 422 `copy_discarded`.
 - **Statistics**: `Scope::LOCATION`, resolved by slug (numeric id fallback)
   with no ownership gate. `Support\LocationQuery` mirrors `ListQuery` over
   `versions.location_id` in the subtree; `Support\ScopeQuery` dispatches the
@@ -115,8 +123,9 @@ but are no longer how shelving works).
   `App\Support\VirtualLocation` value objects — `slug`, `code`, `name`,
   `description`, and a `constrain(Builder)` closure that narrows a `versions`
   query to the copies held there (`whereNull(location_id) AND NOT
-  is_discarded` for the pen; `is_discarded` for the pile). A third virtual
-  place is one entry plus the column it derives from.
+  is_discarded AND NOT is_on_loan` for the pen; `is_on_loan` for on-loan;
+  `is_discarded` for the pile). Another virtual place is one entry plus the
+  column it derives from.
 - **Routes**: `GET /locations/{virtual}` → `LocationController::showVirtual`
   and `GET /locations/{virtual}/books` → `virtualBooks`, declared *before*
   the slug-bound resource routes and pinned with `->where('virtual',
@@ -127,7 +136,7 @@ but are no longer how shelving works).
   `copiesResponse`, shared with the real `books`), sorted by the standard
   `BookListing` keys since nothing here has a shelf order.
 - **Index**: `GET /locations` appends `VirtualLocations::toIndexRows()` —
-  the two virtual entries with live `versions_count` — after the real rows.
+  the three virtual entries with live `versions_count` — after the real rows.
 - **Reserved slugs**: `LocationService::create`, `update` (on a code change)
   and `findOrCreateByCode` throw `LocationCodeReservedException` (422,
   `location_code_reserved`) when the code slugs to a virtual slug; the
@@ -166,13 +175,17 @@ but are no longer how shelving works).
   pick-a-version widget, extracted to a shared component — so copies can be
   shelved from the shelf page; the view's `addVersion` calls the same
   `setVersionLocation` write path, then quietly refetches the listing.
-  The same view serves `/locations/unshelved` and `/locations/discarded`:
+  The same view serves `/locations/unshelved`, `/locations/on-loan` and
+  `/locations/discarded`:
   on a `virtual` payload it drops the kind, the Statistics link and
   `AddBookSearch`, shows the description, and gives each row the one
   transition out — `ROW_ACTIONS` maps slug → `shelve` (a per-row
-  `ShelfPicker`, through `setVersionLocation`) or `restore` (through
-  `restoreVersion`); either refetches the listing and force-refetches the
-  index. `BookshelfTable` / `BookTableRow` grew an optional scoped
+  `ShelfPicker`, through `setVersionLocation`), `return` (through
+  `returnVersion`) or `restore` (through `restoreVersion`); each refetches
+  the listing and force-refetches the index. Under `per-copy`,
+  `BookTableRow` shows the copy's `loanLabel` (`Lent to Sam · Sep 2026`)
+  under the title, so a lent copy on a real shelf's page says why it isn't
+  physically there. `BookshelfTable` / `BookTableRow` grew an optional scoped
   `#actions="{ book }"` slot for this, rendered as a strip under the row
   and only when supplied, so other listings are unchanged.
 - **New-book and add-a-copy pages**: a Shelf select in the shared
@@ -215,6 +228,13 @@ but are no longer how shelving works).
 - **Deleting structure is never implicit.** The FK is `restrict`, the
   service refuses a parent with children even under `force`, and `force` on
   a leaf means "unshelve these copies", nothing more.
+- **A lent copy keeps its shelf.** The loan is an overlay on the location,
+  not a move — the library-checkout model, where a book out on loan still
+  has a call number. Taking it off the shelf (as discard does) would make
+  every return a manual reshelve and forget where the copy lived. The cost
+  is the one exception to "a copy is in exactly one place", contained to
+  `on-loan`; the pen excludes lent copies so a homeless lent copy isn't
+  offered a Shelve action for a book that isn't in the house.
 - **Unshelved and Discarded are derived, not stored.** A `locations` row for
   either would be a second fact to keep in step with `location_id` /
   `is_discarded` across every write door (picker, discard endpoint, forced

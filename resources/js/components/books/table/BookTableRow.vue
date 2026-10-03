@@ -14,6 +14,9 @@
                 <span v-if="copyNickname" class="text-sm opacity-70">
                     · {{ copyNickname }}</span
                 >
+                <span v-if="copyLoan" class="block text-sm opacity-70">{{
+                    copyLoan
+                }}</span>
             </div>
             <div class="text-sm text-slate-500 mt-0.5">
                 <router-link
@@ -59,6 +62,11 @@
                         class="block text-sm opacity-70"
                         >{{ copyNickname }}</span
                     >
+                    <!-- A lent copy is still listed on its shelf; this is
+                         what says the gap on the shelf is expected. -->
+                    <span v-if="copyLoan" class="block text-sm opacity-70">{{
+                        copyLoan
+                    }}</span>
                 </router-link>
             </div>
             <div class="col-span-2 p-2">
@@ -110,6 +118,8 @@
 </template>
 
 <script>
+import { loanLabel } from "@/utils/bookDetail";
+
 export default {
     name: "BookTableRow",
     props: {
@@ -133,6 +143,10 @@ export default {
         copyNickname() {
             if (!this.perCopy) return "";
             return this.book.versions?.[0]?.nickname || "";
+        },
+        copyLoan() {
+            if (!this.perCopy) return "";
+            return loanLabel(this.book.versions?.[0]);
         },
         authorInfo() {
             const authorResponse = this.book.authors[0];

@@ -25,6 +25,9 @@ class VersionFactory extends Factory
             'nickname' => fake()->optional()->words(2, true),
             'is_discarded' => false,
             'discarded_at' => null,
+            'is_on_loan' => false,
+            'loaned_to' => null,
+            'loaned_at' => null,
         ];
     }
 
@@ -37,6 +40,16 @@ class VersionFactory extends Factory
         return $this->state(fn () => [
             'is_discarded' => true,
             'discarded_at' => $discardedAt,
+        ]);
+    }
+
+    /** Both details are optional, as they are on the lend endpoint. */
+    public function onLoan(?string $loanedTo = null, ?string $loanedAt = null): static
+    {
+        return $this->state(fn () => [
+            'is_on_loan' => true,
+            'loaned_to' => $loanedTo,
+            'loaned_at' => $loanedAt,
         ]);
     }
 

@@ -36,7 +36,7 @@ class VirtualLocationsTest extends TestCase
         $response = $this->getJson('/api/locations');
 
         $response->assertOk();
-        $response->assertJsonCount(3);
+        $response->assertJsonCount(4);
         $rows = collect($response->json());
         $this->assertSame(1, $rows->firstWhere('slug', 'unshelved')['versions_count']);
         $this->assertSame(1, $rows->firstWhere('slug', 'discarded')['versions_count']);
@@ -108,6 +108,44 @@ class VirtualLocationsTest extends TestCase
         $this->assertNull($discarded->fresh()->location_id);
     }
 
+    public function test_on_loan_lists_lent_copies_whether_or_not_they_have_a_shelf(): void
+    {
+        $this->actingAsUser();
+        $shelf = Location::factory()->create();
+        $lentFromShelf = Version::factory()->onLoan('Sam')->create(['location_id' => $shelf->location_id]);
+        $lentHomeless = Version::factory()->onLoan()->create();
+        Version::factory()->create(['location_id' => $shelf->location_id]);
+
+        $ids = collect($this->getJson('/api/locations/on-loan/books')->assertOk()->json('books'))
+            ->pluck('versions.0.version_id')->sort()->values()->all();
+
+        $this->assertSame([$lentFromShelf->version_id, $lentHomeless->version_id], $ids);
+        $this->getJson('/api/locations/on-loan')->assertOk()
+            ->assertJsonPath('location.virtual', true)
+            ->assertJsonPath('subtree_versions_count', 2);
+    }
+
+    public function test_a_lent_copy_stays_listed_on_its_shelf(): void
+    {
+        $this->actingAsUser();
+        $shelf = Location::factory()->create();
+        $lent = Version::factory()->onLoan('Sam')->create(['location_id' => $shelf->location_id]);
+
+        $response = $this->getJson("/api/locations/{$shelf->slug}/books")->assertOk();
+
+        $response->assertJsonPath('books.0.versions.0.version_id', $lent->version_id);
+        $response->assertJsonPath('books.0.versions.0.is_on_loan', true);
+        $response->assertJsonPath('books.0.versions.0.loaned_to', 'Sam');
+    }
+
+    public function test_a_lent_copy_with_no_shelf_is_not_in_the_unshelved_pen(): void
+    {
+        $this->actingAsUser();
+        Version::factory()->onLoan()->create();
+
+        $this->getJson('/api/locations/unshelved/books')->assertOk()->assertJsonCount(0, 'books');
+    }
+
     public function test_a_reserved_code_cannot_become_a_real_location(): void
     {
         $this->actingAsUser();
@@ -126,6 +164,9 @@ class VirtualLocationsTest extends TestCase
         $shelf = Location::factory()->create();
 
         $this->patchJson("/api/locations/{$shelf->slug}", ['code' => 'discarded'])
+            ->assertStatus(422)
+            ->assertJsonPath('reason_code', 'location_code_reserved');
+        $this->patchJson("/api/locations/{$shelf->slug}", ['code' => 'On-Loan'])
             ->assertStatus(422)
             ->assertJsonPath('reason_code', 'location_code_reserved');
     }

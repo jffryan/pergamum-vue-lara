@@ -4,14 +4,17 @@ import {
     copyState,
     formatLabel,
     lengthLabel,
+    loanLabel,
     locationLabel,
 } from "@/utils/bookDetail";
 import { monthYear } from "@/utils/libraryList";
 import ShelfPicker from "@/components/locations/ShelfPicker.vue";
 
 /**
- * One copy of a book: what it is, how long it is, where it is, and the two
- * transitions it can make from here (shelve/move, discard/restore).
+ * One copy of a book: what it is, how long it is, where it is, and the
+ * transitions it can make from here (shelve/move, lend/return,
+ * discard/restore). A loan sits beside the shelf rather than replacing it —
+ * the shelf is where a lent copy goes back to.
  *
  * This replaces the six-column `VersionTable`, whose columns were mostly
  * empty — "Audio Runtime" was blank on every physical book and "Nickname" on
@@ -32,11 +35,19 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(["discard", "restore", "move"]);
+const emit = defineEmits(["discard", "restore", "move", "lend", "return"]);
 
 const isPickingShelf = ref(false);
 const isConfirmingDiscard = ref(false);
 const discardedAt = ref("");
+const isLending = ref(false);
+const loanedTo = ref("");
+const loanedAt = ref("");
+
+// One form at a time; the action links hide while one is open.
+const isFormOpen = computed(
+    () => isPickingShelf.value || isConfirmingDiscard.value || isLending.value,
+);
 
 const state = computed(() => copyState(props.version));
 const isDiscarded = computed(() => state.value === "discarded");
@@ -44,6 +55,7 @@ const isDiscarded = computed(() => state.value === "discarded");
 const format = computed(() => formatLabel(props.version));
 const length = computed(() => lengthLabel(props.version));
 const shelf = computed(() => locationLabel(props.version));
+const loan = computed(() => loanLabel(props.version));
 const nickname = computed(() => props.version.nickname?.trim() || "");
 
 // "read twice" beside the copy, not a number in a column — the sentence is
@@ -82,6 +94,32 @@ const confirmDiscard = () => {
         discarded_at: discardedAt.value || null,
     });
     isConfirmingDiscard.value = false;
+};
+
+// Local today, not `toISOString()` — that is UTC and turns into tomorrow on
+// an evening in the Americas.
+const today = () => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
+// Unlike a discard, a loan is almost always recorded as it happens, so the
+// date starts at today. Both fields may be blanked.
+const openLendForm = () => {
+    loanedTo.value = "";
+    loanedAt.value = today();
+    isLending.value = true;
+};
+
+const confirmLend = () => {
+    emit("lend", {
+        version_id: props.version.version_id,
+        loaned_to: loanedTo.value.trim() || null,
+        loaned_at: loanedAt.value || null,
+    });
+    isLending.value = false;
 };
 
 const confirmMove = (payload) => {
@@ -131,7 +169,9 @@ const confirmMove = (payload) => {
                     >
                     <span v-else class="text-zinc-400">Unshelved</span>
                 </p>
-                <p class="mb-0 text-zinc-500">
+                <!-- The shelf above stays: it is where the copy goes back. -->
+                <p v-if="loan" class="mb-0 text-amber-700">{{ loan }}</p>
+                <p v-if="!isFormOpen" class="mb-0 text-zinc-500">
                     <template v-if="isDiscarded">
                         <button
                             type="button"
@@ -143,18 +183,31 @@ const confirmMove = (payload) => {
                     </template>
                     <template v-else>
                         <button
-                            v-if="!isPickingShelf"
                             type="button"
                             :class="action"
                             @click="isPickingShelf = true"
                         >
                             {{ version.location ? "Move" : "Shelve" }}
                         </button>
-                        <span v-if="!isPickingShelf && !isConfirmingDiscard">
-                            ·
-                        </span>
+                        ·
                         <button
-                            v-if="!isConfirmingDiscard"
+                            v-if="version.is_on_loan"
+                            type="button"
+                            :class="action"
+                            @click="emit('return', version.version_id)"
+                        >
+                            Returned
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            :class="action"
+                            @click="openLendForm"
+                        >
+                            Lend
+                        </button>
+                        ·
+                        <button
                             type="button"
                             :class="action"
                             @click="openDiscardForm"
@@ -173,6 +226,48 @@ const confirmMove = (payload) => {
                 @move="confirmMove"
                 @cancel="isPickingShelf = false"
             />
+        </div>
+
+        <div v-if="isLending" class="mt-2 text-sm">
+            <label
+                :for="`loaned_to_${version.version_id}`"
+                class="mr-2 text-zinc-500"
+                >Lent to</label
+            >
+            <input
+                :id="`loaned_to_${version.version_id}`"
+                v-model="loanedTo"
+                type="text"
+                maxlength="255"
+                placeholder="optional"
+                class="mr-2 rounded border border-zinc-400 bg-zinc-50 px-2 py-1"
+                @keydown.enter="confirmLend"
+            />
+            <label
+                :for="`loaned_at_${version.version_id}`"
+                class="mr-2 text-zinc-500"
+                >on</label
+            >
+            <input
+                :id="`loaned_at_${version.version_id}`"
+                v-model="loanedAt"
+                type="date"
+                class="mr-2 rounded border border-zinc-400 bg-zinc-50 px-2 py-1"
+            />
+            <button
+                type="button"
+                :class="['mr-2', action]"
+                @click="confirmLend"
+            >
+                Confirm
+            </button>
+            <button
+                type="button"
+                :class="[action, 'text-zinc-500']"
+                @click="isLending = false"
+            >
+                Cancel
+            </button>
         </div>
 
         <div v-if="isConfirmingDiscard" class="mt-2 text-sm">

@@ -17,7 +17,7 @@ use Generator;
  * export should land where it started.
  *
  * What crosses the boundary follows the tenancy split. Books, authors, genres,
- * versions and their discard state are the shared catalog and are exported
+ * versions and their discard and loan state are the shared catalog and are exported
  * whole. Read instances and lists belong to a person, so both are the
  * exporting user's — `BelongsToCurrentUser` handles the first and the list
  * query filters the second.
@@ -71,6 +71,9 @@ class CatalogExportService
                     'rating' => '',
                     'is_discarded' => $version->is_discarded ? '1' : '0',
                     'discarded_at' => $version->discarded_at?->format('Y-m-d') ?? '',
+                    'is_on_loan' => $version->is_on_loan ? '1' : '0',
+                    'loaned_to' => $version->loaned_to ?? '',
+                    'loaned_at' => $version->loaned_at?->format('Y-m-d') ?? '',
                     // A fact of the copy, like is_discarded, so it repeats on
                     // every row of the version — unlike `lists`, which is a
                     // membership claim and is blanked after the first row.

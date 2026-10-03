@@ -54,7 +54,7 @@ class CompleteBookCreationRequest extends ApiFormRequest
             'bookData.versions.*.page_count' => ['nullable', 'integer', 'min:0'],
             'bookData.versions.*.audio_runtime' => ['nullable', 'integer', 'min:0'],
             // Same rule as `MoveVersionRequest`: any real location row. The
-            // virtual ones (`unshelved`, `discarded`) have no id to send —
+            // virtual ones (`unshelved`, `on-loan`, `discarded`) have no id to send —
             // unshelved is just null.
             'bookData.versions.*.location_id' => ['nullable', 'integer', 'exists:locations,location_id'],
 
