@@ -141,8 +141,8 @@ class ListMetricsTest extends TestCase
         $response = $this->getJson("/api/statistics/list/{$list->list_id}")->assertOk();
 
         $this->assertSame([
-            ['name' => 'fiction', 'count' => 2],
-            ['name' => 'history', 'count' => 1],
+            ['genre_id' => $fiction->genre_id, 'name' => 'fiction', 'count' => 2],
+            ['genre_id' => $history->genre_id, 'name' => 'history', 'count' => 1],
         ], $response->json('metrics.genreBreakdown'));
     }
 

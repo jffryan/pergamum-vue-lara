@@ -13,7 +13,7 @@ use App\Statistics\Scope;
  */
 class CompletedPercent extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST, Scope::LOCATION];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION, Scope::GENRE];
 
     public function key(): string
     {

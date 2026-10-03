@@ -16,7 +16,7 @@ use App\Statistics\Support\ScopeQuery;
  */
 class TotalItems extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST, Scope::LOCATION];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION, Scope::GENRE];
 
     public function key(): string
     {

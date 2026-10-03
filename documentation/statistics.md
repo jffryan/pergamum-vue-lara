@@ -7,11 +7,11 @@ status: living
 
 ## Scope
 
-Covers every statistics surface in the app: the user-wide dashboard at `/statistics`, the post-login summary at `/dashboard`, per-list statistics at `/lists/:id/statistics`, and per-location statistics at `/locations/:slug/statistics`. All three go through one endpoint (`GET /api/statistics/{scope?}/{scopeId?}`), one backend metric registry (`app/Statistics/`), and one frontend widget registry plus grid host. Does **not** cover the year-browse "Completed" surface, which is read-history aggregation — see `read-history.md`.
+Covers every statistics surface in the app: the user-wide dashboard at `/statistics`, the post-login summary at `/dashboard`, per-list statistics at `/lists/:id/statistics`, per-location statistics at `/locations/:slug/statistics`, and the genre profile on `/genres/:id`. All of them go through one endpoint (`GET /api/statistics/{scope?}/{scopeId?}`), one backend metric registry (`app/Statistics/`), and one frontend widget registry plus grid host. Does **not** cover the year-browse "Completed" surface, which is read-history aggregation — see `read-history.md`.
 
 ## Summary
 
-A **metric** is one number or one series, computed on demand. A **scope** is what the numbers are about — the requesting user, one of their lists, or a location, whose subtree makes one scope serve shelf, bookcase and room alike (authors, genres, formats and an admin scope are the intended next entries). Metrics declare which scopes they support, which other metrics they depend on, and which caveats apply to them; the registry resolves a requested key list into a response.
+A **metric** is one number or one series, computed on demand. A **scope** is what the numbers are about — the requesting user, one of their lists, a location (whose subtree makes one scope serve shelf, bookcase and room alike), or a genre (authors, formats and an admin scope are the intended next entries). Metrics declare which scopes they support, which other metrics they depend on, and which caveats apply to them; the registry resolves a requested key list into a response.
 
 On the frontend a **surface** is a plain config object: which widgets, fed by which metrics, with what labels and grid spans. `StatisticsGrid` reads a surface, derives the metric set from it, asks `StatisticsStore` for exactly that set, and renders. Adding a statistics page is writing a config file; adding a chart is registering a widget.
 
@@ -29,6 +29,9 @@ MetricRegistry.php         key -> metric; dependency ordering, per-metric error 
 MetricResults.php          computed-value bag handed to dependent metrics
 Support/ReadInstanceQuery  shared read-history base query + groupedByYear()
 Support/ListQuery          shared list-membership queries
+Support/LocationQuery      location subtree membership
+Support/GenreQuery         genre membership (books on the pivot, every copy of each)
+Support/ScopeQuery         scope type -> membership query; covers() = "narrows to books"
 Metrics/*.php              one class per metric
 ```
 
@@ -36,7 +39,7 @@ Metrics/*.php              one class per metric
 - **Request**: `App\Http\Requests\StatisticsRequest` resolves the scope (which is also where it gets authorized) and validates `?metrics=` — a comma-separated list — against the keys the resolved scope supports.
 - **Controller**: `StatisticsController::show` is four lines: resolve scope, compute, respond.
 - **Registration**: `config/statistics.php` lists the metric classes and holds the estimate constants. `AppServiceProvider` builds the singleton `MetricRegistry` from it.
-- **Authorization**: `auth:sanctum` covers the user scope. The list scope runs `BookListPolicy::view` through `Gate::authorize`, so someone else's list is a 403 rather than an empty page. The location scope has no ownership gate — locations are shared catalog — and resolves its identifier as a slug, numeric id as fallback.
+- **Authorization**: `auth:sanctum` covers the user scope. The list scope runs `BookListPolicy::view` through `Gate::authorize`, so someone else's list is a 403 rather than an empty page. The location scope has no ownership gate — locations are shared catalog — and resolves its identifier as a slug, numeric id as fallback. The genre scope is shared catalog too and resolves by numeric id only, matching `/genres/:id`.
 
 ### Frontend
 
@@ -52,7 +55,7 @@ components/statistics/WidgetShell.vue    span, heading, footnote, unavailable st
 components/statistics/widgets/*.vue      StatTile, SeriesList, BreakdownList, EntityLinkList
 ```
 
-Views are thin: `StatisticsDashboard.vue`, `UserDashboard.vue`, and `ListStatisticsView.vue` each pass a surface config to `StatisticsGrid`. `ListStatisticsView` keeps its own list payload for the heading and the genre drill-down table, because those need the items themselves rather than an aggregate.
+Views are thin: `StatisticsDashboard.vue`, `UserDashboard.vue`, and `ListStatisticsView.vue` each pass a surface config to `StatisticsGrid`. The exception is `components/genres/GenreProfile.vue`, which reads the genre scope through `StatisticsStore` directly and draws it in the library's light list style. It sits above a book list rather than on a dashboard, where the dark grid would read as a separate page. It refetches whenever its cache entry is invalidated, and `GenreView` calls `invalidateAll()` after tagging a book, because a new tag also moves list and shelf genre breakdowns. `ListStatisticsView` keeps its own list payload for the heading and the genre drill-down table, because those need the items themselves rather than an aggregate.
 
 ## Non-obvious decisions and gotchas
 
@@ -121,7 +124,11 @@ Metric keys are camelCase throughout. Omitting `?metrics=` returns everything th
 
 **User scope**: `totalBooks`, `totalBooksRead`, `percentageOfBooksRead`, `totalReads`, `readsByYear`, `uniqueBooksReadByYear`, `pagesReadByYear`, `audioRuntimeByYear` (minutes), `estimatedTotalPagesByYear`, `averageRating` (0–5 or null), `ratingDistribution`, `newestBooks`.
 
-**List scope**: `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `averageRating`, `ratingDistribution`.
+**List, location and genre scopes**: `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `topAuthors`, `averageRating`, `ratingDistribution`.
+
+`genreBreakdown` rows are `{ genre_id, name, count }`; under the genre scope the genre itself is left out, so it reads as "often tagged with". `topAuthors` is the ten authors with the most distinct books in scope, `{ author_id, name, slug, count }`, crediting every author of a co-written book.
+
+Under the genre scope `totalItems` counts books that have a copy, while `GenreView`'s summary counts every tagged book, so a tagged book with no copies shows in the latter only. `GenreProfile` scales its bars against the summary's number for that reason.
 
 ### Adding a metric
 

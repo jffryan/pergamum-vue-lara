@@ -2,6 +2,14 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.27] - 2026-10-03
+
+- **The genre page looks like the library.** `/genres/:id` shows its books as library rows (title, author, format and length, genres, last read) under author-letter headings, with the library's summary line and pagination (page size picker, `?page=` / `?limit=`, 50 per page by default). It replaces the striped `BookshelfTable` and bare page links. "Add a book" sits below a divider.
+- **Genre statistics on the genre page.** A profile under the summary shows how many of the genre's books you've read, the share read, your average rating, the top authors, and the genres it's most often tagged with (each a link with a bar for its share of this genre). It refreshes after a book is tagged from the page.
+- **New statistics scope: `genre`** (`GET /api/statistics/genre/{genre_id}`). It supports `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `topAuthors`, `averageRating`, `ratingDistribution`. An unknown genre returns 404.
+- **New metric: `topAuthors`** for the list, location and genre scopes: the ten authors with the most distinct books in scope.
+- **`genreBreakdown` rows now carry `genre_id`.** This is additive. Under the genre scope the genre itself is excluded. 6 new backend tests (`GenreMetricsTest`). See `/documentation/statistics.md`.
+
 ## [0.1.26] - 2026-10-03
 
 - **Books can be added to a genre from the genre's page.** `/genres/:id` has an "Add a book" title search below the bookshelf. Each result has one Add button that tags the book with this genre (genres belong to the book, not to a copy), shows "✓ Added" once the book has the genre, and refreshes the shelf. `AddBookSearch` has a new `mode="book"` for this. Lists and shelves keep the default per-copy `mode="version"`.

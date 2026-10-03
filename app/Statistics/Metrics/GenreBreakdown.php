@@ -9,14 +9,16 @@ use App\Statistics\Support\ScopeQuery;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Genres on a list with how many distinct books carry each, commonest first.
+ * Genres in the scope with how many distinct books carry each, commonest
+ * first. Under the genre scope it reads as "often tagged with": the genre
+ * itself is left out, since every book in scope carries it.
  *
  * Counts books rather than copies, so a novel held twice doesn't inflate its
  * genre. Ties break alphabetically to keep the order stable between requests.
  */
 class GenreBreakdown extends AbstractMetric
 {
-    protected array $scopes = [Scope::LIST, Scope::LOCATION];
+    protected array $scopes = [Scope::LIST, Scope::LOCATION, Scope::GENRE];
 
     public function key(): string
     {
@@ -28,14 +30,20 @@ class GenreBreakdown extends AbstractMetric
         return DB::table('book_genre')
             ->join('genres', 'genres.genre_id', '=', 'book_genre.genre_id')
             ->whereIn('book_genre.book_id', ScopeQuery::bookIds($scope))
+            ->when($scope->is(Scope::GENRE), fn ($query) => $query->where('genres.genre_id', '!=', $scope->id))
             ->groupBy('genres.genre_id', 'genres.name')
             ->orderByDesc(DB::raw('COUNT(DISTINCT book_genre.book_id)'))
             ->orderBy('genres.name')
             ->get([
+                'genres.genre_id as genre_id',
                 'genres.name as name',
                 DB::raw('COUNT(DISTINCT book_genre.book_id) as count'),
             ])
-            ->map(fn ($row) => ['name' => $row->name, 'count' => (int) $row->count])
+            ->map(fn ($row) => [
+                'genre_id' => (int) $row->genre_id,
+                'name' => $row->name,
+                'count' => (int) $row->count,
+            ])
             ->all();
     }
 }

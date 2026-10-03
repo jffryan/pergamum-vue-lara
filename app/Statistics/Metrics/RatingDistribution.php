@@ -19,7 +19,7 @@ use App\Statistics\Support\ReadInstanceQuery;
  */
 class RatingDistribution extends AbstractMetric
 {
-    protected array $scopes = [Scope::USER, Scope::LIST, Scope::LOCATION];
+    protected array $scopes = [Scope::USER, Scope::LIST, Scope::LOCATION, Scope::GENRE];
 
     public function key(): string
     {

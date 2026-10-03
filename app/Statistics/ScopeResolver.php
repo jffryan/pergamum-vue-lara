@@ -3,6 +3,7 @@
 namespace App\Statistics;
 
 use App\Models\BookList;
+use App\Models\Genre;
 use App\Models\Location;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -26,6 +27,7 @@ class ScopeResolver
             Scope::USER => new Scope(Scope::USER, $userId),
             Scope::LIST => $this->list($id, $userId),
             Scope::LOCATION => $this->location($id, $userId),
+            Scope::GENRE => $this->genre($id, $userId),
             default => throw new NotFoundHttpException("Unknown statistics scope [{$type}]."),
         };
     }
@@ -46,6 +48,21 @@ class ScopeResolver
         }
 
         return new Scope(Scope::LOCATION, $userId, (int) $location->location_id, $location);
+    }
+
+    /**
+     * Genres are shared catalog like locations, so no ownership gate. They are
+     * id-routed (`/genres/:id`), so the identifier is the id.
+     */
+    private function genre(?string $id, ?int $userId): Scope
+    {
+        $genre = ctype_digit((string) $id) ? Genre::find($id) : null;
+
+        if ($genre === null) {
+            throw new NotFoundHttpException("Unknown genre [{$id}].");
+        }
+
+        return new Scope(Scope::GENRE, $userId, (int) $genre->genre_id, $genre);
     }
 
     /**

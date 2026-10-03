@@ -125,7 +125,7 @@ Everywhere a book's genres are listed (`BookTableRow`, `BookCard`, `BookView`, `
 
 ### Statistics
 
-`app/Statistics/Metrics/GenreBreakdown.php` counts pivot rows. With materialization, `nonfiction` approaches 100% of nonfiction books, which is *correct* but makes the breakdown a pie with one slice. The metric gains a parameter: `explicit_only` (default for the breakdown widget) and, with `kind` populated, `kind = subject` etc. as a filter. `ScopeResolver`'s genre scope (planned in `statistics-widgets.md`) should scope on explicit + implied — "all my history books" wants the cascade.
+`app/Statistics/Metrics/GenreBreakdown.php` counts pivot rows. With materialization, `nonfiction` approaches 100% of nonfiction books, which is *correct* but makes the breakdown a pie with one slice. The metric gains a parameter: `explicit_only` (default for the breakdown widget) and, with `kind` populated, `kind = subject` etc. as a filter. `ScopeResolver`'s genre scope (`Support\GenreQuery`) reads `book_genre` directly, so once implied rows are materialized it scopes on explicit + implied with no change — "all my history books" wants the cascade. Its `genreBreakdown` ("Often tagged with" on `GenreView`) will want `explicit_only`, or every history page will lead with `nonfiction`.
 
 ### Similarity
 

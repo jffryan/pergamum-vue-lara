@@ -11,6 +11,7 @@ use App\Statistics\Metrics\PagesReadByYear;
 use App\Statistics\Metrics\PercentageOfBooksRead;
 use App\Statistics\Metrics\RatingDistribution;
 use App\Statistics\Metrics\ReadsByYear;
+use App\Statistics\Metrics\TopAuthors;
 use App\Statistics\Metrics\TotalBooks;
 use App\Statistics\Metrics\TotalBooksRead;
 use App\Statistics\Metrics\TotalItems;
@@ -45,12 +46,13 @@ return [
         RatingDistribution::class,
         NewestBooks::class,
 
-        // List scope
+        // Membership scopes (list, location, genre)
         TotalItems::class,
         CompletedCount::class,
         CompletedPercent::class,
         TotalPages::class,
         GenreBreakdown::class,
+        TopAuthors::class,
     ],
 
     /*

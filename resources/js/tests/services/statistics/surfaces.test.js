@@ -32,6 +32,7 @@ const BACKEND_METRICS = [
     "completedPercent",
     "totalPages",
     "genreBreakdown",
+    "topAuthors",
 ];
 
 const allEntries = () =>

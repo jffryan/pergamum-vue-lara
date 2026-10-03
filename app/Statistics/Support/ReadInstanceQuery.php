@@ -35,7 +35,7 @@ class ReadInstanceQuery
         // Narrowing by scope happens here rather than in each metric: a list's
         // (or shelf's) average rating is the user's rating of *any* copy of a
         // covered book, not only of the copy that happens to sit there.
-        if ($scope->is(Scope::LIST) || $scope->is(Scope::LOCATION)) {
+        if (ScopeQuery::covers($scope)) {
             $query->whereIn('read_instances.book_id', ScopeQuery::bookIds($scope));
         }
 

@@ -24,6 +24,8 @@ class Scope
 
     public const LOCATION = 'location';
 
+    public const GENRE = 'genre';
+
     public function __construct(
         public readonly string $type,
         public readonly ?int $userId,
