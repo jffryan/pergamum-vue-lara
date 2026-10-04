@@ -4,7 +4,7 @@ All notable changes to Pergamum will be documented in this file.
 
 ## [0.1.27] - 2026-10-03
 
-- **The genre page looks like the library.** `/genres/:id` shows its books as library rows (title, author, format and length, genres, last read) under author-letter headings, with the library's summary line and pagination (page size picker, `?page=` / `?limit=`, 50 per page by default). It replaces the striped `BookshelfTable` and bare page links. "Add a book" sits below a divider.
+- **The genre page looks like the library.** `/genres/:id` shows its books as library rows (title, author, format and length, genres, last read) under author-letter headings, with the library's summary line and pagination (page size picker, `?page=` / `?limit=`, 50 per page by default). It replaces the striped `BookshelfTable` and bare page links. The summary line also gives the genre's share of the catalog ("42 books · 6% of the catalog"), using the existing `totalBooks` metric as the denominator. "Add a book" sits below a divider.
 - **Genre statistics on the genre page.** A profile under the summary shows how many of the genre's books you've read, the share read, your average rating, the top authors, and the genres it's most often tagged with (each a link with a bar for its share of this genre). It refreshes after a book is tagged from the page.
 - **New statistics scope: `genre`** (`GET /api/statistics/genre/{genre_id}`). It supports `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `topAuthors`, `averageRating`, `ratingDistribution`. An unknown genre returns 404.
 - **New metric: `topAuthors`** for the list, location and genre scopes: the ten authors with the most distinct books in scope.

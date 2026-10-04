@@ -68,9 +68,50 @@ const pagination = ref(null);
 // The endpoint takes no `?sort=` yet and orders by the library's default, so
 // the sections are that sort's — author letters.
 const sections = computed(() => groupBooks(books.value, DEFAULT_SORT));
-const summary = computed(() =>
-    pagination.value ? summarize({ total: pagination.value.total }) : "",
+// The catalog total is the user scope's `totalBooks` — the same unfiltered
+// book count the genre's own total is, so the share can't exceed 100%. Read
+// through the store so a visit from the dashboard costs no request, and
+// refetched whenever the cache entry is dropped (tagging below drops it).
+const catalogTotal = computed(
+    () => statisticsStore.metricsFor("user").totalBooks ?? null,
 );
+
+watch(
+    () => statisticsStore.scopes.user,
+    (entry) => {
+        if (!entry) {
+            // Without it the summary just omits the share.
+            statisticsStore.fetch("user", null, ["totalBooks"]).catch(() => {});
+        }
+    },
+    { immediate: true },
+);
+
+// Whole percents read cleanly for big genres; small ones keep a decimal so
+// a three-book genre doesn't read as 0%.
+const formatShare = (share) => {
+    if (share >= 10) return `${Math.round(share)}%`;
+    if (share >= 0.1) return `${share.toFixed(1).replace(/\.0$/, "")}%`;
+
+    return "under 0.1%";
+};
+
+const summary = computed(() => {
+    if (!pagination.value) {
+        return "";
+    }
+
+    const { total } = pagination.value;
+    const count = summarize({ total });
+
+    if (!total || !catalogTotal.value) {
+        return count;
+    }
+
+    const share = (total / catalogTotal.value) * 100;
+
+    return `${count} · ${formatShare(share)} of the catalog`;
+});
 
 const fetchData = async () => {
     isLoading.value = true;
