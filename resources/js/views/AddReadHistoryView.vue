@@ -33,16 +33,21 @@
                 </div>
                 <!-- End book information -->
                 <h2>Select a version</h2>
-                <div class="grid grid-cols-2">
-                    <div
+                <div class="grid grid-cols-2 gap-4">
+                    <button
                         v-for="version in currentVersions"
                         :key="version.version_id"
-                        class="p-4 mb-4 bg-white border rounded-md border-zinc-400 shadow-md"
-                        :class="{
-                            'bg-zinc-100 border-2 border-zinc-600':
-                                version.version_id ===
-                                selectedVersion?.version_id,
-                        }"
+                        type="button"
+                        @click="selectedVersion = version"
+                        :aria-pressed="
+                            version.version_id === selectedVersion?.version_id
+                        "
+                        class="p-4 mb-4 text-left rounded-md shadow-md cursor-pointer hover:border-zinc-600"
+                        :class="
+                            version.version_id === selectedVersion?.version_id
+                                ? 'bg-zinc-100 border-2 border-zinc-600'
+                                : 'bg-white border border-zinc-400'
+                        "
                     >
                         <p v-if="version.nickname">{{ version.nickname }}</p>
                         <p>
@@ -54,14 +59,17 @@
                         <p v-if="version.format?.expects_audio_runtime">
                             {{ version.audio_runtime }}
                         </p>
-                    </div>
+                    </button>
                 </div>
                 <!-- End versions -->
-                <div>
+                <div v-if="selectedVersion">
                     <UpdateBookReadInstance
                         :selectedVersion="selectedVersion"
                     />
                 </div>
+                <p v-else class="text-zinc-600">
+                    Select a version above to add a read to it.
+                </p>
             </div>
         </div>
     </div>

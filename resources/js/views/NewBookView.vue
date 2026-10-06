@@ -4,7 +4,6 @@ import { useRouter } from "vue-router";
 import { useConfigStore } from "@/stores";
 import { createOrGetBookByTitle, submitNewBook } from "@/api/BookController";
 import {
-    RATINGS,
     canAddAuthor,
     emptyAuthor,
     emptyDraft,
@@ -15,6 +14,7 @@ import {
 } from "@/utils/newBookForm";
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import GenreTagInput from "@/components/genres/GenreTagInput.vue";
+import RatingSelect from "@/components/books/RatingSelect.vue";
 import CopyFields from "@/components/books/CopyFields.vue";
 
 /**
@@ -309,20 +309,12 @@ const action = "underline hover:no-underline";
                         <label for="new-book-rating" :class="label"
                             >Rating</label
                         >
-                        <select
+                        <RatingSelect
                             id="new-book-rating"
                             v-model="draft.read.rating"
                             :class="select"
-                        >
-                            <option :value="null">No rating</option>
-                            <option
-                                v-for="rating in RATINGS"
-                                :key="rating"
-                                :value="rating"
-                            >
-                                {{ rating }} / 5
-                            </option>
-                        </select>
+                            clearable
+                        />
                     </div>
                 </div>
             </section>

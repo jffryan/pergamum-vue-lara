@@ -2,8 +2,8 @@
 /**
  * The shared destructive-action confirm.
  *
- * Lives in `globals/` rather than `admin/` because book delete wants the same
- * component; genre delete, genre merge and author merge are its consumers.
+ * Lives in `globals/` rather than `admin/` because nothing about it is
+ * admin-specific; genre delete, genre merge and author merge are its consumers.
  *
  * `impact` is the point of it — a confirm that only says "are you sure?" is
  * noise. Callers pass the concrete consequence ("this will remove the genre

@@ -13,7 +13,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 
 ### Authorization & ownership
 
-- **Authors are global, by design** (see `/documentation/books.md`). The live risk is not visibility but the orphan-cascade in `BookController::destroy`, which lets either account silently delete an author row the other still cares about — see Future improvements.
+- **Authors are global, by design** (see `/documentation/books.md`). The live risk is not visibility but the orphan-cascade in `BookController::destroy`, which deletes an author row the moment its last book goes. The SPA no longer calls it; it returns with admin-only book delete (`/feature-plans/books.md`, "Unlock book delete as an admin-only action").
 
 ### Validation & request shape
 
@@ -27,7 +27,7 @@ Most of the gnarly behavior here is owned by the book pipeline (attach on create
 - **A renamed author's old URL 404s.** `AuthorService::rename` moves the slug with the name and keeps no record of the old one, so a bookmarked or externally linked `/authors/<old-slug>` stops resolving. A `author_slug_redirects` table (or a `previous_slugs` column) consulted by `getAuthorBySlug` would fix it; books have the same gap.
 - **Merges are irreversible and unrecorded.** `AuthorService::merge` deletes the losers outright. Same gap as genre merge — see `/feature-plans/admin.md` ("Audit log table").
 - **A single-name author is valid everywhere now.** `App\Http\Requests\Concerns\ValidatesAuthorNames` requires a first name *or* a last name across all three book requests, matching what the CSV importer always did. What is still asymmetric is where a lone name goes: the importer accepts `|Aristotle` (last-name-only) and the forms accept either half, so two entries for the same person can differ in which column holds the name while slugging identically — which means they dedupe to one row whose column split depends on who got there first.
-- **Orphan-pruning is silent and irreversible.** When `BookController::destroy` deletes the last book by an author, the author row is hard-deleted with no audit trail. If the book deletion was a misclick, the author has to be re-typed by hand and gets a fresh `author_id`, breaking any external reference. Linked from `/feature-plans/books.md` ("Soft-delete books, versions, and read instances").
+- **Orphan-pruning is silent and irreversible.** When `BookController::destroy` deletes the last book by an author, the author row is hard-deleted with no audit trail. If the book deletion was a mistake, the author has to be re-typed by hand and gets a fresh `author_id`, breaking any external reference. Unreachable from the SPA until book delete is unlocked as an admin action (`/feature-plans/books.md`); the impact confirm planned there should name the authors it will prune.
 - **`bio` is returned by the API but has no column.** `AuthorService::getAuthorWithRelations` includes `bio` in the response payload; the migration doesn't define it and the model doesn't declare it. Reads as `null` today; if a frontend ever depends on it before the column exists, it'll break silently.
 
 ### Performance & query shape
@@ -64,7 +64,7 @@ In rough priority order — earlier items unblock later ones.
 5. **Link the author page to its edit.** A "Rename" link on `AuthorView` into `/admin/authors` pre-filtered to that author.
 6. **Let the book edit form detach and re-credit authors.** Today an edited name next to an `author_id` renames that author everywhere; "this book is actually by someone else" needs a remove-author control and a detach path in `BookController::updateAuthors`.
 7. **Redirect renamed authors' old slugs** — see Known limitations, "A renamed author's old URL 404s".
-8. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). Same trait + `deleted_at` strategy as `/feature-plans/books.md` ("Soft-delete books, versions, and read instances"). The orphan prune should mark, not delete.
+8. **Soft-delete authors** (and remove the silent hard-cascade in `BookController::destroy`'s orphan-prune). `SoftDeletes` trait + `deleted_at` column. The orphan prune should mark, not delete.
 9. **Build an author index / browse view.** `GET /authors` exists (unpaginated, filing order, with `books_count`) and `AuthorsStore.allAuthors` holds it for the admin screen; a user-facing `/authors` alphabetic browse could reuse both, adding pagination if the list outgrows one payload.
 10. **Surface author-level stats on the detail page.** Total books in catalog, total reads, average rating, first/most-recent read year. These are `ScopeResolver` cases plus a surface config — see `/feature-plans/statistics-widgets.md` item 1.
 11. **Link all authors on book rows, not just `authors[0]`.** Either render the full list comma-separated (matching `BookCard`) or add a hover/expand affordance.

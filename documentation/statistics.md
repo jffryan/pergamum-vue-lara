@@ -78,6 +78,8 @@ Views are thin: `StatisticsDashboard.vue`, `UserDashboard.vue`, and `ListStatist
 
 - **`readsByYear` counts reads; `uniqueBooksReadByYear` counts books.** The old `booksReadByYear` was the former under a label claiming the latter. Both are available; the label no longer lies.
 
+- **Three read counts, three questions.** `totalReads` counts every read, re-reads included. `totalBooksRead` counts distinct books read at least once. `loggedBooksRead` counts distinct books with at least one *logged* read, meaning a read that has both a `date_read` and a rating. One logged read is enough, so a book read twice counts once whether one read or both are logged. "Rated" means `rating > 0`, the same test `averageRating` uses, because a blank rating used to be stored as `0`. `UserMetricsTest::test_logged_books_read_needs_a_read_with_both_a_date_and_a_rating` checks all three counts against each other.
+
 - **`totalReads` does not filter on `date_read`.** The dashboard used to derive it by summing the per-year counts, which silently undercounted for anyone with undated reads.
 
 - **Audiobooks store zero pages, not null.** `versions.page_count` is `NOT NULL` and `BulkImportService` writes 0 for audio rows, so an audiobook contributes nothing to a page sum and can't double-count the book it shares. `estimatedTotalPagesByYear` adds `audioRuntimeByYear × pagesPerAudioMinute` on top; the factor lives in `config/statistics.php` and is echoed in `meta.estimated` because it is a stated assumption, not a fact.
@@ -122,7 +124,7 @@ Views are thin: `StatisticsDashboard.vue`, `UserDashboard.vue`, and `ListStatist
 
 Metric keys are camelCase throughout. Omitting `?metrics=` returns everything the scope supports; an unknown key for that scope is a 422, an unknown scope type a 404, and a list you don't own a 403.
 
-**User scope**: `totalBooks`, `totalBooksRead`, `percentageOfBooksRead`, `totalReads`, `readsByYear`, `uniqueBooksReadByYear`, `pagesReadByYear`, `audioRuntimeByYear` (minutes), `estimatedTotalPagesByYear`, `averageRating` (0–5 or null), `ratingDistribution`, `newestBooks`.
+**User scope**: `totalBooks`, `totalBooksRead`, `loggedBooksRead`, `percentageOfBooksRead`, `totalReads`, `readsByYear`, `uniqueBooksReadByYear`, `pagesReadByYear`, `audioRuntimeByYear` (minutes), `estimatedTotalPagesByYear`, `averageRating` (0–5 or null), `ratingDistribution`, `newestBooks`.
 
 **List, location and genre scopes**: `totalItems`, `completedCount`, `completedPercent`, `totalPages`, `genreBreakdown`, `topAuthors`, `averageRating`, `ratingDistribution`.
 

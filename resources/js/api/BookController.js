@@ -37,10 +37,6 @@ const getBooksByYear = async (year) => {
 const updateBook = async (book_id, formData) =>
     makeRequest("patch", buildUrl("books", book_id), formData);
 
-// DELETE
-const deleteBook = async (book_id) =>
-    makeRequest("delete", buildUrl("books", book_id));
-
 // BULK TAG
 // Additive: every genre in `genre_ids` and `names` onto every book in
 // `book_ids`. Pass ids when you hold the genre row; names may create one.
@@ -96,7 +92,6 @@ export {
     bulkTagBooks,
     removeGenreInstance,
     removeAuthorInstance,
-    deleteBook,
     createOrGetBookByTitle,
     submitNewBook,
 };

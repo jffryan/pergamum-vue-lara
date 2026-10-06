@@ -25,7 +25,7 @@ The `lists` column is also what makes lists survive a database reset; the ordina
 
 ### Data integrity
 
-- **Cascading delete is hard, no soft-delete.** Deleting a list immediately and irreversibly removes every `list_item` via DB cascade. There's no "undo" and no audit trail. Less catastrophic than the books cascade (no read history is lost — items only point at versions), but a misclick still vaporizes a curated reading list.
+- **Cascading delete is hard, no soft-delete.** Deleting a list immediately and irreversibly removes every `list_item` via DB cascade. There's no "undo" and no audit trail. Less catastrophic than a book delete (no read history is lost — items only point at versions), but a misclick still vaporizes a curated reading list.
 - **The slug column is generated but unused.** Every list write computes `Str::slug($name)` and writes it to a unique-indexed column, but no route or query reads it. Two lists with names that slugify identically (e.g. "Sci-Fi" and "Sci Fi") collide on insert and 500. The same trap fires from leading/trailing whitespace — `"  Want to Read  "` and `"Want to Read"` both slugify to `want-to-read`, so a paste with a stray newline 500s the second `store`/`update`. Either wire slugs into routing (and trim before slugifying) or drop the column.
 - **`(list_id, version_id)` unique on items conflates "the same edition" with "duplicate."** A list can hold two distinct versions of the same book (paperback + audiobook), but not the same version twice — which is the right call for now, but means stats math has to dedupe by `book_id` everywhere it matters.
 - **No max-items cap.** A list can grow unbounded, which interacts badly with the unpaginated `show` endpoint (below).

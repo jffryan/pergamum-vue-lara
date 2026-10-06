@@ -4,6 +4,7 @@ namespace Tests\Feature\Statistics;
 
 use App\Models\Book;
 use App\Models\ReadInstance;
+use App\Models\User;
 use App\Models\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -62,6 +63,42 @@ class UserMetricsTest extends TestCase
 
         $this->assertSame([['year' => 2024, 'total' => 3]], $response->json('metrics.readsByYear'));
         $this->assertSame([['year' => 2024, 'total' => 2]], $response->json('metrics.uniqueBooksReadByYear'));
+    }
+
+    /**
+     * The three read counts answer different questions and must not drift
+     * into each other: every read, every book, every book with a full record.
+     */
+    public function test_logged_books_read_needs_a_read_with_both_a_date_and_a_rating(): void
+    {
+        $user = $this->actingAsUser();
+
+        $reRead = Book::factory()->create();
+        $reReadVersion = Version::factory()->for($reRead, 'book')->create(['page_count' => 100]);
+        foreach (['2023-01-01', '2024-01-01'] as $date) {
+            ReadInstance::factory()->forUser($user)->create([
+                'book_id' => $reRead->book_id, 'version_id' => $reReadVersion->version_id,
+                'date_read' => $date, 'rating' => 4,
+            ]);
+        }
+
+        // One sparse read and one logged read of the same book: logged.
+        $mixed = $this->readBook($user->user_id, ['page_count' => 100], null, null);
+        ReadInstance::factory()->forUser($user)->create([
+            'book_id' => $mixed->book_id, 'version_id' => $mixed->version_id,
+            'date_read' => '2024-03-01', 'rating' => 3,
+        ]);
+
+        $this->readBook($user->user_id, ['page_count' => 100], '2024-02-01', null);  // dated, unrated
+        $this->readBook($user->user_id, ['page_count' => 100], null, 5);            // rated, undated
+        $this->readBook($user->user_id, ['page_count' => 100], '2024-04-01', 0);    // a blank rating, stored as 0
+        $this->readBook(User::factory()->create()->user_id, ['page_count' => 100], '2024-05-01', 5);
+
+        $response = $this->getJson('/api/statistics')->assertOk();
+
+        $this->assertSame(7, $response->json('metrics.totalReads'));
+        $this->assertSame(5, $response->json('metrics.totalBooksRead'));
+        $this->assertSame(2, $response->json('metrics.loggedBooksRead'));
     }
 
     public function test_ratings_are_returned_on_the_display_scale(): void

@@ -158,29 +158,15 @@
                         <p>{{ formatDateRead(history.date_read) }}</p>
                         <div class="mb-4">
                             <label
-                                for="rating"
+                                :for="`rating-${history.read_instance_id}`"
                                 class="block mb-2 font-bold text-zinc-600 mr-6"
                                 >Rating</label
                             >
-                            <select
+                            <RatingSelect
+                                :id="`rating-${history.read_instance_id}`"
                                 v-model="history.rating"
                                 class="bg-zinc-100 text-zinc-700 border border-zinc-400 rounded p-2 focus:border-zinc-500 focus:outline-none"
-                            >
-                                <option value="" class="text-zinc-400" disabled>
-                                    Select a rating
-                                </option>
-                                <option
-                                    v-for="(rating, idx) in Array.from(
-                                        { length: 9 },
-                                        (_, i) => 1 + i * 0.5,
-                                    )"
-                                    :key="idx"
-                                    :value="rating"
-                                    class="text-zinc-700"
-                                >
-                                    {{ rating }}
-                                </option>
-                            </select>
+                            />
                         </div>
                     </div>
                 </div>
@@ -189,31 +175,11 @@
                 <button class="btn btn-primary mr-4" @click="initBookEdits">
                     Save changes
                 </button>
-                <button
-                    class="btn btn-danger mr-4"
-                    @click="deleteConfirmation = true"
-                >
-                    Delete Book
-                </button>
                 <router-link
                     :to="{ name: 'books.show', params: { slug: currentSlug } }"
                     class="btn btn-secondary"
                     >Cancel</router-link
                 >
-            </div>
-            <div v-if="deleteConfirmation" class="pt-6">
-                <p class="font-bold">
-                    Are you sure you want to delete this book?
-                </p>
-                <button class="btn btn-danger mr-4" @click="requestDeleteBook">
-                    Yes, delete
-                </button>
-                <button
-                    class="btn btn-secondary"
-                    @click="deleteConfirmation = false"
-                >
-                    No, cancel
-                </button>
             </div>
         </section>
     </div>
@@ -226,13 +192,14 @@ import {
     fetchBookData,
     formatDateRead,
 } from "@/services/BookServices";
-import { updateBook, deleteBook } from "@/api/BookController";
+import { updateBook } from "@/api/BookController";
 import { validateAuthor } from "@/utils/validators";
 import { formatExpects } from "@/utils/formats";
 
 import AlertBox from "@/components/globals/alerts/AlertBox.vue";
 import PageLoadingIndicator from "@/components/globals/loading/PageLoadingIndicator.vue";
 import GenreTagInput from "@/components/genres/GenreTagInput.vue";
+import RatingSelect from "@/components/books/RatingSelect.vue";
 
 export default {
     name: "EditBookView",
@@ -250,6 +217,7 @@ export default {
         AlertBox,
         PageLoadingIndicator,
         GenreTagInput,
+        RatingSelect,
     },
     data() {
         return {
@@ -257,7 +225,6 @@ export default {
             showErrorMessage: false,
             error: "",
             bookData: null,
-            deleteConfirmation: false,
             isValidAuthors: [],
         };
     },
@@ -287,11 +254,6 @@ export default {
         setBookData(bookData) {
             this.bookData = JSON.parse(JSON.stringify(bookData));
             this.isValidAuthors = this.bookData.authors.map(() => true);
-        },
-        async requestDeleteBook() {
-            const { book_id } = this.bookData.book;
-            await deleteBook(book_id);
-            this.$router.push({ name: "library.index" });
         },
         expectsPageCount(version) {
             return formatExpects(this.formats, version.format_id, "page_count");

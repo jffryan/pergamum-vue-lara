@@ -43,7 +43,7 @@ That tension is now sharper than it was: `/admin/genres` shipped without item 1,
 
 The codebase already has actions that *behave* like admin operations but live elsewhere because there's no admin authorization to migrate them behind. Each of these is a candidate to fold into `/admin/*` once a permission model exists:
 
-- **Book delete.** `BookController::destroy` exists and is reachable by any authed user. In a single-user instance that's fine; with multiple users, deleting a book ripples through every user's lists and read history. Either it becomes admin-only, or per-user libraries replace the global catalog (see `/feature-plans/books.md`).
+- **Book delete.** Removed from the SPA (discard is the everyday path), but `BookController::destroy` is still reachable by any authed user and ripples through every account's read history. It comes back as an admin-only action — see `/feature-plans/books.md` ("Unlock book delete as an admin-only action").
 - **Bulk upload.** `BulkUploadView` lives at its own URL today but is functionally an admin operation (mass-imports into the global catalog). Could either stay where it is and gain an admin gate, or move under `/admin/bulk-upload`.
 - **User management** (once registration is real). Listing users, deactivating a user, resetting a password as an admin, viewing per-user activity. None of this exists; all of it belongs here.
 - **Catalog integrity tools.** Orphaned authors / genres / formats, books with no versions, versions with no read instances, read instances with mismatched `book_id` / `version_id` (see `/feature-plans/read-history.md`) — admin reports that flag and let an admin clean these up.
@@ -87,7 +87,7 @@ In rough priority order. **Items 1–3 are sequencing-critical** — most of the
 
 ### Sibling actions to migrate or build
 
-11. **Book delete confirmation flow.** Either an admin-only operation under `/admin/books` with a confirm-with-impact-summary ("this will affect 3 lists and 7 read instances") or — depending on how `/feature-plans/books.md` resolves ownership — a per-user delete that doesn't need to live here. `ConfirmAction` is the component; the impact summary is the work.
+11. **Admin-only book delete.** Owned by `/feature-plans/books.md` ("Unlock book delete as an admin-only action"), which lists what it needs from here: the gate, the audit log, and a place in the admin shell.
 12. **Migrate bulk upload under `/admin/bulk-upload`.** Or keep its current URL and add the admin gate. Decide based on whether non-admins should ever bulk-upload (today, they can).
 13. **Catalog integrity dashboard.** A read-only admin view that lists: orphaned authors / genres / formats (zero references), books with zero versions, versions with zero reads, read instances with `book_id` ≠ their version's `book_id`. Each item linkable to its detail page; some entries get a one-click cleanup once the destructive ops above exist. Orphaned genres are now one click from cleanup via `/admin/genres`, which is the pattern the rest should follow.
 

@@ -2,6 +2,16 @@
 
 All notable changes to Pergamum will be documented in this file.
 
+## [0.1.29] - 2026-10-04
+
+- **New statistic: logged books read.** `/statistics` now shows three read counts side by side. Total reads includes re-reads, unique books read counts each book once, and the new logged books read counts books that have at least one read with both a date and a rating. The new metric key is `loggedBooksRead` (user scope). A rating of 0, which is how a blank rating used to be saved, doesn't count as rated. The catalog tiles moved down to a row of their own. 1 new backend test.
+
+## [0.1.28] - 2026-10-03
+
+- **Books can no longer be deleted from the app.** The Delete button on the edit page is gone. To record a book you no longer have, discard its copies from the book page: that takes it off the library and keeps its reads, lists and authors, and Restore undoes it. Deleting a book also deleted every account's reads of it and could not be undone. `DELETE /books/{id}` stays registered but nothing calls it; it will return as an admin-only action (`/feature-plans/books.md`). The unused `deleteBook` API wrapper and `BooksStore.deleteBook` action were removed with it.
+- **Ratings of 0.5 can be entered on existing reads.** The rating dropdowns on the edit page and the add-a-read form started at 1, though the server has always accepted 0.5. All three rating pickers (including the new-book form) now share one `RatingSelect` component that offers 0.5–5. On a saved read a rating can be changed but not cleared back to "No rating". The new-book form, whose read is still a draft, can still clear it.
+- **A copy can be picked on the add-a-read page.** On `/books/:slug/add-read-history`, a book with more than one copy listed them with no way to choose one, so a read could only be recorded on a book with exactly one copy. The copy cards are now buttons that select the copy, and the date/rating form appears once a copy is chosen.
+
 ## [0.1.27] - 2026-10-03
 
 - **The genre page looks like the library.** `/genres/:id` shows its books as library rows (title, author, format and length, genres, last read) under author-letter headings, with the library's summary line and pagination (page size picker, `?page=` / `?limit=`, 50 per page by default). It replaces the striped `BookshelfTable` and bare page links. The summary line also gives the genre's share of the catalog ("42 books · 6% of the catalog"), using the existing `totalBooks` metric as the denominator. "Add a book" sits below a divider.

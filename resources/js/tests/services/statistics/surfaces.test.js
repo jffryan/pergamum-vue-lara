@@ -17,6 +17,7 @@ import {
 const BACKEND_METRICS = [
     "totalBooks",
     "totalBooksRead",
+    "loggedBooksRead",
     "percentageOfBooksRead",
     "totalReads",
     "readsByYear",

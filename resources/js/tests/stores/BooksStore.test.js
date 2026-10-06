@@ -132,23 +132,6 @@ describe("BooksStore", () => {
     });
 
     // ------------------------
-    // deleteBook
-    // ------------------------
-    it("should delete a book by book_id", () => {
-        const book = { book: { book_id: 1 }, versions: [] };
-        store.addBook(book);
-        store.deleteBook(book);
-        expect(store.allBooks).toEqual([]);
-    });
-
-    it("should not delete a book if it does not exist", () => {
-        const book = { book: { book_id: 1 }, versions: [] };
-        store.addBook(book);
-        store.deleteBook({ book: { book_id: 2 } }); // Book ID 2 doesn't exist
-        expect(store.allBooks).toEqual([book]);
-    });
-
-    // ------------------------
     // Ordering
     // ------------------------
     // The store holds one page of a server-ordered listing, so it preserves

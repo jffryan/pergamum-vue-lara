@@ -6,6 +6,7 @@ use App\Statistics\Metrics\CompletedCount;
 use App\Statistics\Metrics\CompletedPercent;
 use App\Statistics\Metrics\EstimatedTotalPagesByYear;
 use App\Statistics\Metrics\GenreBreakdown;
+use App\Statistics\Metrics\LoggedBooksRead;
 use App\Statistics\Metrics\NewestBooks;
 use App\Statistics\Metrics\PagesReadByYear;
 use App\Statistics\Metrics\PercentageOfBooksRead;
@@ -35,6 +36,7 @@ return [
     'metrics' => [
         TotalBooks::class,
         TotalBooksRead::class,
+        LoggedBooksRead::class,
         PercentageOfBooksRead::class,
         TotalReads::class,
         ReadsByYear::class,

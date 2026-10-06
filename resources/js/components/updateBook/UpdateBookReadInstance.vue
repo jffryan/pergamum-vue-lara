@@ -33,25 +33,11 @@
                     class="block mb-2 font-bold text-zinc-600 mr-6"
                     >Rating</label
                 >
-                <select
+                <RatingSelect
+                    id="rating"
                     v-model="readInstance.rating"
                     class="bg-zinc-100 text-zinc-700 border rounded p-2 focus:border-zinc-500 focus:outline-none"
-                >
-                    <option value="" class="text-zinc-400" disabled>
-                        Select a rating
-                    </option>
-                    <option
-                        v-for="(rating, idx) in Array.from(
-                            { length: 9 },
-                            (_, i) => 1 + i * 0.5,
-                        )"
-                        :key="idx"
-                        :value="rating"
-                        class="text-zinc-700"
-                    >
-                        {{ rating }}
-                    </option>
-                </select>
+                />
             </div>
             <!-- END RATING INPUT -->
             <div class="flex justify-end">
@@ -64,10 +50,15 @@
 <script>
 import { useBooksStore, useNewBookStore, useStatisticsStore } from "@/stores";
 
+import RatingSelect from "@/components/books/RatingSelect.vue";
+
 import axios from "axios";
 
 export default {
     name: "UpdateReadInstanceInput",
+    components: {
+        RatingSelect,
+    },
     setup() {
         const BooksStore = useBooksStore();
         const NewBookStore = useNewBookStore();
@@ -89,7 +80,7 @@ export default {
         return {
             readInstance: {
                 date_read: "",
-                rating: "",
+                rating: null,
             },
         };
     },

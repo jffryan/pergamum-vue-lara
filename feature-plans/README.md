@@ -36,6 +36,6 @@ When finishing a feature, flip the status to `living`, move the descriptive cont
 
 **Plans hold only work that is still ahead.** When an item ships, or a limitation is fixed, delete it. Don't strike it through, and don't mark it "Done", "Fixed", "Moot" or "Shipped" — `CHANGELOG.md` and git history record what shipped, and anything a future reader still needs belongs in `/documentation/`. When an item is only partly done, rewrite it to describe what's left. When it moves to another plan, keep a one-line pointer there.
 
-**Refer to items by title, not number** — `/feature-plans/books.md` ("Soft-delete books, versions, and read instances"), not "item 1". Deleting finished items renumbers the list.
+**Refer to items by title, not number** — `/feature-plans/books.md` ("Merge a duplicate book into another"), not "item 1". Deleting finished items renumbers the list.
 
 A `_template.md` is provided — copy it when starting a new plan.

@@ -97,11 +97,6 @@ const useBooksStore = defineStore("BooksStore", {
                 };
             });
         },
-        deleteBook(book) {
-            this.allBooks = this.allBooks.filter(
-                (b) => b.book.book_id !== book.book.book_id,
-            );
-        },
     },
 });
 
